@@ -35,7 +35,7 @@ const data = {
     },
     {
       title: "Ponto",
-      url: "/horarios",
+      url: "/ponto",
       icon: Clock,
     },
     {
