@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Home, Utensils, Clock, PencilLine, File } from "lucide-react"
+import { Home, Utensils, Clock, Users, File } from "lucide-react"
 
 import {
   Collapsible,
@@ -29,9 +29,9 @@ const data = {
       icon: Home,
     },
     {
-      title: "Cadastros",
+      title: "Funcionários",
       url: "#",
-      icon: PencilLine,
+      icon: Users,
     },
     {
       title: "Ponto",
