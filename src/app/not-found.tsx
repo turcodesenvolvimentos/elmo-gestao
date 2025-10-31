@@ -19,10 +19,7 @@ export default function NotFound() {
 
           <div className="flex flex-col sm:flex-row gap-3 w-full">
             <Button asChild className="flex-1">
-              <Link href="/">Voltar ao início</Link>
-            </Button>
-            <Button asChild variant="outline" className="flex-1">
-              <Link href="/login">Fazer login</Link>
+              <Link href="/home">Voltar ao início</Link>
             </Button>
           </div>
 
