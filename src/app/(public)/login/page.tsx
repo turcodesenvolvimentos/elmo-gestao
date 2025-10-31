@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircleIcon } from "lucide-react";
 import logo from "@/assets/logo.png";
 import Image from "next/image";
 import { useState } from "react";
@@ -15,11 +17,32 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [validationErrors, setValidationErrors] = useState<{
+    email?: string;
+    password?: string;
+  }>({});
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setValidationErrors({});
+
+    const errors: { email?: string; password?: string } = {};
+
+    if (!email.trim()) {
+      errors.email = "Por favor, preencha o campo de email";
+    }
+
+    if (!password.trim()) {
+      errors.password = "Por favor, preencha o campo de senha";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -69,12 +92,6 @@ export default function LoginPage() {
                   </p>
                 </div>
 
-                {error && (
-                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-                    {error}
-                  </div>
-                )}
-
                 <Field>
                   <FieldLabel htmlFor="email">Email</FieldLabel>
                   <Input
@@ -82,10 +99,28 @@ export default function LoginPage() {
                     type="email"
                     placeholder="email@exemplo.com"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (validationErrors.email) {
+                        setValidationErrors((prev) => ({
+                          ...prev,
+                          email: undefined,
+                        }));
+                      }
+                    }}
                     disabled={isLoading}
                   />
+                  {validationErrors.email && (
+                    <Alert
+                      variant="destructive"
+                      className="mt-1 border-0 rounded-none p-0 items-center [&>svg]:translate-y-0"
+                    >
+                      <AlertCircleIcon className="size-3" />
+                      <AlertDescription className="text-xs !flex !items-center">
+                        {validationErrors.email}
+                      </AlertDescription>
+                    </Alert>
+                  )}
                 </Field>
                 <Field>
                   <div className="flex items-center">
@@ -101,11 +136,40 @@ export default function LoginPage() {
                     id="password"
                     type="password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (validationErrors.password) {
+                        setValidationErrors((prev) => ({
+                          ...prev,
+                          password: undefined,
+                        }));
+                      }
+                    }}
                     disabled={isLoading}
                   />
+                  {validationErrors.password && (
+                    <Alert
+                      variant="destructive"
+                      className="mt-1 border-0 rounded-none p-0 items-center [&>svg]:translate-y-0"
+                    >
+                      <AlertCircleIcon className="size-3" />
+                      <AlertDescription className="text-xs !flex !items-center">
+                        {validationErrors.password}
+                      </AlertDescription>
+                    </Alert>
+                  )}
                 </Field>
+                {error && (
+                  <Alert
+                    variant="destructive"
+                    className="border-0 rounded-none p-0 items-center [&>svg]:translate-y-0"
+                  >
+                    <AlertCircleIcon className="size-3" />
+                    <AlertDescription className="text-xs !flex !items-center">
+                      {error}
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <Field>
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading ? "Entrando..." : "Login"}
