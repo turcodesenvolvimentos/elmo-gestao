@@ -32,9 +32,8 @@ export default function Page() {
         alt="banner"
         className="bg-white max-w-xl rounded-xl shadow-lg"
       />
-      
+
       <div className="flex flex-col gap-6 w-full max-w-4xl">
-        
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Link
             href="/funcionarios"
@@ -50,7 +49,10 @@ export default function Page() {
             href="/empresas"
             className="bg-white flex justify-center items-center flex-col aspect-video rounded-2xl border border-green-800/20 hover:border-green-900/50 transition-all duration-300 cursor-pointer hover:scale-105 hover:bg-transparent shadow-lg hover:shadow-xl backdrop-blur-sm"
           >
-            <Building size={48} className="mb-2 transition-colors duration-300" />
+            <Building
+              size={48}
+              className="mb-2 transition-colors duration-300"
+            />
             <span className="text-gray-700 font-medium group-hover:text-gray-900 transition-colors duration-300">
               Empresas
             </span>
@@ -66,26 +68,30 @@ export default function Page() {
             </span>
           </Link>
         </div>
-        <div className="flex justify-center grid grid-cols-1 md:grid-cols-2 gap-6 max-w-1xl">
-            <Link
-              href="/vale-alimentacao"
-              className="bg-white flex justify-center items-center flex-col aspect-video rounded-2xl border border-green-800/20 hover:border-green-900/50 transition-all duration-300 cursor-pointer hover:scale-105 hover:bg-transparent shadow-lg hover:shadow-xl backdrop-blur-sm"
-            >
-              <Utensils size={48} className="mb-2 transition-colors duration-300" />
-              <span className="text-gray-700 font-medium group-hover:text-gray-900 transition-colors duration-300">
-                Vale-Alimentação
-              </span>
-            </Link>
 
-            <Link
-              href="/boletim"
-              className="bg-white flex justify-center items-center flex-col aspect-video rounded-2xl border border-green-800/20 hover:border-green-900/50 transition-all duration-300 cursor-pointer hover:scale-105 hover:bg-transparent shadow-lg hover:shadow-xl backdrop-blur-sm"
-            >
-              <File size={48} className="mb-2 transition-colors duration-300" />
-              <span className="text-gray-700 font-medium group-hover:text-gray-900 transition-colors duration-300">
-                Boletim
-              </span>
-            </Link>
+        <div className="flex flex-col md:flex-row justify-center items-center gap-6 w-full">
+          <Link
+            href="/vale-alimentacao"
+            className="bg-white flex justify-center items-center flex-col aspect-video rounded-2xl border border-green-800/20 hover:border-green-900/50 transition-all duration-300 cursor-pointer hover:scale-105 hover:bg-transparent shadow-lg hover:shadow-xl backdrop-blur-sm w-full md:w-[calc((100%-2*1.5rem)/3)]"
+          >
+            <Utensils
+              size={48}
+              className="mb-2 transition-colors duration-300"
+            />
+            <span className="text-gray-700 font-medium group-hover:text-gray-900 transition-colors duration-300">
+              Vale-Alimentação
+            </span>
+          </Link>
+
+          <Link
+            href="/boletim"
+            className="bg-white flex justify-center items-center flex-col aspect-video rounded-2xl border border-green-800/20 hover:border-green-900/50 transition-all duration-300 cursor-pointer hover:scale-105 hover:bg-transparent shadow-lg hover:shadow-xl backdrop-blur-sm w-full md:w-[calc((100%-2*1.5rem)/3)]"
+          >
+            <File size={48} className="mb-2 transition-colors duration-300" />
+            <span className="text-gray-700 font-medium group-hover:text-gray-900 transition-colors duration-300">
+              Boletim
+            </span>
+          </Link>
         </div>
       </div>
     </div>
