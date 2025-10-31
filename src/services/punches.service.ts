@@ -19,7 +19,10 @@ export async function fetchPunches(
   const response = await fetch(`/api/punches?${searchParams.toString()}`);
 
   if (!response.ok) {
-    throw new Error("Erro ao buscar pontos");
+    const errorData = await response.json().catch(() => ({}));
+    const errorMessage =
+      errorData?.error || `Erro ao buscar pontos (${response.status})`;
+    throw new Error(errorMessage);
   }
 
   return response.json();
