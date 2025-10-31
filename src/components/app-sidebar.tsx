@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Home, Utensils, Clock, Users, File, LogOut } from "lucide-react";
+import { Home, Utensils, Clock, Users, File, LogOut, Building } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Collapsible, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -29,8 +29,13 @@ const data = {
     },
     {
       title: "Funcionários",
-      url: "#",
+      url: "/funcionarios",
       icon: Users,
+    },
+    {
+      title: "Empresas",
+      url: "/empresas",
+      icon: Building,
     },
     {
       title: "Ponto",
@@ -75,7 +80,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 </div>
                 <div className="flex flex-col gap-0.5 leading-none">
                   <span className="font-medium">Elmosys</span>
-                  <span className="">v1.0.0</span>
+                  <span className="">v0.1.0</span>
                 </div>
               </a>
             </SidebarMenuButton>
@@ -100,17 +105,23 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarRail />
-      <div className="border-t p-4">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton onClick={handleLogout} className="w-full">
-              <LogOut className="size-4" />
-              <span>Sair</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+      <div className="mt-auto pb-5">
+        <SidebarGroup>
+          <SidebarMenu>
+            <Collapsible className="group/collapsible">
+              <SidebarMenuItem>
+                <CollapsibleTrigger asChild>
+                  <SidebarMenuButton onClick={handleLogout}>
+                    <LogOut className="size-4" />
+                    <span>Sair</span>
+                  </SidebarMenuButton>
+                </CollapsibleTrigger>
+              </SidebarMenuItem>
+            </Collapsible>
+          </SidebarMenu>
+        </SidebarGroup>
       </div>
+      <SidebarRail />
     </Sidebar>
   );
 }
