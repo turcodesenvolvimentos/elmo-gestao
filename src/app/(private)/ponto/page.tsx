@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/table";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useEmployees } from "@/hooks/use-employees";
 import { usePunchesInfinite } from "@/hooks/use-punches";
 import { useState, useEffect, useRef, useMemo } from "react";
@@ -191,12 +192,14 @@ export default function PontoPage() {
   }, [canFetch, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   if (employeesLoading) {
-    return <div>Carregando...</div>;
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center">
+        <div className="h-10 w-10 rounded-full border-4 border-muted-foreground/30 border-t-green-700 animate-spin" />
+      </div>
+    );
   }
 
-  if (employeesError || punchesError) {
-    return <div>Erro ao carregar dados</div>;
-  }
+  const hasAnyError = !!(employeesError || punchesError);
 
   const mappedCompanies = getMappedCompanies();
   const companiesList = [
@@ -210,6 +213,14 @@ export default function PontoPage() {
       <div className="min-h-screen w-full p-6">
         <SidebarTrigger className="-ml-1" />
         <div className="space-y-6">
+          {hasAnyError && (
+            <Alert variant="destructive">
+              <AlertDescription>
+                Erro ao carregar dados. Tente atualizar os filtros ou recarregar
+                a página.
+              </AlertDescription>
+            </Alert>
+          )}
           <h2 className="scroll-m-20 text-3xl font-semibold tracking-tight">
             Filtrar horários registrados
           </h2>
