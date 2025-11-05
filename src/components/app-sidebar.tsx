@@ -44,12 +44,12 @@ const data = {
     },
     {
       title: "Vale Alimentação",
-      url: "#",
+      url: "/vale-alimentacao",
       icon: Utensils,
     },
     {
       title: "Boletim",
-      url: "#",
+      url: "/boletim",
       icon: File,
     },
   ],
