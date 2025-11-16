@@ -396,7 +396,7 @@ export default function PontoPage() {
             </Alert>
           )}
           <h2 className="scroll-m-20 text-3xl font-semibold tracking-tight">
-            Filtrar horários registrados
+            Pontos registrados
           </h2>
           <div className="flex flex-row gap-4 items-end flex-wrap">
             <div className="flex items-center gap-2">
