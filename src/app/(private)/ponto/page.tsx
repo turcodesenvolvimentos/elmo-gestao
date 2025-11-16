@@ -1,6 +1,8 @@
 "use client";
 
 import { Fragment } from "react";
+import { calcularHorasPorPeriodo, formatarHoras } from "@/lib/ponto-calculator";
+import Holidays from "date-holidays";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -33,10 +35,11 @@ interface GroupedPunch {
   key: string;
   employeeName: string;
   company: string;
+  isHoliday: boolean;
   date: string;
   formattedDate: string;
   dayOfWeek: string;
-  dayOfWeekNumber: number; // 0=domingo, 1=segunda, ..., 6=sábado
+  dayOfWeekNumber: number;
   punches: Array<{ dateIn?: string; dateOut?: string }>;
   horasDiurnas: string;
   horasNoturnas: string;
@@ -50,7 +53,6 @@ interface GroupedPunch {
   extra100Noturno: string;
 }
 
-// Interface para o punch da API
 interface Punch {
   id: number;
   date: string;
@@ -62,181 +64,8 @@ interface Punch {
   employer?: { name: string };
 }
 
-// Função para calcular horas entre dois horários
-function calcularHorasEntreDatas(inicio: Date, fim: Date): number {
-  const diferencaMs = fim.getTime() - inicio.getTime();
-  return diferencaMs / (1000 * 60 * 60); // Converter para horas
-}
-
-// Função para verificar se um horário está no período noturno (22h às 5h)
-function ehHorarioNoturno(hora: number): boolean {
-  return hora >= 22 || hora < 5;
-}
-
-// Função para calcular horas por período com lógica de extras
-function calcularHorasPorPeriodo(
-  punches: Array<{ dateIn?: string; dateOut?: string }>,
-  dayOfWeekNumber: number
-) {
-  // Definir carga horária por dia da semana
-  let cargaHoraria = 0;
-  if (dayOfWeekNumber >= 1 && dayOfWeekNumber <= 5) {
-    // Segunda a Sexta
-    cargaHoraria = 8;
-  } else if (dayOfWeekNumber === 6) {
-    // Sábado
-    cargaHoraria = 4;
-  } else {
-    // Domingo
-    cargaHoraria = 0;
-  }
-
-  // Coletar todos os períodos trabalhados em ordem cronológica
-  const periodos: Array<{ inicio: Date; fim: Date }> = [];
-  punches.forEach((punch) => {
-    if (!punch.dateIn || !punch.dateOut) return;
-    periodos.push({
-      inicio: new Date(punch.dateIn),
-      fim: new Date(punch.dateOut),
-    });
-  });
-
-  // Ordenar períodos por horário de início
-  periodos.sort((a, b) => a.inicio.getTime() - b.inicio.getTime());
-
-  // Variáveis para acumular horas
-  let horasTrabalhadasAcumuladas = 0; // Horas REAIS acumuladas (sem multiplicador)
-  let totalHorasNoturnas = 0;
-  let totalHorasDiurnas = 0;
-  let horasNormaisNoturnas = 0;
-  let horasNormaisDiurnas = 0;
-  let horasExtrasNoturnas50 = 0;
-  let horasExtrasDiurnas50 = 0;
-  let horasExtrasNoturnas100 = 0;
-  let horasExtrasDiurnas100 = 0;
-
-  // Iterar por cada período
-  periodos.forEach((periodo) => {
-    let horaAtual = new Date(periodo.inicio);
-
-    while (horaAtual < periodo.fim) {
-      const proximaHora = new Date(horaAtual);
-      proximaHora.setHours(horaAtual.getHours() + 1);
-      proximaHora.setMinutes(0);
-      proximaHora.setSeconds(0);
-      proximaHora.setMilliseconds(0);
-
-      const fimPeriodo = proximaHora > periodo.fim ? periodo.fim : proximaHora;
-      const horasNoPeriodo = calcularHorasEntreDatas(horaAtual, fimPeriodo);
-
-      // Verificar se é domingo OU se passou de 23:59 de sábado
-      const diaAtual = horaAtual.getDay();
-      const horaAtualNum = horaAtual.getHours();
-      const eh100 = diaAtual === 0 || (dayOfWeekNumber === 6 && diaAtual === 0);
-      const ehNoturno = ehHorarioNoturno(horaAtualNum);
-
-      // Calcular quantas horas esta hora representa (com multiplicador se noturno)
-      const horasComMultiplicador = ehNoturno
-        ? horasNoPeriodo * 1.142857
-        : horasNoPeriodo;
-
-      // Verificar se esta hora cruza o limite da carga horária
-      const horasRestantesParaCargaHoraria = Math.max(
-        0,
-        cargaHoraria - horasTrabalhadasAcumuladas
-      );
-
-      let horasNormaisNestePeriodo = 0;
-      let horasExtrasNestePeriodo = 0;
-
-      if (horasRestantesParaCargaHoraria > 0) {
-        // Parte desta hora é normal, parte é extra
-        horasNormaisNestePeriodo = Math.min(
-          horasComMultiplicador,
-          horasRestantesParaCargaHoraria
-        );
-        horasExtrasNestePeriodo =
-          horasComMultiplicador - horasNormaisNestePeriodo;
-      } else {
-        // Toda esta hora é extra
-        horasExtrasNestePeriodo = horasComMultiplicador;
-      }
-
-      // Converter de volta para horas reais (sem multiplicador) para classificar
-      const horasNormaisReais =
-        horasNormaisNestePeriodo / (ehNoturno ? 1.142857 : 1);
-      const horasExtrasReais =
-        horasExtrasNestePeriodo / (ehNoturno ? 1.142857 : 1);
-
-      if (ehNoturno) {
-        totalHorasNoturnas += horasNoPeriodo;
-        horasNormaisNoturnas += horasNormaisReais;
-        if (horasExtrasReais > 0) {
-          if (eh100) {
-            horasExtrasNoturnas100 += horasExtrasReais;
-          } else {
-            horasExtrasNoturnas50 += horasExtrasReais;
-          }
-        }
-      } else {
-        totalHorasDiurnas += horasNoPeriodo;
-        horasNormaisDiurnas += horasNormaisReais;
-        if (horasExtrasReais > 0) {
-          if (eh100) {
-            horasExtrasDiurnas100 += horasExtrasReais;
-          } else {
-            horasExtrasDiurnas50 += horasExtrasReais;
-          }
-        }
-      }
-
-      // Atualizar horas acumuladas (considerando multiplicador noturno)
-      horasTrabalhadasAcumuladas += horasComMultiplicador;
-
-      horaAtual = fimPeriodo;
-    }
-  });
-
-  const totalHoras = totalHorasNoturnas * 1.142857 + totalHorasDiurnas;
-  const horasFictas = totalHorasNoturnas * 0.142857;
-  const horasNormais = horasNormaisDiurnas + horasNormaisNoturnas * 1.142857;
-
-  // Calcular extras 50% com multiplicador noturno aplicado
-  const extra50Diurno = horasExtrasDiurnas50;
-  const extra50Noturno = horasExtrasNoturnas50 * 1.142857;
-
-  return {
-    horasNoturnas: totalHorasNoturnas * 1.142857,
-    horasDiurnas: totalHorasDiurnas,
-    totalHoras: totalHoras,
-    horasFictas: horasFictas,
-    horasNormais: horasNormais,
-    adicionalNoturno: horasNormaisNoturnas * 1.142857,
-    extra50Diurno: extra50Diurno,
-    extra50Noturno: extra50Noturno,
-    extra100Diurno: horasExtrasDiurnas100,
-    extra100Noturno: horasExtrasNoturnas100 * 1.142857,
-  };
-}
-
-// Função para formatar horas decimais em HH:MM
-function formatarHoras(horas: number): string {
-  let horasInteiras = Math.floor(horas);
-  let minutos = Math.round((horas - horasInteiras) * 60);
-
-  // Tratar quando minutos chega a 60
-  if (minutos >= 60) {
-    horasInteiras += Math.floor(minutos / 60);
-    minutos = minutos % 60;
-  }
-
-  return `${String(horasInteiras).padStart(2, "0")}:${String(minutos).padStart(
-    2,
-    "0"
-  )}`;
-}
-
 export default function PontoPage() {
+  const hd = useMemo(() => new Holidays("BR"), []);
   const [filter, setFilter] = useState<{
     startDate: string;
     endDate: string;
@@ -288,14 +117,12 @@ export default function PontoPage() {
 
   const loadMoreRef = useRef<HTMLTableRowElement>(null);
 
-  const { groupedPunches, maxPunchPairs } = useMemo(() => {
+  const { groupedPunches, maxPunchPairs, totals } = useMemo(() => {
     let allPunchesRaw =
       punchesData?.pages.flatMap((page) => page.content || []) || [];
 
-    // Filtrar por data se as datas estiverem definidas
     if (shouldSendDates && filter.startDate && filter.endDate) {
       allPunchesRaw = allPunchesRaw.filter((punch: Punch) => {
-        // Pegar a data do ponto (pode ser date, dateIn ou dateOut)
         const punchDateStr = punch.date
           ? punch.date.includes("T")
             ? punch.date.split("T")[0]
@@ -308,7 +135,6 @@ export default function PontoPage() {
 
         if (!punchDateStr) return false;
 
-        // Comparar apenas as datas (sem hora)
         return (
           punchDateStr >= filter.startDate && punchDateStr <= filter.endDate
         );
@@ -322,7 +148,6 @@ export default function PontoPage() {
       });
     }
 
-    // Ordenar todos os punches por funcionário e data/hora
     allPunchesRaw.sort((a: Punch, b: Punch) => {
       const employeeCompare = (a.employee?.name || "").localeCompare(
         b.employee?.name || ""
@@ -334,10 +159,11 @@ export default function PontoPage() {
       return dateA.localeCompare(dateB);
     });
 
-    // Agrupar punches considerando turno noturno
     const grouped = new Map<string, GroupedPunch>();
-    let currentJourneyKey: string | null = null;
-    let lastPunchWasNightShift = false;
+    const lastGroupByEmployee = new Map<
+      string,
+      { key: string; dateStr: string; hadNightShift: boolean }
+    >();
 
     allPunchesRaw.forEach((punch: Punch) => {
       const employeeName = punch.employee?.name || "sem-nome";
@@ -345,82 +171,92 @@ export default function PontoPage() {
         ? punch.date.split("T")[0]
         : punch.date.substring(0, 10);
 
-      // Verificar se é entrada após 18h (turno noturno)
-      const isNightShift = punch.dateIn
-        ? (() => {
-            const entryDate = new Date(punch.dateIn);
-            const hours = entryDate.getHours();
-            return hours >= 18; // Entrada após 18h
-          })()
-        : false;
+      const entryDate = punch.dateIn ? new Date(punch.dateIn) : undefined;
+      const entryHour = entryDate ? entryDate.getHours() : undefined;
+      const isEarlyMorning = entryHour !== undefined ? entryHour < 12 : false;
+      const isNightShiftEntry =
+        entryHour !== undefined ? entryHour >= 18 : false;
 
-      // Verificar se é uma batida de madrugada (antes das 12h)
-      const isEarlyMorning = punch.dateIn
-        ? (() => {
-            const entryDate = new Date(punch.dateIn);
-            const hours = entryDate.getHours();
-            return hours < 12; // Antes do meio-dia
-          })()
-        : false;
-
-      // Decidir se continua na mesma jornada ou cria nova
-      let key: string;
-      if (
-        lastPunchWasNightShift &&
+      const lastGroup = lastGroupByEmployee.get(employeeName);
+      const shouldAttachToPreviousDay =
+        !!lastGroup &&
         isEarlyMorning &&
-        currentJourneyKey &&
-        currentJourneyKey.startsWith(employeeName)
-      ) {
-        // Continua na mesma jornada (turno noturno que atravessa a madrugada)
-        key = currentJourneyKey;
-      } else {
-        // Nova jornada
-        key = `${employeeName}-${punchDateStr}`;
-        currentJourneyKey = key;
-        lastPunchWasNightShift = isNightShift;
+        (() => {
+          const [y, m, d] = lastGroup.dateStr.split("-").map(Number);
+          const lastDate = new Date(Date.UTC(y, m - 1, d));
+          const [cy, cm, cd] = punchDateStr.split("-").map(Number);
+          const currentDate = new Date(Date.UTC(cy, cm - 1, cd));
+          const diffDays =
+            (currentDate.getTime() - lastDate.getTime()) /
+            (1000 * 60 * 60 * 24);
+          return Math.round(diffDays) === 1 && lastGroup.hadNightShift;
+        })();
 
-        if (!grouped.has(key)) {
-          const [year, month, day] = punchDateStr.split("-");
-          const formattedDate = `${day}/${month}/${year}`;
-          const date = new Date(
-            punch.date + (punch.date.includes("T") ? "" : "T12:00:00Z")
-          );
-          const dayOfWeek = date.toLocaleDateString("pt-BR", {
-            weekday: "long",
-            timeZone: "UTC",
-          });
-          const dayOfWeekNumber = date.getDay(); // 0=domingo, 1=segunda, ..., 6=sábado
+      const baseDateStr = shouldAttachToPreviousDay
+        ? lastGroup!.dateStr
+        : punchDateStr;
+      const key = `${employeeName}-${baseDateStr}`;
 
-          grouped.set(key, {
-            key,
-            employeeName: punch.employee?.name || "-",
-            company: getCompanyFromPunch(punch),
-            date: punchDateStr,
-            formattedDate,
-            dayOfWeek,
-            dayOfWeekNumber,
-            punches: [],
-            horasDiurnas: "00:00",
-            horasNoturnas: "00:00",
-            horasFictas: "00:00",
-            totalHoras: "00:00",
-            horasNormais: "00:00",
-            adicionalNoturno: "00:00",
-            extra50Diurno: "00:00",
-            extra50Noturno: "00:00",
-            extra100Diurno: "00:00",
-            extra100Noturno: "00:00",
-          });
-        }
+      if (!grouped.has(key)) {
+        const [year, month, day] = baseDateStr.split("-");
+        const formattedDate = `${day}/${month}/${year}`;
+        const date = new Date(baseDateStr + "T12:00:00Z");
+        const dayOfWeek = date.toLocaleDateString("pt-BR", {
+          weekday: "long",
+          timeZone: "UTC",
+        });
+        const dayOfWeekNumber = date.getDay();
+
+        grouped.set(key, {
+          key,
+          employeeName: punch.employee?.name || "-",
+          company: getCompanyFromPunch(punch),
+          isHoliday: !!hd.isHoliday(new Date(baseDateStr + "T12:00:00Z")),
+          date: baseDateStr,
+          formattedDate,
+          dayOfWeek,
+          dayOfWeekNumber,
+          punches: [],
+          horasDiurnas: "00:00",
+          horasNoturnas: "00:00",
+          horasFictas: "00:00",
+          totalHoras: "00:00",
+          horasNormais: "00:00",
+          adicionalNoturno: "00:00",
+          extra50Diurno: "00:00",
+          extra50Noturno: "00:00",
+          extra100Diurno: "00:00",
+          extra100Noturno: "00:00",
+        });
       }
 
       grouped.get(key)!.punches.push({
         dateIn: punch.dateIn,
         dateOut: punch.dateOut,
       });
+
+      const prev = lastGroupByEmployee.get(employeeName);
+      lastGroupByEmployee.set(employeeName, {
+        key,
+        dateStr: baseDateStr,
+        hadNightShift:
+          (prev?.hadNightShift && prev.key === key) || isNightShiftEntry,
+      });
     });
 
-    // Ordenar punches dentro de cada grupo por horário e calcular horas
+    const totalsNumeric = {
+      horasDiurnas: 0,
+      horasNoturnas: 0,
+      horasFictas: 0,
+      totalHoras: 0,
+      horasNormais: 0,
+      adicionalNoturno: 0,
+      extra50Diurno: 0,
+      extra50Noturno: 0,
+      extra100Diurno: 0,
+      extra100Noturno: 0,
+    };
+
     grouped.forEach((group) => {
       group.punches.sort((a, b) => {
         const timeA = String(a.dateIn || a.dateOut || "");
@@ -428,11 +264,17 @@ export default function PontoPage() {
         return timeA.localeCompare(timeB);
       });
 
-      // Calcular horas diurnas, noturnas, fictas, extras e total
-      const calculoHoras = calcularHorasPorPeriodo(
-        group.punches,
-        group.dayOfWeekNumber
-      );
+      const calculoHoras = calcularHorasPorPeriodo(group.punches);
+      totalsNumeric.horasDiurnas += calculoHoras.horasDiurnas;
+      totalsNumeric.horasNoturnas += calculoHoras.horasNoturnas;
+      totalsNumeric.horasFictas += calculoHoras.horasFictas;
+      totalsNumeric.totalHoras += calculoHoras.totalHoras;
+      totalsNumeric.horasNormais += calculoHoras.horasNormais;
+      totalsNumeric.adicionalNoturno += calculoHoras.adicionalNoturno;
+      totalsNumeric.extra50Diurno += calculoHoras.extra50Diurno;
+      totalsNumeric.extra50Noturno += calculoHoras.extra50Noturno;
+      totalsNumeric.extra100Diurno += calculoHoras.extra100Diurno;
+      totalsNumeric.extra100Noturno += calculoHoras.extra100Noturno;
       group.horasDiurnas = formatarHoras(calculoHoras.horasDiurnas);
       group.horasNoturnas = formatarHoras(calculoHoras.horasNoturnas);
       group.horasFictas = formatarHoras(calculoHoras.horasFictas);
@@ -445,7 +287,6 @@ export default function PontoPage() {
       group.extra100Noturno = formatarHoras(calculoHoras.extra100Noturno);
     });
 
-    // Encontrar o número máximo de pares de entrada/saída
     let maxPairs = 1;
     grouped.forEach((group) => {
       maxPairs = Math.max(maxPairs, group.punches.length);
@@ -454,6 +295,18 @@ export default function PontoPage() {
     return {
       groupedPunches: Array.from(grouped.values()),
       maxPunchPairs: maxPairs,
+      totals: {
+        horasDiurnas: formatarHoras(totalsNumeric.horasDiurnas),
+        horasNoturnas: formatarHoras(totalsNumeric.horasNoturnas),
+        horasFictas: formatarHoras(totalsNumeric.horasFictas),
+        totalHoras: formatarHoras(totalsNumeric.totalHoras),
+        horasNormais: formatarHoras(totalsNumeric.horasNormais),
+        adicionalNoturno: formatarHoras(totalsNumeric.adicionalNoturno),
+        extra50Diurno: formatarHoras(totalsNumeric.extra50Diurno),
+        extra50Noturno: formatarHoras(totalsNumeric.extra50Noturno),
+        extra100Diurno: formatarHoras(totalsNumeric.extra100Diurno),
+        extra100Noturno: formatarHoras(totalsNumeric.extra100Noturno),
+      },
     };
   }, [
     punchesData,
@@ -461,6 +314,7 @@ export default function PontoPage() {
     filter.startDate,
     filter.endDate,
     shouldSendDates,
+    hd,
   ]);
 
   useEffect(() => {
@@ -727,7 +581,6 @@ export default function PontoPage() {
                             {group.dayOfWeek}
                           </TableCell>
 
-                          {/* Renderizar entrada e saída de forma dinâmica */}
                           {Array.from({ length: maxPunchPairs }).map(
                             (_, index) => {
                               const punch = group.punches[index];
@@ -763,7 +616,6 @@ export default function PontoPage() {
                             }
                           )}
 
-                          {/* Colunas de horas calculadas */}
                           <TableCell className="px-4 py-3 border-r border-gray-200">
                             {group.horasDiurnas}
                           </TableCell>
@@ -796,6 +648,48 @@ export default function PontoPage() {
                           </TableCell>
                         </TableRow>
                       ))}
+                      <TableRow className="bg-gray-50/50">
+                        {Array.from({ length: 4 + maxPunchPairs * 2 }).map(
+                          (_, idx) => (
+                            <TableCell
+                              key={`totals-empty-${idx}`}
+                              className="px-4 py-3 border-r border-gray-200 text-gray-700 font-medium"
+                            >
+                              {idx === 0 ? "Totais" : "-"}
+                            </TableCell>
+                          )
+                        )}
+                        <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                          {totals.horasDiurnas}
+                        </TableCell>
+                        <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                          {totals.horasNoturnas}
+                        </TableCell>
+                        <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                          {totals.horasFictas}
+                        </TableCell>
+                        <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                          {totals.totalHoras}
+                        </TableCell>
+                        <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                          {totals.horasNormais}
+                        </TableCell>
+                        <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                          {totals.adicionalNoturno}
+                        </TableCell>
+                        <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                          {totals.extra50Diurno}
+                        </TableCell>
+                        <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                          {totals.extra50Noturno}
+                        </TableCell>
+                        <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                          {totals.extra100Diurno}
+                        </TableCell>
+                        <TableCell className="px-4 py-3 font-semibold">
+                          {totals.extra100Noturno}
+                        </TableCell>
+                      </TableRow>
                       <TableRow ref={loadMoreRef}>
                         <TableCell
                           colSpan={dynamicColumns.length}
