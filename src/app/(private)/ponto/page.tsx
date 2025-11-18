@@ -51,6 +51,7 @@ interface GroupedPunch {
   extra50Noturno: string;
   extra100Diurno: string;
   extra100Noturno: string;
+  heDomEFer: string;
 }
 
 interface Punch {
@@ -99,6 +100,21 @@ export default function PontoPage() {
 
   const canFetch = hasFilters && (shouldSendDates ? isDateRangeValid : true);
 
+  const startDateTimestamp =
+    shouldSendDates && isDateRangeValid && filter.startDate
+      ? (() => {
+          const date = new Date(filter.startDate + "T00:00:00Z");
+          return date.getTime().toString();
+        })()
+      : undefined;
+  const endDateTimestamp =
+    shouldSendDates && isDateRangeValid && filter.endDate
+      ? (() => {
+          const date = new Date(filter.endDate + "T23:59:59.999Z");
+          return date.getTime().toString();
+        })()
+      : undefined;
+
   const {
     data: punchesData,
     isLoading: punchesLoading,
@@ -107,9 +123,9 @@ export default function PontoPage() {
     hasNextPage,
     isFetchingNextPage,
   } = usePunchesInfinite(
-    50,
-    shouldSendDates && isDateRangeValid ? filter.startDate : undefined,
-    shouldSendDates && isDateRangeValid ? filter.endDate : undefined,
+    1000,
+    startDateTimestamp,
+    endDateTimestamp,
     filter.employeeId > 0 ? filter.employeeId : undefined,
     filter.status,
     canFetch
@@ -227,6 +243,7 @@ export default function PontoPage() {
           extra50Noturno: "00:00",
           extra100Diurno: "00:00",
           extra100Noturno: "00:00",
+          heDomEFer: "00:00",
         });
       }
 
@@ -255,6 +272,7 @@ export default function PontoPage() {
       extra50Noturno: 0,
       extra100Diurno: 0,
       extra100Noturno: 0,
+      heDomEFer: 0,
     };
 
     grouped.forEach((group) => {
@@ -264,7 +282,7 @@ export default function PontoPage() {
         return timeA.localeCompare(timeB);
       });
 
-      const calculoHoras = calcularHorasPorPeriodo(group.punches);
+      const calculoHoras = calcularHorasPorPeriodo(group.punches, group.date);
       totalsNumeric.horasDiurnas += calculoHoras.horasDiurnas;
       totalsNumeric.horasNoturnas += calculoHoras.horasNoturnas;
       totalsNumeric.horasFictas += calculoHoras.horasFictas;
@@ -275,6 +293,7 @@ export default function PontoPage() {
       totalsNumeric.extra50Noturno += calculoHoras.extra50Noturno;
       totalsNumeric.extra100Diurno += calculoHoras.extra100Diurno;
       totalsNumeric.extra100Noturno += calculoHoras.extra100Noturno;
+      totalsNumeric.heDomEFer += calculoHoras.heDomEFer;
       group.horasDiurnas = formatarHoras(calculoHoras.horasDiurnas);
       group.horasNoturnas = formatarHoras(calculoHoras.horasNoturnas);
       group.horasFictas = formatarHoras(calculoHoras.horasFictas);
@@ -285,6 +304,7 @@ export default function PontoPage() {
       group.extra50Noturno = formatarHoras(calculoHoras.extra50Noturno);
       group.extra100Diurno = formatarHoras(calculoHoras.extra100Diurno);
       group.extra100Noturno = formatarHoras(calculoHoras.extra100Noturno);
+      group.heDomEFer = formatarHoras(calculoHoras.heDomEFer);
     });
 
     let maxPairs = 1;
@@ -306,6 +326,7 @@ export default function PontoPage() {
         extra50Noturno: formatarHoras(totalsNumeric.extra50Noturno),
         extra100Diurno: formatarHoras(totalsNumeric.extra100Diurno),
         extra100Noturno: formatarHoras(totalsNumeric.extra100Noturno),
+        heDomEFer: formatarHoras(totalsNumeric.heDomEFer),
       },
     };
   }, [

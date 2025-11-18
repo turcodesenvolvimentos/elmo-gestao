@@ -7,15 +7,10 @@ function calcularHorasEntreDatas(inicio: Date, fim: Date): number {
   return diferencaMs / (1000 * 60 * 60);
 }
 
-function ehHorarioNoturno(hora: number): boolean {
-  return hora >= 22 || hora < 5;
-}
-
 export function calcularHorasPorPeriodo(
-  punches: Array<{ dateIn?: string; dateOut?: string }>
+  punches: Array<{ dateIn?: string; dateOut?: string }>,
+  dataReferencia?: string | Date
 ) {
-  const horasReaisTrabalhadasPorDia = new Map<string, number>();
-
   const periodos: Array<{ inicio: Date; fim: Date }> = [];
   punches.forEach((punch) => {
     if (!punch.dateIn || !punch.dateOut) return;
@@ -27,122 +22,186 @@ export function calcularHorasPorPeriodo(
 
   periodos.sort((a, b) => a.inicio.getTime() - b.inicio.getTime());
 
-  let totalHorasNoturnas = 0;
-  let totalHorasDiurnas = 0;
-  let horasNormaisNoturnas = 0;
-  let horasNormaisDiurnas = 0;
-  let horasExtrasNoturnas50 = 0;
-  let horasExtrasDiurnas50 = 0;
-  let horasExtrasNoturnas100 = 0;
-  let horasExtrasDiurnas100 = 0;
+  const CARGA_HORARIA_DIA_NORMAL = 8;
+  const CARGA_HORARIA_SABADO = 4;
+
+  let dataPonto: Date;
+  if (dataReferencia) {
+    dataPonto =
+      typeof dataReferencia === "string"
+        ? new Date(dataReferencia + "T12:00:00Z")
+        : dataReferencia;
+  } else if (periodos.length > 0) {
+    dataPonto = new Date(periodos[0].inicio);
+    dataPonto.setHours(12, 0, 0, 0);
+  } else {
+    return {
+      horasNoturnas: 0,
+      horasDiurnas: 0,
+      totalHoras: 0,
+      horasFictas: 0,
+      horasNormais: 0,
+      adicionalNoturno: 0,
+      extra50Diurno: 0,
+      extra50Noturno: 0,
+      extra100Diurno: 0,
+      extra100Noturno: 0,
+    };
+  }
+
+  const diaSemana = dataPonto.getDay();
+  const ehFeriado = !!hd.isHoliday(dataPonto);
+  const ehDomingo = diaSemana === 0;
+  const ehSabado = diaSemana === 6;
+
+  let horasTrabalhadasTotais = 0;
+  periodos.forEach((periodo) => {
+    const horasPeriodo = calcularHorasEntreDatas(periodo.inicio, periodo.fim);
+    horasTrabalhadasTotais += horasPeriodo;
+  });
+
+  let horasNoturnasTrabalhadas = 0;
 
   periodos.forEach((periodo) => {
-    let horaAtual = new Date(periodo.inicio);
+    const inicio = new Date(periodo.inicio);
+    const fim = new Date(periodo.fim);
 
-    while (horaAtual < periodo.fim) {
-      const proximaHora = new Date(horaAtual);
-      proximaHora.setHours(horaAtual.getHours() + 1, 0, 0, 0);
+    let horaAtual = new Date(inicio);
 
-      const fimPeriodo = proximaHora > periodo.fim ? periodo.fim : proximaHora;
-      const horasNoPeriodo = calcularHorasEntreDatas(horaAtual, fimPeriodo);
-
-      const diaAtual = horaAtual.getDay();
-      const currentDateStr = new Date(
-        Date.UTC(
-          horaAtual.getFullYear(),
-          horaAtual.getMonth(),
-          horaAtual.getDate()
-        )
-      )
-        .toISOString()
-        .slice(0, 10);
-
+    while (horaAtual < fim) {
       const horaAtualNum = horaAtual.getHours();
-      const ehFeriadoHora = !!hd.isHoliday(horaAtual);
-      const eh100 = diaAtual === 0 || ehFeriadoHora;
-      const ehNoturno = ehHorarioNoturno(horaAtualNum);
+      let horasNoturnasNesteSegmento = 0;
 
-      let cargaHorariaDoDia = 0;
-      if (ehFeriadoHora || diaAtual === 0) {
-        cargaHorariaDoDia = 0;
-      } else if (diaAtual >= 1 && diaAtual <= 5) {
-        cargaHorariaDoDia = 8;
-      } else if (diaAtual === 6) {
-        cargaHorariaDoDia = 4;
-      }
+      if (horaAtualNum >= 22) {
+        const fimNoturno = new Date(horaAtual);
+        fimNoturno.setDate(fimNoturno.getDate() + 1);
+        fimNoturno.setHours(5, 0, 0, 0);
 
-      const horasTrabalhadasAcumuladasNoDia =
-        horasReaisTrabalhadasPorDia.get(currentDateStr) ?? 0;
-      const horasRestantesParaCargaHoraria = Math.max(
-        0,
-        cargaHorariaDoDia - horasTrabalhadasAcumuladasNoDia
-      );
-
-      let horasNormaisNestePeriodo = 0;
-      let horasExtrasNestePeriodo = 0;
-
-      if (horasRestantesParaCargaHoraria > 0) {
-        horasNormaisNestePeriodo = Math.min(
-          horasNoPeriodo,
-          horasRestantesParaCargaHoraria
+        const fimSegmento = fim < fimNoturno ? fim : fimNoturno;
+        horasNoturnasNesteSegmento = calcularHorasEntreDatas(
+          horaAtual,
+          fimSegmento
         );
-        horasExtrasNestePeriodo = horasNoPeriodo - horasNormaisNestePeriodo;
-      } else {
-        horasExtrasNestePeriodo = horasNoPeriodo;
-      }
+        horasNoturnasTrabalhadas += horasNoturnasNesteSegmento;
 
-      const horasNormaisReais = horasNormaisNestePeriodo;
-      const horasExtrasReais = horasExtrasNestePeriodo;
+        horaAtual = fimSegmento;
+      } else if (horaAtualNum < 5) {
+        const fimNoturno = new Date(horaAtual);
+        fimNoturno.setHours(5, 0, 0, 0);
 
-      if (ehNoturno) {
-        totalHorasNoturnas += horasNoPeriodo;
-        horasNormaisNoturnas += horasNormaisReais;
-        if (horasExtrasReais > 0) {
-          if (eh100) {
-            horasExtrasNoturnas100 += horasExtrasReais;
-          } else {
-            horasExtrasNoturnas50 += horasExtrasReais;
-          }
+        if (fimNoturno <= horaAtual) {
+          const proximaHoraCheia = new Date(horaAtual);
+          proximaHoraCheia.setHours(horaAtualNum + 1, 0, 0, 0);
+          horaAtual = proximaHoraCheia > fim ? fim : proximaHoraCheia;
+        } else {
+          const fimSegmento = fim < fimNoturno ? fim : fimNoturno;
+          horasNoturnasNesteSegmento = calcularHorasEntreDatas(
+            horaAtual,
+            fimSegmento
+          );
+          horasNoturnasTrabalhadas += horasNoturnasNesteSegmento;
+          horaAtual = fimSegmento;
         }
       } else {
-        totalHorasDiurnas += horasNoPeriodo;
-        horasNormaisDiurnas += horasNormaisReais;
-        if (horasExtrasReais > 0) {
-          if (eh100) {
-            horasExtrasDiurnas100 += horasExtrasReais;
-          } else {
-            horasExtrasDiurnas50 += horasExtrasReais;
-          }
-        }
+        const proximaHoraCheia = new Date(horaAtual);
+        proximaHoraCheia.setHours(horaAtualNum + 1, 0, 0, 0);
+        horaAtual = proximaHoraCheia > fim ? fim : proximaHoraCheia;
       }
-
-      horasReaisTrabalhadasPorDia.set(
-        currentDateStr,
-        (horasReaisTrabalhadasPorDia.get(currentDateStr) ?? 0) + horasNoPeriodo
-      );
-
-      horaAtual = fimPeriodo;
     }
   });
 
-  const totalHoras = totalHorasNoturnas * 1.142857 + totalHorasDiurnas;
-  const horasFictas = totalHorasNoturnas * 0.142857;
-  const horasNormais = horasNormaisDiurnas + horasNormaisNoturnas;
+  const horasFictas = horasNoturnasTrabalhadas / 7;
 
-  const extra50Diurno = horasExtrasDiurnas50;
-  const extra50Noturno = horasExtrasNoturnas50 * 1.142857;
+  horasTrabalhadasTotais = horasTrabalhadasTotais + horasFictas;
+
+  const horasNoturnasTotais = horasNoturnasTrabalhadas + horasFictas;
+
+  const horasDiurnas = horasTrabalhadasTotais - horasNoturnasTotais;
+
+  let horasNormais = 0;
+  if (ehFeriado || ehDomingo) {
+    horasNormais = 0;
+  } else if (ehSabado) {
+    horasNormais = Math.min(CARGA_HORARIA_SABADO, horasTrabalhadasTotais);
+  } else {
+    horasNormais = Math.min(CARGA_HORARIA_DIA_NORMAL, horasTrabalhadasTotais);
+  }
+
+  let horasExtras = 0;
+  if (ehDomingo || ehFeriado) {
+    horasExtras = horasTrabalhadasTotais;
+  } else if (horasNormais === 0) {
+    horasExtras = 0;
+  } else {
+    if (ehSabado) {
+      horasExtras = Math.max(0, horasTrabalhadasTotais - CARGA_HORARIA_SABADO);
+    } else {
+      horasExtras = Math.max(
+        0,
+        horasTrabalhadasTotais - CARGA_HORARIA_DIA_NORMAL
+      );
+    }
+  }
+
+  let horasNormaisDiurnas = 0;
+  let horasNormaisNoturnas = 0;
+  let horasExtrasDiurnas = 0;
+  let horasExtrasNoturnas = 0;
+
+  if (horasTrabalhadasTotais > 0) {
+    const proporcaoNoturnas = horasNoturnasTotais / horasTrabalhadasTotais;
+    const proporcaoDiurnas = horasDiurnas / horasTrabalhadasTotais;
+
+    horasNormaisNoturnas = horasNormais * proporcaoNoturnas;
+    horasNormaisDiurnas = horasNormais * proporcaoDiurnas;
+
+    horasExtrasNoturnas = horasExtras * proporcaoNoturnas;
+    horasExtrasDiurnas = horasExtras * proporcaoDiurnas;
+  }
+
+  let horasExtrasDiurnas50 = horasExtrasDiurnas;
+  let horasExtrasDiurnas100 = 0;
+  let horasExtrasNoturnas50 = horasExtrasNoturnas;
+  let horasExtrasNoturnas100 = 0;
+
+  if (ehDomingo || ehFeriado) {
+    horasExtrasDiurnas100 = horasExtrasDiurnas;
+    horasExtrasDiurnas50 = 0;
+    horasExtrasNoturnas100 = horasExtrasNoturnas;
+    horasExtrasNoturnas50 = 0;
+  }
+
+  const fatorNoturno = 1.142857;
+  const adicionalNoturnoFator = 0.142857;
+  const adicionalNoturno = horasNormaisNoturnas * adicionalNoturnoFator;
+
+  const horasNoturnasComFator =
+    horasNormaisNoturnas * fatorNoturno +
+    horasExtrasNoturnas50 +
+    horasExtrasNoturnas100;
+
+  const totalHoras =
+    horasNormaisDiurnas +
+    horasNormaisNoturnas * fatorNoturno +
+    horasExtrasDiurnas50 +
+    horasExtrasDiurnas100 +
+    horasExtrasNoturnas50 +
+    horasExtrasNoturnas100;
+
+  const heDomEFer = horasNormais === 0 ? horasTrabalhadasTotais : 0;
 
   return {
-    horasNoturnas: totalHorasNoturnas * 1.142857,
-    horasDiurnas: totalHorasDiurnas,
+    horasNoturnas: horasNoturnasComFator,
+    horasDiurnas: horasDiurnas,
     totalHoras: totalHoras,
     horasFictas: horasFictas,
     horasNormais: horasNormais,
-    adicionalNoturno: horasNormaisNoturnas * 1.142857,
-    extra50Diurno: extra50Diurno,
-    extra50Noturno: extra50Noturno,
+    adicionalNoturno: adicionalNoturno,
+    extra50Diurno: horasExtrasDiurnas50,
+    extra50Noturno: horasExtrasNoturnas50,
     extra100Diurno: horasExtrasDiurnas100,
-    extra100Noturno: horasExtrasNoturnas100 * 1.142857,
+    extra100Noturno: horasExtrasNoturnas100,
+    heDomEFer: heDomEFer,
   };
 }
 
