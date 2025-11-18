@@ -46,6 +46,7 @@ export function calcularHorasPorPeriodo(
       extra50Noturno: 0,
       extra100Diurno: 0,
       extra100Noturno: 0,
+      heDomEFer: 0,
     };
   }
 
