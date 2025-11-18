@@ -1,6 +1,6 @@
 export async function fetchPunches(
   page = 0,
-  size = 50,
+  size = 1000,
   startDate?: string,
   endDate?: string,
   employeeId?: number,

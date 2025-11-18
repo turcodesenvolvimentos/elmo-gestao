@@ -28,18 +28,31 @@ export function usePunchesInfinite(
   enabled = true
 ) {
   return useInfiniteQuery({
-    queryKey: ["punches-infinite", size, startDate, endDate, employeeId, status],
+    queryKey: [
+      "punches-infinite",
+      size,
+      startDate,
+      endDate,
+      employeeId,
+      status,
+    ],
     queryFn: ({ pageParam = 0 }) =>
       fetchPunches(pageParam, size, startDate, endDate, employeeId, status),
     getNextPageParam: (lastPage) => {
       if (lastPage.last === true) {
         return undefined;
       }
-      
-      if (lastPage.last === false || (lastPage.content && lastPage.content.length > 0)) {
+
+      if (
+        lastPage.last === false ||
+        (lastPage.content && lastPage.content.length > 0)
+      ) {
         const nextPage = (lastPage.number ?? lastPage.page ?? 0) + 1;
-      
-        if (lastPage.totalPages !== undefined && nextPage >= lastPage.totalPages) {
+
+        if (
+          lastPage.totalPages !== undefined &&
+          nextPage >= lastPage.totalPages
+        ) {
           return undefined;
         }
         return nextPage;

@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const page = parseInt(searchParams.get("page") || "0");
-    const size = parseInt(searchParams.get("size") || "50");
+    const size = parseInt(searchParams.get("size") || "1000");
     const startDate = searchParams.get("startDate") || undefined;
     const endDate = searchParams.get("endDate") || undefined;
     const employeeId = searchParams.get("employeeId")
@@ -25,10 +25,10 @@ export async function GET(request: NextRequest) {
     };
 
     if (startDate) {
-      queryParams.initialDate = startDate;
+      queryParams.startDate = startDate;
     }
     if (endDate) {
-      queryParams.finalDate = endDate;
+      queryParams.endDate = endDate;
     }
     if (employeeId) {
       queryParams.employeeId = employeeId;
@@ -41,46 +41,11 @@ export async function GET(request: NextRequest) {
       params: queryParams,
     });
 
-    let content = response.data?.content || [];
-
-    if (startDate || endDate) {
-      const startDateObj = startDate ? new Date(startDate + "T00:00:00") : null;
-      const endDateObj = endDate ? new Date(endDate + "T23:59:59") : null;
-
-      content = content.filter(
-        (punch: { date?: string; dateIn?: string; dateOut?: string }) => {
-          const punchDateStr =
-            punch.date || punch.dateIn || punch.dateOut || "";
-          if (!punchDateStr) return false;
-
-          const punchDate = new Date(punchDateStr);
-
-          if (startDateObj && punchDate < startDateObj) return false;
-          if (endDateObj && punchDate > endDateObj) return false;
-
-          return true;
-        }
-      );
-    }
-
-    return NextResponse.json({
-      ...response.data,
-      content,
-    });
+    return NextResponse.json(response.data);
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
       const solidesError = handleSolidesError(error);
       const errorDetails = solidesError.details || {};
-
-      console.error("Erro Sólides:", {
-        message: solidesError.message,
-        status: solidesError.status,
-        details: errorDetails,
-        url: error.config?.url,
-        params: error.config?.params,
-        responseData: error.response?.data,
-        headers: error.config?.headers,
-      });
 
       return NextResponse.json(
         {
