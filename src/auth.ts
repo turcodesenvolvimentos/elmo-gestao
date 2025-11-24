@@ -1,19 +1,11 @@
 import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
-
-// Mock de usuários - em produção, buscar do banco de dados
-const USERS = [
-  {
-    id: "1",
-    email: "admin@elmosys.com",
-    password: "$2b$10$oKt1xiYWhLxmVTAwYYp.bO5K.x4lEiquxtRMv7F1u4aNBM/osRj7e", // senha123
-    name: "Admin",
-  },
-];
+import { supabaseAdmin } from "@/lib/db/client";
+import { loginSchema } from "@/lib/validations/auth";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  secret: process.env.AUTH_SECRET || "elmo-gestao-secret-development",
+  secret: process.env.AUTH_SECRET,
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -26,24 +18,45 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           throw new Error("Email e senha são obrigatórios");
         }
 
-        const user = USERS.find((u) => u.email === credentials.email);
+        const validationResult = loginSchema.safeParse({
+          email: credentials.email,
+          password: credentials.password,
+        });
 
-        if (!user) {
-          throw new Error("Email ou senha inválidos");
+        if (!validationResult.success) {
+          throw new Error("Dados de login inválidos");
         }
 
-        const password = credentials.password as string;
-        const isPasswordValid = await bcrypt.compare(password, user.password);
+        try {
+          const { data: user, error } = await supabaseAdmin
+            .from("users")
+            .select("id, email, password_hash, name")
+            .eq("email", credentials.email)
+            .single();
 
-        if (!isPasswordValid) {
-          throw new Error("Email ou senha inválidos");
+          if (error || !user) {
+            throw new Error("Email ou senha inválidos");
+          }
+
+          const password = credentials.password as string;
+          const isPasswordValid = await bcrypt.compare(
+            password,
+            user.password_hash
+          );
+
+          if (!isPasswordValid) {
+            throw new Error("Email ou senha inválidos");
+          }
+
+          return {
+            id: user.id.toString(),
+            email: user.email,
+            name: user.name || "",
+          };
+        } catch (error) {
+          console.error("Erro na autenticação:", error);
+          throw new Error("Erro ao autenticar usuário");
         }
-
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-        };
       },
     }),
   ],
