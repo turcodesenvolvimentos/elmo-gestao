@@ -1,7 +1,14 @@
-import fs from "fs";
-import path from "path";
+const fs = require("fs");
+const path = require("path");
 
-const migrationsDir = path.join(__dirname, "..", "supabase", "migrations");
+const migrationsDir = path.join(
+  __dirname,
+  "..",
+  "src",
+  "lib",
+  "db",
+  "migrations"
+);
 
 function getMigrations() {
   if (!fs.existsSync(migrationsDir)) {
