@@ -1,7 +1,15 @@
 "use client";
 
 import * as React from "react";
-import { Home, Utensils, Clock, Users, File, LogOut, Building } from "lucide-react";
+import {
+  Home,
+  Utensils,
+  Clock,
+  Users,
+  File,
+  LogOut,
+  Building,
+} from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Collapsible, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -28,13 +36,8 @@ const data = {
       icon: Home,
     },
     {
-      title: "Funcionários",
-      url: "/funcionarios",
-      icon: Users,
-    },
-    {
-      title: "Empresas",
-      url: "/empresas",
+      title: "Empresas e Funcionários",
+      url: "/empresas-e-funcionarios",
       icon: Building,
     },
     {
