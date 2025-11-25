@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "migrations": "node scripts/run-migrations.js",
-    "sync-punches": "node scripts/sync-punches.js"
+    "sync-punches": "node scripts/sync-punches.js",
+    "link-employees-companies": "node scripts/link-employees-companies.js"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
