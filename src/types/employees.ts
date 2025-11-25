@@ -38,6 +38,12 @@ interface Employee {
     name: string;
     externalId: string | number;
   };
+
+  companies?: {
+    id: string;
+    name: string;
+    address: string;
+  }[];
 }
 
 interface TangerinoEmployeesResponse {

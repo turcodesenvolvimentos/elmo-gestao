@@ -27,3 +27,38 @@ export async function fetchEmployees(
 
   return response.json();
 }
+
+export async function addCompanyToEmployee(
+  solidesId: number,
+  companyId: string
+): Promise<void> {
+  const response = await fetch(`/api/employees/${solidesId}/companies`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ companyId }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Erro ao adicionar empresa ao funcionário");
+  }
+}
+
+export async function removeCompanyFromEmployee(
+  solidesId: number,
+  companyId: string
+): Promise<void> {
+  const response = await fetch(
+    `/api/employees/${solidesId}/companies?companyId=${companyId}`,
+    {
+      method: "DELETE",
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Erro ao remover empresa do funcionário");
+  }
+}
