@@ -307,13 +307,114 @@ export default function PontoPage() {
       group.heDomEFer = formatarHoras(calculoHoras.heDomEFer);
     });
 
-    let maxPairs = 1;
+    // Preencher dias faltantes entre a primeira e última data de cada funcionário
+    const groupedByEmployee = new Map<string, GroupedPunch[]>();
     grouped.forEach((group) => {
+      if (!groupedByEmployee.has(group.employeeName)) {
+        groupedByEmployee.set(group.employeeName, []);
+      }
+      groupedByEmployee.get(group.employeeName)!.push(group);
+    });
+
+    // Determinar o range de datas para preenchimento
+    const startDateForFill =
+      shouldSendDates && filter.startDate ? filter.startDate : null;
+    const endDateForFill =
+      shouldSendDates && filter.endDate ? filter.endDate : null;
+
+    groupedByEmployee.forEach((groups, employeeName) => {
+      // Ordenar grupos por data
+      groups.sort((a, b) => a.date.localeCompare(b.date));
+
+      // Determinar primeira e última data
+      const firstDate = startDateForFill || groups[0].date;
+      const lastDate = endDateForFill || groups[groups.length - 1].date;
+
+      // Criar um Set com as datas existentes para busca rápida
+      const existingDates = new Set(groups.map((g) => g.date));
+
+      // Preencher dias faltantes
+      const [startYear, startMonth, startDay] = firstDate
+        .split("-")
+        .map(Number);
+      const [endYear, endMonth, endDay] = lastDate.split("-").map(Number);
+      const startDateObj = new Date(
+        Date.UTC(startYear, startMonth - 1, startDay)
+      );
+      const endDateObj = new Date(Date.UTC(endYear, endMonth - 1, endDay));
+
+      const currentDate = new Date(startDateObj);
+      while (currentDate <= endDateObj) {
+        const year = currentDate.getUTCFullYear();
+        const month = String(currentDate.getUTCMonth() + 1).padStart(2, "0");
+        const day = String(currentDate.getUTCDate()).padStart(2, "0");
+        const dateStr = `${year}-${month}-${day}`;
+
+        if (!existingDates.has(dateStr)) {
+          const formattedDate = `${day}/${month}/${year}`;
+          const date = new Date(dateStr + "T12:00:00Z");
+          const dayOfWeek = date.toLocaleDateString("pt-BR", {
+            weekday: "long",
+            timeZone: "UTC",
+          });
+          const dayOfWeekNumber = date.getDay();
+
+          // Encontrar a empresa do funcionário (pegar da primeira ocorrência)
+          const company = groups[0]?.company || "-";
+
+          const emptyGroup: GroupedPunch = {
+            key: `${employeeName}-${dateStr}`,
+            employeeName,
+            company,
+            isHoliday: !!hd.isHoliday(new Date(dateStr + "T12:00:00Z")),
+            date: dateStr,
+            formattedDate,
+            dayOfWeek,
+            dayOfWeekNumber,
+            punches: [],
+            horasDiurnas: "00:00",
+            horasNoturnas: "00:00",
+            horasFictas: "00:00",
+            totalHoras: "00:00",
+            horasNormais: "00:00",
+            adicionalNoturno: "00:00",
+            extra50Diurno: "00:00",
+            extra50Noturno: "00:00",
+            extra100Diurno: "00:00",
+            extra100Noturno: "00:00",
+            heDomEFer: "00:00",
+          };
+
+          groups.push(emptyGroup);
+        }
+
+        currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+      }
+
+      // Reordenar após adicionar dias faltantes
+      groups.sort((a, b) => a.date.localeCompare(b.date));
+    });
+
+    // Reconstruir o array final com todos os grupos (incluindo os vazios)
+    const finalGroupedPunches: GroupedPunch[] = [];
+    groupedByEmployee.forEach((groups) => {
+      finalGroupedPunches.push(...groups);
+    });
+
+    // Ordenar por funcionário e depois por data
+    finalGroupedPunches.sort((a, b) => {
+      const employeeCompare = a.employeeName.localeCompare(b.employeeName);
+      if (employeeCompare !== 0) return employeeCompare;
+      return a.date.localeCompare(b.date);
+    });
+
+    let maxPairs = 1;
+    finalGroupedPunches.forEach((group) => {
       maxPairs = Math.max(maxPairs, group.punches.length);
     });
 
     return {
-      groupedPunches: Array.from(grouped.values()),
+      groupedPunches: finalGroupedPunches,
       maxPunchPairs: maxPairs,
       totals: {
         horasDiurnas: formatarHoras(totalsNumeric.horasDiurnas),
@@ -587,18 +688,35 @@ export default function PontoPage() {
                     </TableRow>
                   ) : groupedPunches.length > 0 ? (
                     <>
-                      {groupedPunches.map((group) => (
-                        <TableRow key={group.key}>
+                      {groupedPunches.map((group, index) => (
+                        <TableRow
+                          key={group.key}
+                          className={
+                            index % 2 === 0 ? "bg-white" : "bg-gray-100"
+                          }
+                        >
                           <TableCell className="px-4 py-3 border-r border-gray-200">
                             {group.employeeName}
                           </TableCell>
                           <TableCell className="px-4 py-3 border-r border-gray-200">
                             {group.company}
                           </TableCell>
-                          <TableCell className="px-4 py-3 border-r border-gray-200">
+                          <TableCell
+                            className={`px-4 py-3 border-r border-gray-200 ${
+                              group.isHoliday || group.dayOfWeekNumber === 0
+                                ? "bg-blue-100 text-blue-800 font-medium"
+                                : ""
+                            }`}
+                          >
                             {group.formattedDate}
                           </TableCell>
-                          <TableCell className="px-4 py-3 border-r border-gray-200 capitalize">
+                          <TableCell
+                            className={`px-4 py-3 border-r border-gray-200 capitalize ${
+                              group.isHoliday || group.dayOfWeekNumber === 0
+                                ? "bg-blue-100 text-blue-800 font-medium"
+                                : ""
+                            }`}
+                          >
                             {group.dayOfWeek}
                           </TableCell>
 
