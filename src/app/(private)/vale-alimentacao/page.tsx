@@ -352,7 +352,9 @@ export default function ValeAlimentacaoPage() {
           : shouldAutoActivate && costHelpValue > 0;
 
         // Formatar entradas e saídas
-        const punches = group.punches.filter((p) => p.dateIn && p.dateOut);
+        const punches = group.punches.filter(
+          (p: { dateIn?: string; dateOut?: string }) => p.dateIn && p.dateOut
+        );
         const entry1 = punches[0]?.dateIn
           ? new Date(punches[0].dateIn).toLocaleTimeString("pt-BR", {
               hour: "2-digit",
