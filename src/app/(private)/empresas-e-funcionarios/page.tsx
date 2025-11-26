@@ -2085,7 +2085,7 @@ export default function EmpresasPage() {
 
                   <Field orientation="vertical">
                     <FieldLabel htmlFor="edit-vr-per-hour">
-                      VR por Hora (R$){" "}
+                      VR (R$){" "}
                       <span className="text-muted-foreground">(opcional)</span>
                     </FieldLabel>
                     <FieldContent>
@@ -2108,7 +2108,7 @@ export default function EmpresasPage() {
 
                   <Field orientation="vertical">
                     <FieldLabel htmlFor="edit-cost-help-per-hour">
-                      Ajuda de Custo por Hora (R$){" "}
+                      Ajuda de Custo (R$){" "}
                       <span className="text-muted-foreground">(opcional)</span>
                     </FieldLabel>
                     <FieldContent>
