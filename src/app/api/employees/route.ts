@@ -40,10 +40,16 @@ export async function GET(request: NextRequest) {
           .select(
             `
             company_id,
+            position_id,
             companies (
               id,
               name,
               address
+            ),
+            positions (
+              id,
+              name,
+              hour_value
             )
           `
           )
@@ -52,8 +58,12 @@ export async function GET(request: NextRequest) {
         // Extrair as empresas do resultado e ordenar por nome
         const companies =
           employeeCompanies
-            ?.map((ec: any) => ec.companies)
-            .filter((company: any) => company !== null)
+            ?.map((ec: any) => ({
+              ...ec.companies,
+              position_id: ec.position_id,
+              position: ec.positions || null,
+            }))
+            .filter((company: any) => company !== null && company.id)
             .sort((a: any, b: any) => {
               const nameA = (a.name || "").toLowerCase();
               const nameB = (b.name || "").toLowerCase();

@@ -12,7 +12,7 @@ export async function POST(
   try {
     const { solidesId } = await params;
     const body = await request.json();
-    const { companyId } = body;
+    const { companyId, positionId } = body;
 
     if (!solidesId) {
       return NextResponse.json(
@@ -56,6 +56,29 @@ export async function POST(
       );
     }
 
+    // Se positionId foi fornecido, verificar se o cargo existe e pertence à empresa
+    if (positionId) {
+      const { data: position, error: positionError } = await supabaseAdmin
+        .from("positions")
+        .select("id, company_id")
+        .eq("id", positionId)
+        .single();
+
+      if (positionError || !position) {
+        return NextResponse.json(
+          { error: "Cargo não encontrado" },
+          { status: 404 }
+        );
+      }
+
+      if (position.company_id !== companyId) {
+        return NextResponse.json(
+          { error: "O cargo não pertence a esta empresa" },
+          { status: 400 }
+        );
+      }
+    }
+
     // Verificar se o vínculo já existe
     const { data: existingLink } = await supabaseAdmin
       .from("employee_companies")
@@ -77,6 +100,7 @@ export async function POST(
       .insert({
         employee_id: localEmployee.id,
         company_id: companyId,
+        position_id: positionId || null,
       })
       .select()
       .single();
@@ -91,6 +115,126 @@ export async function POST(
     return NextResponse.json(
       {
         error: "Erro ao adicionar empresa ao funcionário",
+        details: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * PUT /api/employees/[solidesId]/companies
+ * Atualiza o cargo de um funcionário em uma empresa
+ */
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ solidesId: string }> }
+) {
+  try {
+    const { solidesId } = await params;
+    const body = await request.json();
+    const { companyId, positionId } = body;
+
+    if (!solidesId) {
+      return NextResponse.json(
+        { error: "ID do funcionário é obrigatório" },
+        { status: 400 }
+      );
+    }
+
+    if (!companyId) {
+      return NextResponse.json(
+        { error: "ID da empresa é obrigatório" },
+        { status: 400 }
+      );
+    }
+
+    // Buscar o UUID do funcionário no banco local usando o solides_id
+    const { data: localEmployee, error: employeeError } = await supabaseAdmin
+      .from("employees")
+      .select("id")
+      .eq("solides_id", parseInt(solidesId))
+      .single();
+
+    if (employeeError || !localEmployee) {
+      return NextResponse.json(
+        { error: "Funcionário não encontrado no banco local" },
+        { status: 404 }
+      );
+    }
+
+    // Verificar se a empresa existe
+    const { data: company, error: companyError } = await supabaseAdmin
+      .from("companies")
+      .select("id")
+      .eq("id", companyId)
+      .single();
+
+    if (companyError || !company) {
+      return NextResponse.json(
+        { error: "Empresa não encontrada" },
+        { status: 404 }
+      );
+    }
+
+    // Se positionId foi fornecido, verificar se o cargo existe e pertence à empresa
+    if (positionId) {
+      const { data: position, error: positionError } = await supabaseAdmin
+        .from("positions")
+        .select("id, company_id")
+        .eq("id", positionId)
+        .single();
+
+      if (positionError || !position) {
+        return NextResponse.json(
+          { error: "Cargo não encontrado" },
+          { status: 404 }
+        );
+      }
+
+      if (position.company_id !== companyId) {
+        return NextResponse.json(
+          { error: "O cargo não pertence a esta empresa" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Verificar se o vínculo existe
+    const { data: existingLink, error: linkError } = await supabaseAdmin
+      .from("employee_companies")
+      .select("id")
+      .eq("employee_id", localEmployee.id)
+      .eq("company_id", companyId)
+      .single();
+
+    if (linkError || !existingLink) {
+      return NextResponse.json(
+        { error: "Funcionário não está vinculado a esta empresa" },
+        { status: 404 }
+      );
+    }
+
+    // Atualizar o cargo
+    const { data: updatedLink, error: updateError } = await supabaseAdmin
+      .from("employee_companies")
+      .update({
+        position_id: positionId || null,
+      })
+      .eq("id", existingLink.id)
+      .select()
+      .single();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    return NextResponse.json({ success: true, data: updatedLink });
+  } catch (error: unknown) {
+    console.error("Erro ao atualizar cargo do funcionário:", error);
+    return NextResponse.json(
+      {
+        error: "Erro ao atualizar cargo do funcionário",
         details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 }

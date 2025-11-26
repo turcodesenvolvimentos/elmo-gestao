@@ -30,19 +30,39 @@ export async function fetchEmployees(
 
 export async function addCompanyToEmployee(
   solidesId: number,
-  companyId: string
+  companyId: string,
+  positionId?: string
 ): Promise<void> {
   const response = await fetch(`/api/employees/${solidesId}/companies`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ companyId }),
+    body: JSON.stringify({ companyId, positionId }),
   });
 
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.error || "Erro ao adicionar empresa ao funcionário");
+  }
+}
+
+export async function updateEmployeeCompanyPosition(
+  solidesId: number,
+  companyId: string,
+  positionId?: string
+): Promise<void> {
+  const response = await fetch(`/api/employees/${solidesId}/companies`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ companyId, positionId }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Erro ao atualizar cargo do funcionário");
   }
 }
 

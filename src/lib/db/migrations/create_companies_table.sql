@@ -1,5 +1,7 @@
 -- Criação da tabela de empresas
 -- Empresas são cadastradas manualmente a partir de endereços dos pontos
+-- Nota: Esta migration cria a tabela básica. A migration update_positions_and_companies_structure.sql
+-- adicionará os campos vr_per_hour e cost_help_per_hour se não existirem
 CREATE TABLE IF NOT EXISTS companies (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   

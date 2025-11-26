@@ -13,11 +13,15 @@ export async function fetchCompanies(): Promise<CompaniesResponse> {
 export interface CreateCompanyData {
   name: string;
   address: string;
+  vr_per_hour?: number;
+  cost_help_per_hour?: number;
 }
 
 export interface UpdateCompanyData {
   name: string;
   address: string;
+  vr_per_hour?: number;
+  cost_help_per_hour?: number;
 }
 
 export async function createCompany(data: CreateCompanyData): Promise<Company> {

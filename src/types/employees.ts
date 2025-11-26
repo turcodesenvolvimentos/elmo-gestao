@@ -43,6 +43,12 @@ interface Employee {
     id: string;
     name: string;
     address: string;
+    position_id?: string;
+    position?: {
+      id: string;
+      name: string;
+      hour_value: number;
+    };
   }[];
 }
 

@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/db/client";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, address } = body;
+    const { name, address, vr_per_hour, cost_help_per_hour } = body;
 
     // Validação
     if (!name || !name.trim()) {
@@ -21,12 +21,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validação de valores numéricos (opcionais, com default 0)
+    const vrValue = vr_per_hour !== undefined ? Number(vr_per_hour) : 0;
+    const costValue = cost_help_per_hour !== undefined ? Number(cost_help_per_hour) : 0;
+
+    if (isNaN(vrValue) || vrValue < 0) {
+      return NextResponse.json(
+        { error: "Valor do VR por hora deve ser um número positivo" },
+        { status: 400 }
+      );
+    }
+
+    if (isNaN(costValue) || costValue < 0) {
+      return NextResponse.json(
+        { error: "Ajuda de Custo por hora deve ser um número positivo" },
+        { status: 400 }
+      );
+    }
+
     // Criar empresa
     const { data: company, error: createError } = await supabaseAdmin
       .from("companies")
       .insert({
         name: name.trim(),
         address: address.trim(),
+        vr_per_hour: vrValue,
+        cost_help_per_hour: costValue,
       })
       .select()
       .single();
@@ -73,6 +93,8 @@ export async function GET() {
         id,
         name,
         address,
+        vr_per_hour,
+        cost_help_per_hour,
         created_at,
         updated_at
       `

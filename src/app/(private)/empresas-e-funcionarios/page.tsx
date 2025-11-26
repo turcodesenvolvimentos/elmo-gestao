@@ -12,6 +12,7 @@ import {
   Trash2,
   User,
   Link2,
+  Briefcase,
 } from "lucide-react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -39,7 +40,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Field,
   FieldContent,
@@ -62,12 +62,547 @@ import {
 import {
   useEmployees,
   useAddCompanyToEmployee,
+  useUpdateEmployeeCompanyPosition,
   useRemoveCompanyFromEmployee,
 } from "@/hooks/use-employees";
+import {
+  usePositions,
+  useCreatePosition,
+  useUpdatePosition,
+  useDeletePosition,
+} from "@/hooks/use-positions";
 import { Company } from "@/types/companies";
 import { Employee } from "@/types/employees";
+import { Position, CreatePositionData } from "@/types/positions";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+function PositionsManager({ companyId }: { companyId: string }) {
+  const { data: positionsData, isLoading } = usePositions(companyId);
+  const createPositionMutation = useCreatePosition();
+  const updatePositionMutation = useUpdatePosition();
+  const deletePositionMutation = useDeletePosition();
+
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [editingPosition, setEditingPosition] = useState<Position | null>(null);
+  const [deletingPosition, setDeletingPosition] = useState<Position | null>(
+    null
+  );
+
+  const [positionFormData, setPositionFormData] = useState({
+    name: "",
+    hour_value: "",
+  });
+  const [positionFormErrors, setPositionFormErrors] = useState<{
+    name?: string;
+    hour_value?: string;
+  }>({});
+
+  const handlePositionInputChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const { name, value } = e.target;
+    setPositionFormData((prev) => ({ ...prev, [name]: value }));
+    if (positionFormErrors[name as keyof typeof positionFormErrors]) {
+      setPositionFormErrors((prev) => ({ ...prev, [name]: undefined }));
+    }
+  };
+
+  const validatePositionForm = () => {
+    const errors: {
+      name?: string;
+      hour_value?: string;
+    } = {};
+
+    if (!positionFormData.name.trim()) {
+      errors.name = "Nome do cargo é obrigatório";
+    }
+
+    // Valor hora é opcional, mas se preenchido deve ser válido
+    if (positionFormData.hour_value.trim()) {
+      const hourValue = parseFloat(positionFormData.hour_value);
+      if (isNaN(hourValue) || hourValue < 0) {
+        errors.hour_value = "Valor hora deve ser um número positivo";
+      }
+    }
+
+    setPositionFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleCreatePosition = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!validatePositionForm()) {
+      return;
+    }
+
+    try {
+      const positionData: CreatePositionData = {
+        name: positionFormData.name.trim(),
+        company_id: companyId,
+      };
+
+      if (positionFormData.hour_value.trim()) {
+        positionData.hour_value = parseFloat(positionFormData.hour_value);
+      }
+
+      await createPositionMutation.mutateAsync({
+        companyId,
+        data: positionData,
+      });
+
+      toast.success("Cargo criado com sucesso!");
+      setIsCreateDialogOpen(false);
+      setPositionFormData({
+        name: "",
+        hour_value: "",
+      });
+      setPositionFormErrors({});
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Erro ao criar cargo"
+      );
+    }
+  };
+
+  const handleEditClick = (position: Position) => {
+    setEditingPosition(position);
+    setPositionFormData({
+      name: position.name,
+      hour_value: position.hour_value.toString(),
+    });
+    setPositionFormErrors({});
+    setIsEditDialogOpen(true);
+  };
+
+  const handleEditPosition = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!validatePositionForm() || !editingPosition) {
+      return;
+    }
+
+    try {
+      await updatePositionMutation.mutateAsync({
+        id: editingPosition.id,
+        companyId,
+        data: {
+          name: positionFormData.name.trim(),
+          hour_value: positionFormData.hour_value.trim()
+            ? parseFloat(positionFormData.hour_value)
+            : undefined,
+        },
+      });
+
+      toast.success("Cargo atualizado com sucesso!");
+      setIsEditDialogOpen(false);
+      setEditingPosition(null);
+      setPositionFormData({
+        name: "",
+        hour_value: "",
+      });
+      setPositionFormErrors({});
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Erro ao atualizar cargo"
+      );
+    }
+  };
+
+  const handleDeleteClick = (position: Position) => {
+    setDeletingPosition(position);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeletePosition = async () => {
+    if (!deletingPosition) return;
+
+    try {
+      await deletePositionMutation.mutateAsync({
+        id: deletingPosition.id,
+        companyId,
+      });
+
+      toast.success("Cargo excluído com sucesso!");
+      setIsDeleteDialogOpen(false);
+      setDeletingPosition(null);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Erro ao excluir cargo"
+      );
+    }
+  };
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    }).format(value);
+  };
+
+  return (
+    <>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold">Cargos</h3>
+          <Button
+            onClick={() => {
+              setPositionFormData({
+                name: "",
+                hour_value: "",
+              });
+              setPositionFormErrors({});
+              setIsCreateDialogOpen(true);
+            }}
+            size="sm"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Novo Cargo
+          </Button>
+        </div>
+
+        {isLoading ? (
+          <div className="space-y-2">
+            {[...Array(3)].map((_, i) => (
+              <Skeleton key={i} className="h-16 w-full" />
+            ))}
+          </div>
+        ) : positionsData?.positions && positionsData.positions.length > 0 ? (
+          <div className="space-y-2">
+            {positionsData.positions.map((position) => (
+              <Card key={position.id} className="border">
+                <CardContent className="px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                      <Briefcase className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold text-base truncate">
+                          {position.name}
+                        </h4>
+                        {position.hour_value > 0 && (
+                          <div className="text-sm text-muted-foreground">
+                            <span className="font-medium">Valor Hora:</span>{" "}
+                            {formatCurrency(position.hour_value)}
+                          </div>
+                        )}
+                        {position.hour_value === 0 && (
+                          <div className="text-sm text-muted-foreground italic">
+                            Valor hora não definido
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-1 flex-shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9"
+                        onClick={() => handleEditClick(position)}
+                      >
+                        <Edit className="h-5 w-5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9"
+                        onClick={() => handleDeleteClick(position)}
+                      >
+                        <Trash2 className="h-5 w-5 text-destructive" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-muted-foreground">
+            Nenhum cargo cadastrado. Clique no botão acima para adicionar.
+          </div>
+        )}
+      </div>
+
+      {/* Dialog de Criar Cargo */}
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <DialogContent>
+          <form onSubmit={handleCreatePosition}>
+            <DialogHeader>
+              <DialogTitle>Criar Novo Cargo</DialogTitle>
+              <DialogDescription>
+                Preencha os dados abaixo para criar um novo cargo.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <Field orientation="vertical">
+                <FieldLabel htmlFor="position-name">
+                  Nome do Cargo <span className="text-destructive">*</span>
+                </FieldLabel>
+                <FieldContent>
+                  <Input
+                    id="position-name"
+                    name="name"
+                    placeholder="Ex: Desenvolvedor"
+                    value={positionFormData.name}
+                    onChange={handlePositionInputChange}
+                    aria-invalid={!!positionFormErrors.name}
+                  />
+                  {positionFormErrors.name && (
+                    <FieldError>{positionFormErrors.name}</FieldError>
+                  )}
+                </FieldContent>
+              </Field>
+
+              <Field orientation="vertical">
+                <FieldLabel htmlFor="hour-value">
+                  Valor Hora (R$){" "}
+                  <span className="text-muted-foreground">(opcional)</span>
+                </FieldLabel>
+                <FieldContent>
+                  <Input
+                    id="hour-value"
+                    name="hour_value"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    value={positionFormData.hour_value}
+                    onChange={handlePositionInputChange}
+                    aria-invalid={!!positionFormErrors.hour_value}
+                  />
+                  {positionFormErrors.hour_value && (
+                    <FieldError>{positionFormErrors.hour_value}</FieldError>
+                  )}
+                </FieldContent>
+              </Field>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsCreateDialogOpen(false)}
+                disabled={createPositionMutation.isPending}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={createPositionMutation.isPending}>
+                {createPositionMutation.isPending ? "Criando..." : "Criar"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Editar Cargo */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <form onSubmit={handleEditPosition}>
+            <DialogHeader>
+              <DialogTitle>Editar Cargo</DialogTitle>
+              <DialogDescription>
+                Altere os dados do cargo abaixo.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <Field orientation="vertical">
+                <FieldLabel htmlFor="edit-position-name">
+                  Nome do Cargo <span className="text-destructive">*</span>
+                </FieldLabel>
+                <FieldContent>
+                  <Input
+                    id="edit-position-name"
+                    name="name"
+                    placeholder="Ex: Desenvolvedor"
+                    value={positionFormData.name}
+                    onChange={handlePositionInputChange}
+                    aria-invalid={!!positionFormErrors.name}
+                  />
+                  {positionFormErrors.name && (
+                    <FieldError>{positionFormErrors.name}</FieldError>
+                  )}
+                </FieldContent>
+              </Field>
+
+              <Field orientation="vertical">
+                <FieldLabel htmlFor="edit-hour-value">
+                  Valor Hora (R$){" "}
+                  <span className="text-muted-foreground">(opcional)</span>
+                </FieldLabel>
+                <FieldContent>
+                  <Input
+                    id="edit-hour-value"
+                    name="hour_value"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    value={positionFormData.hour_value}
+                    onChange={handlePositionInputChange}
+                    aria-invalid={!!positionFormErrors.hour_value}
+                  />
+                  {positionFormErrors.hour_value && (
+                    <FieldError>{positionFormErrors.hour_value}</FieldError>
+                  )}
+                </FieldContent>
+              </Field>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsEditDialogOpen(false);
+                  setEditingPosition(null);
+                  setPositionFormData({
+                    name: "",
+                    hour_value: "",
+                  });
+                  setPositionFormErrors({});
+                }}
+                disabled={updatePositionMutation.isPending}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={updatePositionMutation.isPending}>
+                {updatePositionMutation.isPending ? "Salvando..." : "Salvar"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Confirmar Exclusão */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar Exclusão</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja excluir o cargo{" "}
+              <strong>{deletingPosition?.name}</strong>?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setIsDeleteDialogOpen(false);
+                setDeletingPosition(null);
+              }}
+              disabled={deletePositionMutation.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleDeletePosition}
+              disabled={deletePositionMutation.isPending}
+            >
+              {deletePositionMutation.isPending ? "Excluindo..." : "Excluir"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function CompanyPositionSelect({
+  companyId,
+  selectedPositionId,
+  onPositionChange,
+}: {
+  companyId: string;
+  selectedPositionId: string;
+  onPositionChange: (positionId: string) => void;
+}) {
+  const { data: positionsData, isLoading } = usePositions(companyId);
+
+  // Normalizar o valor para o Select (string vazia vira undefined)
+  const selectValue =
+    selectedPositionId && selectedPositionId !== ""
+      ? selectedPositionId
+      : undefined;
+
+  const hasPositions =
+    positionsData?.positions && positionsData.positions.length > 0;
+
+  // Se não há cargos e não está carregando, mostrar apenas a mensagem
+  if (!isLoading && !hasPositions) {
+    return (
+      <div className="pl-8 space-y-2">
+        <Field orientation="vertical">
+          <FieldLabel htmlFor={`position-${companyId}`}>
+            Cargo (opcional)
+          </FieldLabel>
+          <FieldContent>
+            <p className="text-sm text-muted-foreground">
+              Nenhum cargo cadastrado para esta empresa.
+            </p>
+          </FieldContent>
+        </Field>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pl-8 space-y-2">
+      <Field orientation="vertical">
+        <FieldLabel htmlFor={`position-${companyId}`}>
+          Cargo (opcional)
+        </FieldLabel>
+        <FieldContent>
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground">
+              Carregando cargos...
+            </p>
+          ) : (
+            <>
+              <Select
+                value={selectValue}
+                onValueChange={(value) => onPositionChange(value || "")}
+                disabled={isLoading}
+              >
+                <SelectTrigger id={`position-${companyId}`}>
+                  <SelectValue placeholder="Selecione um cargo (opcional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {positionsData?.positions &&
+                    positionsData.positions.map((position) => (
+                      <SelectItem key={position.id} value={position.id}>
+                        {position.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              {selectValue && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="mt-2 h-7 text-xs"
+                  onClick={() => onPositionChange("")}
+                >
+                  Remover cargo
+                </Button>
+              )}
+            </>
+          )}
+        </FieldContent>
+      </Field>
+    </div>
+  );
+}
 
 function CompaniesEmployeesTab() {
   const {
@@ -81,6 +616,7 @@ function CompaniesEmployeesTab() {
 
   const { data: companiesData } = useCompanies();
   const addCompanyMutation = useAddCompanyToEmployee();
+  const updatePositionMutation = useUpdateEmployeeCompanyPosition();
   const removeCompanyMutation = useRemoveCompanyFromEmployee();
 
   const [isManageCompaniesDialogOpen, setIsManageCompaniesDialogOpen] =
@@ -91,6 +627,9 @@ function CompaniesEmployeesTab() {
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<Set<string>>(
     new Set()
   );
+  const [selectedPositions, setSelectedPositions] = useState<
+    Map<string, string>
+  >(new Map());
 
   const handleManageCompaniesClick = (employee: Employee) => {
     setSelectedEmployee(employee);
@@ -99,6 +638,16 @@ function CompaniesEmployeesTab() {
       (employee.companies || []).map((c) => c.id)
     );
     setSelectedCompanyIds(currentCompanyIds);
+
+    // Inicializar com cargos já vinculados
+    const positionsMap = new Map<string, string>();
+    (employee.companies || []).forEach((c) => {
+      if (c.position_id) {
+        positionsMap.set(c.id, c.position_id);
+      }
+    });
+    setSelectedPositions(positionsMap);
+
     setIsManageCompaniesDialogOpen(true);
   };
 
@@ -106,10 +655,24 @@ function CompaniesEmployeesTab() {
     const newSelected = new Set(selectedCompanyIds);
     if (newSelected.has(companyId)) {
       newSelected.delete(companyId);
+      // Remover cargo quando desmarcar empresa
+      const newPositions = new Map(selectedPositions);
+      newPositions.delete(companyId);
+      setSelectedPositions(newPositions);
     } else {
       newSelected.add(companyId);
     }
     setSelectedCompanyIds(newSelected);
+  };
+
+  const handlePositionChange = (companyId: string, positionId: string) => {
+    const newPositions = new Map(selectedPositions);
+    if (positionId === "") {
+      newPositions.delete(companyId);
+    } else {
+      newPositions.set(companyId, positionId);
+    }
+    setSelectedPositions(newPositions);
   };
 
   const handleSaveCompanies = async () => {
@@ -125,13 +688,44 @@ function CompaniesEmployeesTab() {
       const toRemove = Array.from(currentCompanyIds).filter(
         (id) => !selectedCompanyIds.has(id)
       );
+      const toUpdate = Array.from(selectedCompanyIds).filter((id) =>
+        selectedCompanyIds.has(id)
+      );
 
       // Adicionar empresas
       for (const companyId of toAdd) {
+        const positionId = selectedPositions.get(companyId);
         await addCompanyMutation.mutateAsync({
           solidesId: selectedEmployee.id,
           companyId,
+          positionId,
         });
+      }
+
+      // Atualizar cargos de empresas já vinculadas
+      for (const companyId of toUpdate) {
+        const currentCompany = selectedEmployee.companies?.find(
+          (c) => c.id === companyId
+        );
+        const currentPositionId = currentCompany?.position_id || undefined;
+        const newPositionId = selectedPositions.get(companyId) || undefined;
+
+        // Normalizar para comparação (null/undefined/string vazia são tratados como sem cargo)
+        const normalizedCurrent =
+          currentPositionId && currentPositionId !== ""
+            ? currentPositionId
+            : undefined;
+        const normalizedNew =
+          newPositionId && newPositionId !== "" ? newPositionId : undefined;
+
+        // Só atualizar se o cargo mudou
+        if (normalizedCurrent !== normalizedNew) {
+          await updatePositionMutation.mutateAsync({
+            solidesId: selectedEmployee.id,
+            companyId,
+            positionId: normalizedNew,
+          });
+        }
       }
 
       // Remover empresas
@@ -146,6 +740,7 @@ function CompaniesEmployeesTab() {
       setIsManageCompaniesDialogOpen(false);
       setSelectedEmployee(null);
       setSelectedCompanyIds(new Set());
+      setSelectedPositions(new Map());
     } catch (error) {
       toast.error(
         error instanceof Error
@@ -252,6 +847,11 @@ function CompaniesEmployeesTab() {
                               >
                                 <Building className="h-3 w-3" />
                                 {company.name}
+                                {company.position && (
+                                  <span className="ml-1 text-xs">
+                                    ({company.position.name})
+                                  </span>
+                                )}
                               </Badge>
                             ))}
                           </div>
@@ -339,6 +939,11 @@ function CompaniesEmployeesTab() {
                                   >
                                     <Building className="h-3 w-3" />
                                     {company.name}
+                                    {company.position && (
+                                      <span className="ml-1">
+                                        ({company.position.name})
+                                      </span>
+                                    )}
                                   </Badge>
                                 ))}
                               </div>
@@ -409,6 +1014,11 @@ function CompaniesEmployeesTab() {
                                 >
                                   <Building className="h-3 w-3" />
                                   {company.name}
+                                  {company.position && (
+                                    <span className="ml-1">
+                                      ({company.position.name})
+                                    </span>
+                                  )}
                                 </Badge>
                               ))}
                             </div>
@@ -470,7 +1080,8 @@ function CompaniesEmployeesTab() {
               Gerenciar Empresas - {selectedEmployee?.name}
             </DialogTitle>
             <DialogDescription>
-              Selecione as empresas vinculadas a este funcionário.
+              Selecione as empresas vinculadas a este funcionário e
+              opcionalmente escolha um cargo para cada uma.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -479,22 +1090,35 @@ function CompaniesEmployeesTab() {
                 {companiesData.companies.map((company) => (
                   <div
                     key={company.id}
-                    className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                    className="p-3 border rounded-lg hover:bg-muted/50 transition-colors space-y-3"
                   >
-                    <Checkbox
-                      id={`company-${company.id}`}
-                      checked={selectedCompanyIds.has(company.id)}
-                      onCheckedChange={() => handleCompanyToggle(company.id)}
-                    />
-                    <label
-                      htmlFor={`company-${company.id}`}
-                      className="flex-1 cursor-pointer"
-                    >
-                      <div className="font-medium">{company.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {company.address}
-                      </div>
-                    </label>
+                    <div className="flex items-center space-x-3">
+                      <Checkbox
+                        id={`company-${company.id}`}
+                        checked={selectedCompanyIds.has(company.id)}
+                        onCheckedChange={() => handleCompanyToggle(company.id)}
+                      />
+                      <label
+                        htmlFor={`company-${company.id}`}
+                        className="flex-1 cursor-pointer"
+                      >
+                        <div className="font-medium">{company.name}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {company.address}
+                        </div>
+                      </label>
+                    </div>
+                    {selectedCompanyIds.has(company.id) && (
+                      <CompanyPositionSelect
+                        companyId={company.id}
+                        selectedPositionId={
+                          selectedPositions.get(company.id) || ""
+                        }
+                        onPositionChange={(positionId: string) =>
+                          handlePositionChange(company.id, positionId)
+                        }
+                      />
+                    )}
                   </div>
                 ))}
               </div>
@@ -512,9 +1136,12 @@ function CompaniesEmployeesTab() {
                 setIsManageCompaniesDialogOpen(false);
                 setSelectedEmployee(null);
                 setSelectedCompanyIds(new Set());
+                setSelectedPositions(new Map());
               }}
               disabled={
-                addCompanyMutation.isPending || removeCompanyMutation.isPending
+                addCompanyMutation.isPending ||
+                updatePositionMutation.isPending ||
+                removeCompanyMutation.isPending
               }
             >
               Cancelar
@@ -523,7 +1150,9 @@ function CompaniesEmployeesTab() {
               type="button"
               onClick={handleSaveCompanies}
               disabled={
-                addCompanyMutation.isPending || removeCompanyMutation.isPending
+                addCompanyMutation.isPending ||
+                updatePositionMutation.isPending ||
+                removeCompanyMutation.isPending
               }
             >
               {addCompanyMutation.isPending || removeCompanyMutation.isPending
@@ -547,16 +1176,23 @@ export default function EmpresasPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isPositionsDialogOpen, setIsPositionsDialogOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [deletingCompany, setDeletingCompany] = useState<Company | null>(null);
+  const [managingPositionsCompany, setManagingPositionsCompany] =
+    useState<Company | null>(null);
 
   const [formData, setFormData] = useState({
     name: "",
     address: "",
+    vr_per_hour: "",
+    cost_help_per_hour: "",
   });
   const [formErrors, setFormErrors] = useState<{
     name?: string;
     address?: string;
+    vr_per_hour?: string;
+    cost_help_per_hour?: string;
   }>({});
 
   const formatDate = (dateString: string) => {
@@ -580,7 +1216,12 @@ export default function EmpresasPage() {
   };
 
   const validateForm = () => {
-    const errors: { name?: string; address?: string } = {};
+    const errors: {
+      name?: string;
+      address?: string;
+      vr_per_hour?: string;
+      cost_help_per_hour?: string;
+    } = {};
 
     if (!formData.name.trim()) {
       errors.name = "Nome da empresa é obrigatório";
@@ -588,6 +1229,23 @@ export default function EmpresasPage() {
 
     if (!formData.address.trim()) {
       errors.address = "Endereço é obrigatório";
+    }
+
+    // Validação de VR (opcional, mas se preenchido deve ser válido)
+    if (formData.vr_per_hour.trim()) {
+      const vrValue = parseFloat(formData.vr_per_hour);
+      if (isNaN(vrValue) || vrValue < 0) {
+        errors.vr_per_hour = "Valor do VR por hora deve ser um número positivo";
+      }
+    }
+
+    // Validação de Ajuda de Custo (opcional, mas se preenchido deve ser válido)
+    if (formData.cost_help_per_hour.trim()) {
+      const costValue = parseFloat(formData.cost_help_per_hour);
+      if (isNaN(costValue) || costValue < 0) {
+        errors.cost_help_per_hour =
+          "Ajuda de Custo por hora deve ser um número positivo";
+      }
     }
 
     setFormErrors(errors);
@@ -605,11 +1263,22 @@ export default function EmpresasPage() {
       await createCompanyMutation.mutateAsync({
         name: formData.name.trim(),
         address: formData.address.trim(),
+        vr_per_hour: formData.vr_per_hour.trim()
+          ? parseFloat(formData.vr_per_hour)
+          : undefined,
+        cost_help_per_hour: formData.cost_help_per_hour.trim()
+          ? parseFloat(formData.cost_help_per_hour)
+          : undefined,
       });
 
       toast.success("Empresa cadastrada com sucesso!");
       setIsDialogOpen(false);
-      setFormData({ name: "", address: "" });
+      setFormData({
+        name: "",
+        address: "",
+        vr_per_hour: "",
+        cost_help_per_hour: "",
+      });
       setFormErrors({});
     } catch (error) {
       toast.error(
@@ -622,7 +1291,12 @@ export default function EmpresasPage() {
     setIsDialogOpen(open);
     if (!open) {
       // Limpar formulário quando fechar
-      setFormData({ name: "", address: "" });
+      setFormData({
+        name: "",
+        address: "",
+        vr_per_hour: "",
+        cost_help_per_hour: "",
+      });
       setFormErrors({});
     }
   };
@@ -632,6 +1306,8 @@ export default function EmpresasPage() {
     setFormData({
       name: company.name,
       address: company.address,
+      vr_per_hour: company.vr_per_hour?.toString() || "",
+      cost_help_per_hour: company.cost_help_per_hour?.toString() || "",
     });
     setFormErrors({});
     setIsEditDialogOpen(true);
@@ -641,7 +1317,12 @@ export default function EmpresasPage() {
     setIsEditDialogOpen(open);
     if (!open) {
       setEditingCompany(null);
-      setFormData({ name: "", address: "" });
+      setFormData({
+        name: "",
+        address: "",
+        vr_per_hour: "",
+        cost_help_per_hour: "",
+      });
       setFormErrors({});
     }
   };
@@ -659,6 +1340,12 @@ export default function EmpresasPage() {
         data: {
           name: formData.name.trim(),
           address: formData.address.trim(),
+          vr_per_hour: formData.vr_per_hour.trim()
+            ? parseFloat(formData.vr_per_hour)
+            : undefined,
+          cost_help_per_hour: formData.cost_help_per_hour.trim()
+            ? parseFloat(formData.cost_help_per_hour)
+            : undefined,
         },
       });
 
@@ -694,6 +1381,18 @@ export default function EmpresasPage() {
       toast.error(
         error instanceof Error ? error.message : "Erro ao excluir empresa"
       );
+    }
+  };
+
+  const handleManagePositionsClick = (company: Company) => {
+    setManagingPositionsCompany(company);
+    setIsPositionsDialogOpen(true);
+  };
+
+  const handlePositionsDialogOpenChange = (open: boolean) => {
+    setIsPositionsDialogOpen(open);
+    if (!open) {
+      setManagingPositionsCompany(null);
     }
   };
 
@@ -847,29 +1546,89 @@ export default function EmpresasPage() {
                           </Field>
 
                           {activeTab === "empresas" && (
-                            <Field orientation="vertical">
-                              <FieldLabel htmlFor="address">
-                                Endereço{" "}
-                                <span className="text-destructive">*</span>
-                              </FieldLabel>
-                              <FieldContent>
-                                <Input
-                                  id="address"
-                                  name="address"
-                                  placeholder="Ex: Rua Exemplo, 123 - Centro - São Paulo/SP"
-                                  value={formData.address}
-                                  onChange={handleInputChange}
-                                  aria-invalid={!!formErrors.address}
-                                />
-                                {formErrors.address && (
-                                  <FieldError>{formErrors.address}</FieldError>
-                                )}
-                                <p className="text-sm text-muted-foreground mt-1">
-                                  O endereço deve ser único e completo para
-                                  identificar a empresa.
-                                </p>
-                              </FieldContent>
-                            </Field>
+                            <>
+                              <Field orientation="vertical">
+                                <FieldLabel htmlFor="address">
+                                  Endereço{" "}
+                                  <span className="text-destructive">*</span>
+                                </FieldLabel>
+                                <FieldContent>
+                                  <Input
+                                    id="address"
+                                    name="address"
+                                    placeholder="Ex: Rua Exemplo, 123 - Centro - São Paulo/SP"
+                                    value={formData.address}
+                                    onChange={handleInputChange}
+                                    aria-invalid={!!formErrors.address}
+                                  />
+                                  {formErrors.address && (
+                                    <FieldError>
+                                      {formErrors.address}
+                                    </FieldError>
+                                  )}
+                                  <p className="text-sm text-muted-foreground mt-1">
+                                    O endereço deve ser único e completo para
+                                    identificar a empresa.
+                                  </p>
+                                </FieldContent>
+                              </Field>
+
+                              <Field orientation="vertical">
+                                <FieldLabel htmlFor="vr-per-hour">
+                                  VR por Hora (R$){" "}
+                                  <span className="text-muted-foreground">
+                                    (opcional)
+                                  </span>
+                                </FieldLabel>
+                                <FieldContent>
+                                  <Input
+                                    id="vr-per-hour"
+                                    name="vr_per_hour"
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    placeholder="0.00"
+                                    value={formData.vr_per_hour}
+                                    onChange={handleInputChange}
+                                    aria-invalid={!!formErrors.vr_per_hour}
+                                  />
+                                  {formErrors.vr_per_hour && (
+                                    <FieldError>
+                                      {formErrors.vr_per_hour}
+                                    </FieldError>
+                                  )}
+                                </FieldContent>
+                              </Field>
+
+                              <Field orientation="vertical">
+                                <FieldLabel htmlFor="cost-help-per-hour">
+                                  Ajuda de Custo por Hora (R$){" "}
+                                  <span className="text-muted-foreground">
+                                    (opcional)
+                                  </span>
+                                </FieldLabel>
+                                <FieldContent>
+                                  <Input
+                                    id="cost-help-per-hour"
+                                    name="cost_help_per_hour"
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    placeholder="0.00"
+                                    value={formData.cost_help_per_hour}
+                                    onChange={handleInputChange}
+                                    aria-invalid={
+                                      !!formErrors.cost_help_per_hour
+                                    }
+                                  />
+                                  {formErrors.cost_help_per_hour && (
+                                    <FieldError>
+                                      {formErrors.cost_help_per_hour}
+                                    </FieldError>
+                                  )}
+                                </FieldContent>
+                              </Field>
+                            </>
                           )}
                         </div>
                         <DialogFooter>
@@ -1003,6 +1762,14 @@ export default function EmpresasPage() {
                                           <Edit className="h-4 w-4 mr-2" />
                                           Editar
                                         </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          onClick={() =>
+                                            handleManagePositionsClick(company)
+                                          }
+                                        >
+                                          <Briefcase className="h-4 w-4 mr-2" />
+                                          Gerenciar Cargos
+                                        </DropdownMenuItem>
                                         <DropdownMenuSeparator />
                                         <DropdownMenuItem
                                           variant="destructive"
@@ -1064,6 +1831,14 @@ export default function EmpresasPage() {
                                         >
                                           <Edit className="h-4 w-4 mr-2" />
                                           Editar
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          onClick={() =>
+                                            handleManagePositionsClick(company)
+                                          }
+                                        >
+                                          <Briefcase className="h-4 w-4 mr-2" />
+                                          Gerenciar Cargos
                                         </DropdownMenuItem>
                                         <DropdownMenuSeparator />
                                         <DropdownMenuItem
@@ -1190,6 +1965,16 @@ export default function EmpresasPage() {
                                             <Edit className="h-4 w-4 mr-2" />
                                             Editar
                                           </DropdownMenuItem>
+                                          <DropdownMenuItem
+                                            onClick={() =>
+                                              handleManagePositionsClick(
+                                                company
+                                              )
+                                            }
+                                          >
+                                            <Briefcase className="h-4 w-4 mr-2" />
+                                            Gerenciar Cargos
+                                          </DropdownMenuItem>
                                           <DropdownMenuSeparator />
                                           <DropdownMenuItem
                                             variant="destructive"
@@ -1297,6 +2082,52 @@ export default function EmpresasPage() {
                       </p>
                     </FieldContent>
                   </Field>
+
+                  <Field orientation="vertical">
+                    <FieldLabel htmlFor="edit-vr-per-hour">
+                      VR por Hora (R$){" "}
+                      <span className="text-muted-foreground">(opcional)</span>
+                    </FieldLabel>
+                    <FieldContent>
+                      <Input
+                        id="edit-vr-per-hour"
+                        name="vr_per_hour"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0.00"
+                        value={formData.vr_per_hour}
+                        onChange={handleInputChange}
+                        aria-invalid={!!formErrors.vr_per_hour}
+                      />
+                      {formErrors.vr_per_hour && (
+                        <FieldError>{formErrors.vr_per_hour}</FieldError>
+                      )}
+                    </FieldContent>
+                  </Field>
+
+                  <Field orientation="vertical">
+                    <FieldLabel htmlFor="edit-cost-help-per-hour">
+                      Ajuda de Custo por Hora (R$){" "}
+                      <span className="text-muted-foreground">(opcional)</span>
+                    </FieldLabel>
+                    <FieldContent>
+                      <Input
+                        id="edit-cost-help-per-hour"
+                        name="cost_help_per_hour"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0.00"
+                        value={formData.cost_help_per_hour}
+                        onChange={handleInputChange}
+                        aria-invalid={!!formErrors.cost_help_per_hour}
+                      />
+                      {formErrors.cost_help_per_hour && (
+                        <FieldError>{formErrors.cost_help_per_hour}</FieldError>
+                      )}
+                    </FieldContent>
+                  </Field>
                 </div>
                 <DialogFooter>
                   <Button
@@ -1361,6 +2192,26 @@ export default function EmpresasPage() {
                   {deleteCompanyMutation.isPending ? "Excluindo..." : "Excluir"}
                 </Button>
               </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Dialog de Gerenciar Cargos */}
+          <Dialog
+            open={isPositionsDialogOpen}
+            onOpenChange={handlePositionsDialogOpenChange}
+          >
+            <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>
+                  Gerenciar Cargos - {managingPositionsCompany?.name}
+                </DialogTitle>
+                <DialogDescription>
+                  Crie e gerencie os cargos desta empresa.
+                </DialogDescription>
+              </DialogHeader>
+              {managingPositionsCompany && (
+                <PositionsManager companyId={managingPositionsCompany.id} />
+              )}
             </DialogContent>
           </Dialog>
         </div>

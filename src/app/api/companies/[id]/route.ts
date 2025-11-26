@@ -8,7 +8,7 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, address } = body;
+    const { name, address, vr_per_hour, cost_help_per_hour } = body;
 
     console.log("PUT /api/companies/[id] - ID recebido:", id);
 
@@ -60,13 +60,44 @@ export async function PUT(
       );
     }
 
+    // Preparar dados para atualização
+    const updateData: {
+      name: string;
+      address: string;
+      vr_per_hour?: number;
+      cost_help_per_hour?: number;
+    } = {
+      name: name.trim(),
+      address: address.trim(),
+    };
+
+    // Atualizar VR e Ajuda de Custo se fornecidos
+    if (vr_per_hour !== undefined) {
+      const vrValue = Number(vr_per_hour);
+      if (isNaN(vrValue) || vrValue < 0) {
+        return NextResponse.json(
+          { error: "Valor do VR por hora deve ser um número positivo" },
+          { status: 400 }
+        );
+      }
+      updateData.vr_per_hour = vrValue;
+    }
+
+    if (cost_help_per_hour !== undefined) {
+      const costValue = Number(cost_help_per_hour);
+      if (isNaN(costValue) || costValue < 0) {
+        return NextResponse.json(
+          { error: "Ajuda de Custo por hora deve ser um número positivo" },
+          { status: 400 }
+        );
+      }
+      updateData.cost_help_per_hour = costValue;
+    }
+
     // Atualizar empresa
     const { data: company, error: updateError } = await supabaseAdmin
       .from("companies")
-      .update({
-        name: name.trim(),
-        address: address.trim(),
-      })
+      .update(updateData)
       .eq("id", id)
       .select()
       .single();
