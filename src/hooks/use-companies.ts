@@ -19,7 +19,7 @@ export function useCompanies(): UseQueryResult<CompaniesResponse, Error> {
   return useQuery({
     queryKey: ["companies"],
     queryFn: fetchCompanies,
-    staleTime: 5 * 60 * 1000, // 5 minutos
+    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -33,7 +33,6 @@ export function useCreateCompany(): UseMutationResult<
   return useMutation({
     mutationFn: createCompany,
     onSuccess: () => {
-      // Invalidar e recarregar a lista de empresas
       queryClient.invalidateQueries({ queryKey: ["companies"] });
     },
   });
@@ -49,7 +48,6 @@ export function useUpdateCompany(): UseMutationResult<
   return useMutation({
     mutationFn: ({ id, data }) => updateCompany(id, data),
     onSuccess: () => {
-      // Invalidar e recarregar a lista de empresas
       queryClient.invalidateQueries({ queryKey: ["companies"] });
     },
   });
@@ -61,7 +59,6 @@ export function useDeleteCompany(): UseMutationResult<void, Error, string> {
   return useMutation({
     mutationFn: deleteCompany,
     onSuccess: () => {
-      // Invalidar e recarregar a lista de empresas
       queryClient.invalidateQueries({ queryKey: ["companies"] });
     },
   });
