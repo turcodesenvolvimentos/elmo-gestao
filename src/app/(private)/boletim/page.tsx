@@ -1,4 +1,4 @@
-// app/boletim/page.tsx
+// app/(private)/boletim/page.tsx
 "use client";
 
 import { useState, useMemo } from "react";
@@ -22,7 +22,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search, Building, Calendar, FileText, Users, Filter, Download, X } from "lucide-react";
+import { Search, Building, Calendar, FileText, Users, Filter, Download, X, Edit } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -239,7 +239,6 @@ const ALL_VALUES = {
   POSITION: "all-positions",
   DEPARTMENT: "all-departments",
   DATE: "all-dates",
-  DAY_OF_WEEK: "all-days",
 };
 
 export default function BoletimPage() {
@@ -255,14 +254,32 @@ export default function BoletimPage() {
   const [isDateRangeValid, setIsDateRangeValid] = useState(true);
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
   const [isBulletinDialogOpen, setIsBulletinDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [editingRow, setEditingRow] = useState<number | null>(null);
   
   // Filtros do modal
   const [employeeFilter, setEmployeeFilter] = useState("");
   const [positionFilter, setPositionFilter] = useState(ALL_VALUES.POSITION);
   const [departmentFilter, setDepartmentFilter] = useState(ALL_VALUES.DEPARTMENT);
   const [dateFilter, setDateFilter] = useState(ALL_VALUES.DATE);
-  const [dayOfWeekFilter, setDayOfWeekFilter] = useState(ALL_VALUES.DAY_OF_WEEK);
+
+  // Estado para edição
+  const [editFormData, setEditFormData] = useState({
+    position: "",
+    department: "",
+    entry1: "",
+    exit1: "",
+    entry2: "",
+    exit2: "",
+    total_hours: "",
+    normal_hours: "",
+    extra_50_day: "",
+    extra_50_night: "",
+    extra_100_day: "",
+    extra_100_night: "",
+    value: "",
+  });
 
   // Filtrar empresas por termo de busca
   const filteredCompanies = useMemo(() => {
@@ -297,13 +314,8 @@ export default function BoletimPage() {
       filtered = filtered.filter((item) => item.date === dateFilter);
     }
 
-    // Filtrar por dia da semana
-    if (dayOfWeekFilter !== ALL_VALUES.DAY_OF_WEEK) {
-      filtered = filtered.filter((item) => item.day_of_week === dayOfWeekFilter);
-    }
-
     return filtered;
-  }, [employeeFilter, positionFilter, departmentFilter, dateFilter, dayOfWeekFilter]);
+  }, [employeeFilter, positionFilter, departmentFilter, dateFilter]);
 
   // Calcular totais
   const totals = useMemo(() => {
@@ -408,6 +420,78 @@ export default function BoletimPage() {
     }, 1500);
   };
 
+  // Funções de edição
+  const handleEditRow = (index: number) => {
+    const rowData = filteredBulletinData[index];
+    setEditingRow(index);
+    setEditFormData({
+      position: rowData.position,
+      department: rowData.department,
+      entry1: rowData.entry1,
+      exit1: rowData.exit1,
+      entry2: rowData.entry2 || "",
+      exit2: rowData.exit2 || "",
+      total_hours: rowData.total_hours,
+      normal_hours: rowData.normal_hours,
+      extra_50_day: rowData.extra_50_day,
+      extra_50_night: rowData.extra_50_night,
+      extra_100_day: rowData.extra_100_day,
+      extra_100_night: rowData.extra_100_night,
+      value: rowData.value.toString(),
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (editingRow !== null) {
+      toast.success("Valores atualizados com sucesso!");
+      setIsEditDialogOpen(false);
+      setEditingRow(null);
+      setEditFormData({
+        position: "",
+        department: "",
+        entry1: "",
+        exit1: "",
+        entry2: "",
+        exit2: "",
+        total_hours: "",
+        normal_hours: "",
+        extra_50_day: "",
+        extra_50_night: "",
+        extra_100_day: "",
+        extra_100_night: "",
+        value: "",
+      });
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditDialogOpen(false);
+    setEditingRow(null);
+    setEditFormData({
+      position: "",
+      department: "",
+      entry1: "",
+      exit1: "",
+      entry2: "",
+      exit2: "",
+      total_hours: "",
+      normal_hours: "",
+      extra_50_day: "",
+      extra_50_night: "",
+      extra_100_day: "",
+      extra_100_night: "",
+      value: "",
+    });
+  };
+
+  const clearAllFilters = () => {
+    setEmployeeFilter("");
+    setPositionFilter(ALL_VALUES.POSITION);
+    setDepartmentFilter(ALL_VALUES.DEPARTMENT);
+    setDateFilter(ALL_VALUES.DATE);
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString("pt-BR");
@@ -431,19 +515,6 @@ export default function BoletimPage() {
     const dates = [...new Set(mockBulletinData.map(item => item.date))];
     return dates.sort();
   }, []);
-
-  // Obter dias da semana únicos para filtro
-  const uniqueDaysOfWeek = useMemo(() => {
-    return [...new Set(mockBulletinData.map(item => item.day_of_week))];
-  }, []);
-
-  const clearAllFilters = () => {
-    setEmployeeFilter("");
-    setPositionFilter(ALL_VALUES.POSITION);
-    setDepartmentFilter(ALL_VALUES.DEPARTMENT);
-    setDateFilter(ALL_VALUES.DATE);
-    setDayOfWeekFilter(ALL_VALUES.DAY_OF_WEEK);
-  };
 
   return (
     <SidebarProvider>
@@ -587,7 +658,7 @@ export default function BoletimPage() {
           </Card>
         </div>
 
-        {/* Modal do Boletim */}
+        {/* Modal principal do Boletim */}
         <Dialog open={isBulletinDialogOpen} onOpenChange={setIsBulletinDialogOpen}>
           <DialogContent className="dialog-override overflow-hidden flex flex-col">
             <DialogHeader>
@@ -617,8 +688,8 @@ export default function BoletimPage() {
               {/* Filtros do modal */}
               <Card>
                 <CardContent className="p-4">
-                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                    <div>
+                  <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+                    <div className="md:col-span-2">
                       <Label className="text-sm font-medium mb-2 block">
                         <Filter className="h-3 w-3 inline mr-1" />
                         Colaborador
@@ -700,43 +771,17 @@ export default function BoletimPage() {
                       </Select>
                     </div>
                     
-                    <div>
-                      <Label className="text-sm font-medium mb-2 block">
-                        <Filter className="h-3 w-3 inline mr-1" />
-                        Dia da Semana
-                      </Label>
-                      <Select
-                        value={dayOfWeekFilter}
-                        onValueChange={setDayOfWeekFilter}
+                    <div className="flex items-end">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearAllFilters}
+                        className="text-sm gap-2 w-full h-10"
                       >
-                        <SelectTrigger className="text-sm">
-                          <SelectValue placeholder="Todos os dias" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={ALL_VALUES.DAY_OF_WEEK}>Todos os dias</SelectItem>
-                          {uniqueDaysOfWeek.map((day) => (
-                            <SelectItem key={day} value={day}>
-                              {day}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        <X className="h-3 w-3" />
+                        Limpar Filtros
+                      </Button>
                     </div>
-                  </div>
-                  
-                  <div className="flex justify-between items-center mt-4 pt-4 border-t">
-                    <div className="text-sm text-muted-foreground">
-                      {filteredBulletinData.length} registro(s) encontrado(s)
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={clearAllFilters}
-                      className="text-sm gap-2"
-                    >
-                      <X className="h-3 w-3" />
-                      Limpar Filtros
-                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -761,9 +806,6 @@ export default function BoletimPage() {
                             Dia
                           </th>
                           <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
-                            Dia da Semana
-                          </th>
-                          <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
                             Entrada 1
                           </th>
                           <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
@@ -776,7 +818,7 @@ export default function BoletimPage() {
                             Saída 2
                           </th>
                           <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
-                            Total de Horas
+                            Total Horas
                           </th>
                           <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
                             Hora Normal
@@ -796,6 +838,9 @@ export default function BoletimPage() {
                           <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
                             Valor
                           </th>
+                          <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background sticky right-0 z-20">
+                            Ações
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -807,7 +852,7 @@ export default function BoletimPage() {
                           </tr>
                         ) : (
                           <>
-                            {filteredBulletinData.map((item) => (
+                            {filteredBulletinData.map((item, index) => (
                               <tr key={item.id} className="border-b hover:bg-muted/50">
                                 <td className="p-3 align-middle font-medium whitespace-nowrap sticky left-0 bg-background">
                                   {item.employee_name}
@@ -820,9 +865,6 @@ export default function BoletimPage() {
                                 </td>
                                 <td className="p-3 align-middle whitespace-nowrap">
                                   {formatDate(item.date)}
-                                </td>
-                                <td className="p-3 align-middle whitespace-nowrap">
-                                  {item.day_of_week}
                                 </td>
                                 <td className="p-3 align-middle whitespace-nowrap">
                                   {item.entry1}
@@ -857,12 +899,22 @@ export default function BoletimPage() {
                                 <td className="p-3 align-middle whitespace-nowrap font-medium">
                                   {formatCurrency(item.value)}
                                 </td>
+                                <td className="p-3 align-middle whitespace-nowrap sticky right-0 bg-background">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleEditRow(index)}
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                </td>
                               </tr>
                             ))}
                             
                             {/* Linha de totais */}
                             <tr className="border-t bg-muted/50 font-semibold">
-                              <td colSpan={9} className="p-3 align-middle text-right">
+                              <td colSpan={8} className="p-3 align-middle text-right">
                                 Totais:
                               </td>
                               <td className="p-3 align-middle whitespace-nowrap">
@@ -886,6 +938,7 @@ export default function BoletimPage() {
                               <td className="p-3 align-middle whitespace-nowrap">
                                 {formatCurrency(totals.totalValue)}
                               </td>
+                              <td className="p-3 align-middle whitespace-nowrap sticky right-0 bg-background"></td>
                             </tr>
                           </>
                         )}
@@ -959,6 +1012,163 @@ export default function BoletimPage() {
                 disabled={isLoading}
               >
                 {isLoading ? "Exportando..." : "Exportar para Excel"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Modal de Edição (separado do modal principal) */}
+        <Dialog open={isEditDialogOpen} onOpenChange={handleCancelEdit}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Editar Valores</DialogTitle>
+              <DialogDescription>
+                Edite os valores para {editingRow !== null && filteredBulletinData[editingRow]?.employee_name}
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 py-4">
+              <div>
+                <Label htmlFor="edit-employee-position">Função</Label>
+                <Input
+                  id="edit-employee-position"
+                  type="text"
+                  value={editFormData.position}
+                  onChange={(e) => setEditFormData({ ...editFormData, position: e.target.value })}
+                  placeholder="Digite a função"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="edit-employee-department">Setor</Label>
+                <Input
+                  id="edit-employee-department"
+                  type="text"
+                  value={editFormData.department}
+                  onChange={(e) => setEditFormData({ ...editFormData, department: e.target.value })}
+                  placeholder="Digite o setor"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="edit-entry1">Entrada 1</Label>
+                <Input
+                  id="edit-entry1"
+                  type="time"
+                  value={editFormData.entry1}
+                  onChange={(e) => setEditFormData({...editFormData, entry1: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="edit-exit1">Saída 1</Label>
+                <Input
+                  id="edit-exit1"
+                  type="time"
+                  value={editFormData.exit1}
+                  onChange={(e) => setEditFormData({...editFormData, exit1: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="edit-entry2">Entrada 2 (opcional)</Label>
+                <Input
+                  id="edit-entry2"
+                  type="time"
+                  value={editFormData.entry2}
+                  onChange={(e) => setEditFormData({...editFormData, entry2: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="edit-exit2">Saída 2 (opcional)</Label>
+                <Input
+                  id="edit-exit2"
+                  type="time"
+                  value={editFormData.exit2}
+                  onChange={(e) => setEditFormData({...editFormData, exit2: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="edit-total-hours">Total Horas</Label>
+                <Input
+                  id="edit-total-hours"
+                  type="time"
+                  value={editFormData.total_hours}
+                  onChange={(e) => setEditFormData({...editFormData, total_hours: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="edit-normal-hours">Hora Normal</Label>
+                <Input
+                  id="edit-normal-hours"
+                  type="time"
+                  value={editFormData.normal_hours}
+                  onChange={(e) => setEditFormData({...editFormData, normal_hours: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="edit-extra50-day">50% Diurna</Label>
+                <Input
+                  id="edit-extra50-day"
+                  type="time"
+                  value={editFormData.extra_50_day}
+                  onChange={(e) => setEditFormData({...editFormData, extra_50_day: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="edit-extra50-night">50% Noturna</Label>
+                <Input
+                  id="edit-extra50-night"
+                  type="time"
+                  value={editFormData.extra_50_night}
+                  onChange={(e) => setEditFormData({...editFormData, extra_50_night: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="edit-extra100-day">100% Diurna</Label>
+                <Input
+                  id="edit-extra100-day"
+                  type="time"
+                  value={editFormData.extra_100_day}
+                  onChange={(e) => setEditFormData({...editFormData, extra_100_day: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="edit-extra100-night">100% Noturna</Label>
+                <Input
+                  id="edit-extra100-night"
+                  type="time"
+                  value={editFormData.extra_100_night}
+                  onChange={(e) => setEditFormData({...editFormData, extra_100_night: e.target.value})}
+                />
+              </div>
+              
+              <div className="md:col-span-3">
+                <Label htmlFor="edit-value">Valor (R$)</Label>
+                <Input
+                  id="edit-value"
+                  type="number"
+                  step="0.01"
+                  value={editFormData.value}
+                  onChange={(e) => setEditFormData({...editFormData, value: e.target.value})}
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+            
+            <DialogFooter>
+              <Button variant="outline" onClick={handleCancelEdit}>
+                Cancelar
+              </Button>
+              <Button onClick={handleSaveEdit}>
+                Salvar Alterações
               </Button>
             </DialogFooter>
           </DialogContent>
