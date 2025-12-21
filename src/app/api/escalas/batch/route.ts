@@ -5,7 +5,7 @@ import { supabaseAdmin } from "@/lib/db/client";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { employee_ids, shift_id, start_date } = body;
+    const { employee_ids, shift_id, start_date, end_date } = body;
 
     // Validação
     if (
@@ -73,12 +73,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validar end_date se fornecido
+    if (end_date) {
+      if (!dateRegex.test(end_date)) {
+        return NextResponse.json(
+          { error: "Data final deve estar no formato YYYY-MM-DD" },
+          { status: 400 }
+        );
+      }
+
+      // Validar que end_date é após start_date
+      if (new Date(end_date) < new Date(start_date)) {
+        return NextResponse.json(
+          { error: "Data final deve ser posterior à data inicial" },
+          { status: 400 }
+        );
+      }
+    }
+
     // Preparar dados para inserção
     const escalasData = employee_ids.map((employee_id: string) => ({
       employee_id,
       shift_id,
       start_date,
-      end_date: null,
+      end_date: end_date || null,
     }));
 
     // Verificar quais já existem para evitar duplicatas

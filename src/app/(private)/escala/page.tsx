@@ -65,6 +65,7 @@ export default function EscalaPage() {
   const [startDate, setStartDate] = useState(
     new Date().toISOString().split("T")[0]
   );
+  const [endDate, setEndDate] = useState("");
 
   // Hooks
   const { data: companiesData } = useCompanies();
@@ -98,6 +99,7 @@ export default function EscalaPage() {
     setSelectedShiftId("");
     const today = new Date();
     setStartDate(today.toISOString().split("T")[0]);
+    setEndDate("");
     setIsDialogOpen(true);
   };
 
@@ -139,15 +141,18 @@ export default function EscalaPage() {
         employee_ids: Array.from(selectedEmployeeIds),
         shift_id: selectedShiftId,
         start_date: startDate,
+        end_date: endDate || undefined,
       });
+      const periodText = endDate
+        ? `de ${formatDate(startDate)} até ${formatDate(endDate)}`
+        : `a partir de ${formatDate(startDate)}`;
       toast.success(
-        `Escala "${selectedShift?.name}" aplicada para ${
-          selectedEmployeeIds.size
-        } funcionário(s) a partir de ${formatDate(startDate)}!`
+        `Escala "${selectedShift?.name}" aplicada para ${selectedEmployeeIds.size} funcionário(s) ${periodText}!`
       );
       setIsDialogOpen(false);
       setSelectedEmployeeIds(new Set());
       setSelectedShiftId("");
+      setEndDate("");
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Erro ao aplicar escalas"
@@ -365,21 +370,45 @@ export default function EscalaPage() {
 
                     <div className="space-y-4">
                       <div>
-                        <h3 className="font-semibold mb-3">Data de Início</h3>
-                        <div>
-                          <Label htmlFor="start-date" className="mb-2 block">
-                            Data Inicial{" "}
-                            <span className="text-destructive">*</span>
-                          </Label>
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4 text-muted-foreground" />
-                            <Input
-                              id="start-date"
-                              type="date"
-                              value={startDate}
-                              onChange={(e) => setStartDate(e.target.value)}
-                              className="flex-1"
-                            />
+                        <h3 className="font-semibold mb-3">Período</h3>
+                        <div className="space-y-3">
+                          <div>
+                            <Label htmlFor="start-date" className="mb-2 block">
+                              Data Inicial{" "}
+                              <span className="text-destructive">*</span>
+                            </Label>
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-4 w-4 text-muted-foreground" />
+                              <Input
+                                id="start-date"
+                                type="date"
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                                className="flex-1"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <Label htmlFor="end-date" className="mb-2 block">
+                              Data Final{" "}
+                              <span className="text-muted-foreground text-xs">
+                                (opcional)
+                              </span>
+                            </Label>
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-4 w-4 text-muted-foreground" />
+                              <Input
+                                id="end-date"
+                                type="date"
+                                value={endDate}
+                                onChange={(e) => setEndDate(e.target.value)}
+                                className="flex-1"
+                                min={startDate}
+                              />
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Deixe em branco para aplicar indefinidamente
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -414,9 +443,11 @@ export default function EscalaPage() {
                           </span>
                         </div>
                         <div className="flex justify-between">
-                          <span>Data de início:</span>
+                          <span>Período:</span>
                           <span className="font-medium">
                             {formatDate(startDate)}
+                            {endDate && ` até ${formatDate(endDate)}`}
+                            {!endDate && " (indefinido)"}
                           </span>
                         </div>
                       </div>

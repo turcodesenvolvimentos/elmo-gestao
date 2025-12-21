@@ -27,12 +27,14 @@ export interface CreateEscalaData {
   employee_id: string;
   shift_id: string;
   start_date: string; // formato "YYYY-MM-DD"
+  end_date?: string; // formato "YYYY-MM-DD" (opcional)
 }
 
 export interface BatchCreateEscalaData {
   employee_ids: string[];
   shift_id: string;
   start_date: string;
+  end_date?: string; // formato "YYYY-MM-DD" (opcional)
 }
 
 export interface EscalasResponse {
