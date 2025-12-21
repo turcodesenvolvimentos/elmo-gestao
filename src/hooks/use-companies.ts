@@ -10,8 +10,10 @@ import {
   createCompany,
   updateCompany,
   deleteCompany,
+  fetchCompanyEmployees,
   CreateCompanyData,
   UpdateCompanyData,
+  CompanyEmployeesResponse,
 } from "@/services/companies.service";
 import { CompaniesResponse, Company } from "@/types/companies";
 
@@ -61,5 +63,16 @@ export function useDeleteCompany(): UseMutationResult<void, Error, string> {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["companies"] });
     },
+  });
+}
+
+export function useCompanyEmployees(
+  companyId: string
+): UseQueryResult<CompanyEmployeesResponse, Error> {
+  return useQuery({
+    queryKey: ["companies", companyId, "employees"],
+    queryFn: () => fetchCompanyEmployees(companyId),
+    enabled: !!companyId,
+    staleTime: 5 * 60 * 1000,
   });
 }

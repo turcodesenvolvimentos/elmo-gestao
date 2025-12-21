@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import {
@@ -20,7 +20,15 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, Building, Clock, Edit, Trash2, ArrowLeft } from "lucide-react";
+import {
+  Search,
+  Plus,
+  Building,
+  Clock,
+  Edit,
+  Trash2,
+  ArrowLeft,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -32,59 +40,16 @@ import {
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import Link from "next/link";
-
-// Dados mockados
-const mockCompanies = [
-  {
-    id: "1",
-    name: "Empresa ABC Ltda",
-    address: "Rua das Flores, 123 - São Paulo/SP",
-  },
-  {
-    id: "2",
-    name: "Comércio XYZ S.A.",
-    address: "Av. Principal, 456 - Rio de Janeiro/RJ",
-  },
-  {
-    id: "3",
-    name: "Indústria 123 ME",
-    address: "Rua Industrial, 789 - Belo Horizonte/MG",
-  },
-];
-
-// Dados iniciais de escalas
-let mockShifts = [
-  {
-    id: "1",
-    name: "Turno Matutino",
-    company_id: "1",
-    entry1: "08:00:00",
-    exit1: "12:00:00",
-    entry2: "13:00:00",
-    exit2: "17:00:00",
-    created_at: "2024-01-15T10:30:00Z",
-  },
-  {
-    id: "2",
-    name: "Turno Noturno",
-    company_id: "1",
-    entry1: "22:00:00",
-    exit1: "06:00:00",
-    entry2: undefined,
-    exit2: undefined,
-    created_at: "2024-01-16T14:20:00Z",
-  },
-  {
-    id: "3",
-    name: "Escala 6x1",
-    company_id: "2",
-    entry1: "07:00:00",
-    exit1: "13:00:00",
-    entry2: "14:00:00",
-    exit2: "18:00:00",
-    created_at: "2024-01-17T09:15:00Z",
-  },
-];
+import { useCompanies } from "@/hooks/use-companies";
+import {
+  useShifts,
+  useCreateShift,
+  useUpdateShift,
+  useDeleteShift,
+} from "@/hooks/use-shifts";
+import { Shift } from "@/types/shifts";
+import { useQuery } from "@tanstack/react-query";
+import { fetchAllShifts } from "@/services/shifts.service";
 
 export default function CriarEscalaPage() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -92,10 +57,21 @@ export default function CriarEscalaPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [editingShift, setEditingShift] = useState<any>(null);
-  const [deletingShift, setDeletingShift] = useState<any>(null);
-  const [shifts, setShifts] = useState(mockShifts);
-  const [isLoading, setIsLoading] = useState(false);
+  const [editingShift, setEditingShift] = useState<Shift | null>(null);
+  const [deletingShift, setDeletingShift] = useState<Shift | null>(null);
+
+  // Hooks
+  const { data: companiesData, isLoading: companiesLoading } = useCompanies();
+  // Buscar todos os shifts para mostrar na lista
+  const { data: allShiftsData } = useQuery({
+    queryKey: ["shifts", "all"],
+    queryFn: () => fetchAllShifts(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const { data: shiftsData } = useShifts(selectedCompany || "");
+  const createShiftMutation = useCreateShift();
+  const updateShiftMutation = useUpdateShift();
+  const deleteShiftMutation = useDeleteShift();
 
   const [formData, setFormData] = useState({
     name: "",
@@ -113,10 +89,16 @@ export default function CriarEscalaPage() {
     exit2: "",
   });
 
+  const companies = companiesData?.companies || [];
+  // Usar allShiftsData para a lista, shiftsData para quando uma empresa estiver selecionada no diálogo
+  const shifts = allShiftsData?.shifts || [];
+
   // Filtrar empresas por termo de busca
-  const filteredCompanies = mockCompanies.filter((company) =>
-    company.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredCompanies = useMemo(() => {
+    return companies.filter((company) =>
+      company.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [companies, searchTerm]);
 
   const handleOpenCreateDialog = (companyId: string) => {
     setSelectedCompany(companyId);
@@ -137,20 +119,22 @@ export default function CriarEscalaPage() {
     setIsDialogOpen(true);
   };
 
-  const handleOpenEditDialog = (shift: any) => {
+  const handleOpenEditDialog = (shift: Shift) => {
     setEditingShift(shift);
+    setSelectedCompany(shift.company_id);
     setFormData({
       name: shift.name,
       entry1: shift.entry1.slice(0, 5),
       exit1: shift.exit1.slice(0, 5),
-      entry2: shift.entry2 ? shift.entry2.slice(0, 5) : "13:00",
-      exit2: shift.exit2 ? shift.exit2.slice(0, 5) : "17:00",
+      entry2: shift.entry2 ? shift.entry2.slice(0, 5) : "",
+      exit2: shift.exit2 ? shift.exit2.slice(0, 5) : "",
     });
     setIsEditDialogOpen(true);
   };
 
-  const handleOpenDeleteDialog = (shift: any) => {
+  const handleOpenDeleteDialog = (shift: Shift) => {
     setDeletingShift(shift);
+    setSelectedCompany(shift.company_id);
     setIsDeleteDialogOpen(true);
   };
 
@@ -225,73 +209,67 @@ export default function CriarEscalaPage() {
   const handleCreateShift = async () => {
     if (!validateForm() || !selectedCompany) return;
 
-    setIsLoading(true);
-
-    // Simular chamada à API
-    setTimeout(() => {
-      const newShift = {
-        id: (shifts.length + 1).toString(),
-        name: formData.name.trim(),
-        company_id: selectedCompany,
-        entry1: `${formData.entry1}:00`,
-        exit1: `${formData.exit1}:00`,
-        entry2: formData.entry2 ? `${formData.entry2}:00` : undefined,
-        exit2: formData.exit2 ? `${formData.exit2}:00` : undefined,
-        created_at: new Date().toISOString(),
-      };
-
-      setShifts([...shifts, newShift]);
+    try {
+      await createShiftMutation.mutateAsync({
+        companyId: selectedCompany,
+        data: {
+          name: formData.name.trim(),
+          entry1: formData.entry1,
+          exit1: formData.exit1,
+          entry2: formData.entry2 || null,
+          exit2: formData.exit2 || null,
+        },
+      });
       toast.success("Escala criada com sucesso!");
       setIsDialogOpen(false);
-      setIsLoading(false);
-    }, 1000);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Erro ao criar escala"
+      );
+    }
   };
 
   const handleUpdateShift = async () => {
-    if (!validateForm() || !editingShift) return;
+    if (!validateForm() || !editingShift || !selectedCompany) return;
 
-    setIsLoading(true);
-
-    // Simular chamada à API
-    setTimeout(() => {
-      const updatedShifts = shifts.map((shift) =>
-        shift.id === editingShift.id
-          ? {
-              ...shift,
-              name: formData.name.trim(),
-              entry1: `${formData.entry1}:00`,
-              exit1: `${formData.exit1}:00`,
-              entry2: formData.entry2 ? `${formData.entry2}:00` : undefined,
-              exit2: formData.exit2 ? `${formData.exit2}:00` : undefined,
-            }
-          : shift
-      );
-
-      setShifts(updatedShifts);
+    try {
+      await updateShiftMutation.mutateAsync({
+        companyId: selectedCompany,
+        shiftId: editingShift.id,
+        data: {
+          name: formData.name.trim(),
+          entry1: formData.entry1,
+          exit1: formData.exit1,
+          entry2: formData.entry2 || null,
+          exit2: formData.exit2 || null,
+        },
+      });
       toast.success("Escala atualizada com sucesso!");
       setIsEditDialogOpen(false);
       setEditingShift(null);
-      setIsLoading(false);
-    }, 1000);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Erro ao atualizar escala"
+      );
+    }
   };
 
   const handleDeleteShift = async () => {
-    if (!deletingShift) return;
+    if (!deletingShift || !selectedCompany) return;
 
-    setIsLoading(true);
-
-    // Simular chamada à API
-    setTimeout(() => {
-      const updatedShifts = shifts.filter(
-        (shift) => shift.id !== deletingShift.id
-      );
-
-      setShifts(updatedShifts);
+    try {
+      await deleteShiftMutation.mutateAsync({
+        companyId: selectedCompany,
+        shiftId: deletingShift.id,
+      });
       toast.success("Escala excluída com sucesso!");
       setIsDeleteDialogOpen(false);
       setDeletingShift(null);
-      setIsLoading(false);
-    }, 1000);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Erro ao excluir escala"
+      );
+    }
   };
 
   const formatTime = (time: string) => {
@@ -322,7 +300,7 @@ export default function CriarEscalaPage() {
                 Crie e gerencie escalas para cada empresa
               </p>
             </div>
-            
+
             <Button asChild variant="outline">
               <Link href="/escala">
                 <ArrowLeft className="h-4 w-4 mr-2" />
@@ -357,6 +335,9 @@ export default function CriarEscalaPage() {
                 ) : (
                   <div className="space-y-6">
                     {filteredCompanies.map((company) => {
+                      // Buscar shifts desta empresa - vamos usar o hook quando a empresa estiver selecionada
+                      // Por enquanto, vamos fazer uma query separada para cada empresa
+                      // Isso não é ideal, mas funciona. Em produção, poderíamos otimizar
                       const companyShifts = shifts.filter(
                         (shift) => shift.company_id === company.id
                       );
@@ -478,7 +459,7 @@ export default function CriarEscalaPage() {
               <DialogDescription>
                 Defina os horários da nova escala para{" "}
                 {selectedCompany &&
-                  mockCompanies.find((c) => c.id === selectedCompany)?.name}
+                  companies.find((c) => c.id === selectedCompany)?.name}
               </DialogDescription>
             </DialogHeader>
 
@@ -583,12 +564,15 @@ export default function CriarEscalaPage() {
               <Button
                 variant="outline"
                 onClick={() => setIsDialogOpen(false)}
-                disabled={isLoading}
+                disabled={createShiftMutation.isPending}
               >
                 Cancelar
               </Button>
-              <Button onClick={handleCreateShift} disabled={isLoading}>
-                {isLoading ? "Criando..." : "Criar Escala"}
+              <Button
+                onClick={handleCreateShift}
+                disabled={createShiftMutation.isPending}
+              >
+                {createShiftMutation.isPending ? "Criando..." : "Criar Escala"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -599,7 +583,9 @@ export default function CriarEscalaPage() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Editar Escala</DialogTitle>
-              <DialogDescription>Altere os horários da escala</DialogDescription>
+              <DialogDescription>
+                Altere os horários da escala
+              </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4 py-4">
@@ -703,12 +689,17 @@ export default function CriarEscalaPage() {
               <Button
                 variant="outline"
                 onClick={() => setIsEditDialogOpen(false)}
-                disabled={isLoading}
+                disabled={updateShiftMutation.isPending}
               >
                 Cancelar
               </Button>
-              <Button onClick={handleUpdateShift} disabled={isLoading}>
-                {isLoading ? "Salvando..." : "Salvar Alterações"}
+              <Button
+                onClick={handleUpdateShift}
+                disabled={updateShiftMutation.isPending}
+              >
+                {updateShiftMutation.isPending
+                  ? "Salvando..."
+                  : "Salvar Alterações"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -729,16 +720,16 @@ export default function CriarEscalaPage() {
               <Button
                 variant="outline"
                 onClick={() => setIsDeleteDialogOpen(false)}
-                disabled={isLoading}
+                disabled={deleteShiftMutation.isPending}
               >
                 Cancelar
               </Button>
               <Button
                 variant="destructive"
                 onClick={handleDeleteShift}
-                disabled={isLoading}
+                disabled={deleteShiftMutation.isPending}
               >
-                {isLoading ? "Excluindo..." : "Excluir"}
+                {deleteShiftMutation.isPending ? "Excluindo..." : "Excluir"}
               </Button>
             </DialogFooter>
           </DialogContent>

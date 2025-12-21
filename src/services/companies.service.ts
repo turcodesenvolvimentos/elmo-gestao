@@ -71,3 +71,26 @@ export async function deleteCompany(id: string): Promise<void> {
     throw new Error(errorData.error || "Erro ao excluir empresa");
   }
 }
+
+export interface CompanyEmployee {
+  id: string;
+  name: string;
+  solides_id: number;
+}
+
+export interface CompanyEmployeesResponse {
+  employees: CompanyEmployee[];
+  total: number;
+}
+
+export async function fetchCompanyEmployees(
+  companyId: string
+): Promise<CompanyEmployeesResponse> {
+  const response = await fetch(`/api/companies/${companyId}/employees`);
+
+  if (!response.ok) {
+    throw new Error("Erro ao buscar funcionários da empresa");
+  }
+
+  return response.json();
+}

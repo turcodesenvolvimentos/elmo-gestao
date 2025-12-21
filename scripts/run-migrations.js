@@ -43,6 +43,8 @@ function getMigrations() {
     "create_punches_table.sql",
     "create_employee_companies_table.sql",
     "update_punches_table_with_foreign_keys.sql",
+    "create_shifts_table.sql",
+    "create_escalas_table.sql",
   ];
 
   const orderedFiles = executionOrder.filter((file) => allFiles.includes(file));

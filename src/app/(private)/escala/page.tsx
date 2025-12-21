@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import {
@@ -21,7 +21,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, Users, Building, Calendar, Settings } from "lucide-react";
+import {
+  Search,
+  Plus,
+  Users,
+  Building,
+  Calendar,
+  Settings,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -41,161 +48,60 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import Link from "next/link";
-
-// Dados mockados (mantendo os mesmos dados)
-const mockCompanies = [
-  {
-    id: "1",
-    name: "Empresa ABC Ltda",
-    address: "Rua das Flores, 123 - São Paulo/SP",
-    employee_count: 15,
-  },
-  {
-    id: "2",
-    name: "Comércio XYZ S.A.",
-    address: "Av. Principal, 456 - Rio de Janeiro/RJ",
-    employee_count: 8,
-  },
-  {
-    id: "3",
-    name: "Indústria 123 ME",
-    address: "Rua Industrial, 789 - Belo Horizonte/MG",
-    employee_count: 22,
-  },
-];
-
-const mockShifts = [
-  {
-    id: "1",
-    name: "Turno Matutino",
-    company_id: "1",
-    entry1: "08:00",
-    exit1: "12:00",
-    entry2: "13:00",
-    exit2: "17:00",
-  },
-  {
-    id: "2",
-    name: "Turno Noturno",
-    company_id: "1",
-    entry1: "22:00",
-    exit1: "06:00",
-    entry2: undefined,
-    exit2: undefined,
-  },
-  {
-    id: "3",
-    name: "Escala 6x1",
-    company_id: "2",
-    entry1: "07:00",
-    exit1: "13:00",
-    entry2: "14:00",
-    exit2: "18:00",
-  },
-  {
-    id: "4",
-    name: "Escala 12x36",
-    company_id: "1",
-    entry1: "07:00",
-    exit1: "19:00",
-    entry2: undefined,
-    exit2: undefined,
-  },
-];
-
-const mockEmployees = [
-  {
-    id: 1,
-    name: "João Silva",
-    companies: [{ id: "1" }],
-  },
-  {
-    id: 2,
-    name: "Maria Santos",
-    companies: [{ id: "1" }],
-  },
-  {
-    id: 3,
-    name: "Pedro Oliveira",
-    companies: [{ id: "1" }],
-  },
-  {
-    id: 4,
-    name: "Ana Costa",
-    companies: [{ id: "2" }],
-  },
-  {
-    id: 5,
-    name: "Carlos Souza",
-    companies: [{ id: "2" }],
-  },
-  {
-    id: 6,
-    name: "Juliana Lima",
-    companies: [{ id: "3" }],
-  },
-];
+import { useCompanies, useCompanyEmployees } from "@/hooks/use-companies";
+import { useShifts } from "@/hooks/use-shifts";
+import { useBatchCreateEscalas } from "@/hooks/use-escalas";
+import { useQuery } from "@tanstack/react-query";
+import { fetchAllShifts } from "@/services/shifts.service";
 
 export default function EscalaPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<number>>(
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<string>>(
     new Set()
   );
   const [selectedShiftId, setSelectedShiftId] = useState("");
   const [startDate, setStartDate] = useState(
     new Date().toISOString().split("T")[0]
   );
-  const [endDate, setEndDate] = useState("");
-  const [isDateRangeValid, setIsDateRangeValid] = useState(true);
-  const [isLoading, setIsLoading] = useState(false);
+
+  // Hooks
+  const { data: companiesData } = useCompanies();
+  const { data: employeesData } = useCompanyEmployees(selectedCompany || "");
+  const { data: shiftsData } = useShifts(selectedCompany || "");
+  const { data: allShiftsData } = useQuery({
+    queryKey: ["shifts", "all"],
+    queryFn: () => fetchAllShifts(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const batchCreateEscalasMutation = useBatchCreateEscalas();
+
+  const companies = useMemo(
+    () => companiesData?.companies || [],
+    [companiesData?.companies]
+  );
+  const companyEmployees = employeesData?.employees || [];
+  const companyShifts = shiftsData?.shifts || [];
+  const allShifts = allShiftsData?.shifts || [];
 
   // Filtrar empresas por termo de busca
-  const filteredCompanies = mockCompanies.filter((company) =>
-    company.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  // Obter funcionários da empresa selecionada
-  const companyEmployees = selectedCompany
-    ? mockEmployees.filter((employee) =>
-        employee.companies?.some((company) => company.id === selectedCompany)
-      )
-    : [];
-
-  // Obter escalas da empresa selecionada
-  const companyShifts = selectedCompany
-    ? mockShifts.filter((shift) => shift.company_id === selectedCompany)
-    : [];
-
-  // Validar data final
-  const validateDateRange = () => {
-    if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      const isValid = end >= start;
-      setIsDateRangeValid(isValid);
-      return isValid;
-    }
-    setIsDateRangeValid(true);
-    return true;
-  };
+  const filteredCompanies = useMemo(() => {
+    return companies.filter((company) =>
+      company.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [companies, searchTerm]);
 
   const handleOpenDialog = (companyId: string) => {
     setSelectedCompany(companyId);
     setSelectedEmployeeIds(new Set());
     setSelectedShiftId("");
     const today = new Date();
-    const nextMonth = new Date(today);
-    nextMonth.setMonth(today.getMonth() + 1);
-    
     setStartDate(today.toISOString().split("T")[0]);
-    setEndDate(nextMonth.toISOString().split("T")[0]);
-    setIsDateRangeValid(true);
     setIsDialogOpen(true);
   };
 
-  const handleEmployeeToggle = (employeeId: number) => {
+  const handleEmployeeToggle = (employeeId: string) => {
     const newSelected = new Set(selectedEmployeeIds);
     if (newSelected.has(employeeId)) {
       newSelected.delete(employeeId);
@@ -214,46 +120,39 @@ export default function EscalaPage() {
     }
   };
 
-  const handleDateChange = (type: "start" | "end", value: string) => {
-    if (type === "start") {
-      setStartDate(value);
-    } else {
-      setEndDate(value);
-    }
-    
-    // Validar após um pequeno delay para garantir que ambos os estados foram atualizados
-    setTimeout(validateDateRange, 10);
-  };
-
   const handleAssignShifts = async () => {
-    if (!selectedCompany || selectedEmployeeIds.size === 0 || !selectedShiftId) {
-      toast.error("Selecione pelo menos um funcionário e uma escala");
+    if (
+      !selectedCompany ||
+      selectedEmployeeIds.size === 0 ||
+      !selectedShiftId ||
+      !startDate
+    ) {
+      toast.error(
+        "Selecione pelo menos um funcionário, uma escala e uma data inicial"
+      );
       return;
     }
 
-    if (!startDate || !endDate) {
-      toast.error("Informe a data inicial e final");
-      return;
-    }
-
-    if (!isDateRangeValid) {
-      toast.error("Data final deve ser maior ou igual à data inicial");
-      return;
-    }
-
-    setIsLoading(true);
-    
-    // Simular chamada à API
-    setTimeout(() => {
+    try {
       const selectedShift = companyShifts.find((s) => s.id === selectedShiftId);
+      await batchCreateEscalasMutation.mutateAsync({
+        employee_ids: Array.from(selectedEmployeeIds),
+        shift_id: selectedShiftId,
+        start_date: startDate,
+      });
       toast.success(
-        `Escala "${selectedShift?.name}" aplicada para ${selectedEmployeeIds.size} funcionário(s) de ${formatDate(startDate)} até ${formatDate(endDate)}!`
+        `Escala "${selectedShift?.name}" aplicada para ${
+          selectedEmployeeIds.size
+        } funcionário(s) a partir de ${formatDate(startDate)}!`
       );
       setIsDialogOpen(false);
       setSelectedEmployeeIds(new Set());
       setSelectedShiftId("");
-      setIsLoading(false);
-    }, 1000);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Erro ao aplicar escalas"
+      );
+    }
   };
 
   const formatTime = (time: string) => {
@@ -263,16 +162,6 @@ export default function EscalaPage() {
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString("pt-BR");
-  };
-
-  const calculateDays = () => {
-    if (!startDate || !endDate || !isDateRangeValid) return 0;
-    
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const diffTime = Math.abs(end.getTime() - start.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 para incluir ambos os dias
-    return diffDays;
   };
 
   return (
@@ -290,7 +179,7 @@ export default function EscalaPage() {
                 Aplique escalas aos funcionários das empresas
               </p>
             </div>
-            
+
             <Button asChild variant="outline">
               <Link href="/escala/criar">
                 <Settings className="h-4 w-4 mr-2" />
@@ -336,10 +225,11 @@ export default function EscalaPage() {
                       </TableHeader>
                       <TableBody>
                         {filteredCompanies.map((company) => {
-                          const shiftsCount = mockShifts.filter(
+                          // Contar shifts da empresa
+                          const shiftsCount = allShifts.filter(
                             (shift) => shift.company_id === company.id
                           ).length;
-                          
+
                           return (
                             <TableRow key={company.id}>
                               <TableCell className="font-medium">
@@ -359,7 +249,8 @@ export default function EscalaPage() {
                               </TableCell>
                               <TableCell>
                                 <Badge variant="outline">
-                                  {shiftsCount} escala{shiftsCount !== 1 ? "s" : ""}
+                                  {shiftsCount} escala
+                                  {shiftsCount !== 1 ? "s" : ""}
                                 </Badge>
                               </TableCell>
                               <TableCell className="text-right">
@@ -461,7 +352,9 @@ export default function EscalaPage() {
                                   {formatTime(shift.exit1)}
                                   {shift.entry2 &&
                                     shift.exit2 &&
-                                    ` | ${formatTime(shift.entry2)} - ${formatTime(shift.exit2)}`}
+                                    ` | ${formatTime(
+                                      shift.entry2
+                                    )} - ${formatTime(shift.exit2)}`}
                                 </span>
                               </div>
                             </SelectItem>
@@ -472,46 +365,21 @@ export default function EscalaPage() {
 
                     <div className="space-y-4">
                       <div>
-                        <h3 className="font-semibold mb-3">Período da Escala</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <Label htmlFor="start-date" className="mb-2 block">
-                              Data Inicial <span className="text-destructive">*</span>
-                            </Label>
-                            <div className="flex items-center gap-2">
-                              <Calendar className="h-4 w-4 text-muted-foreground" />
-                              <Input
-                                id="start-date"
-                                type="date"
-                                value={startDate}
-                                onChange={(e) => handleDateChange("start", e.target.value)}
-                                className="flex-1"
-                              />
-                            </div>
-                          </div>
-                          
-                          <div>
-                            <Label htmlFor="end-date" className="mb-2 block">
-                              Data Final <span className="text-destructive">*</span>
-                            </Label>
-                            <div className="flex items-center gap-2">
-                              <Calendar className="h-4 w-4 text-muted-foreground" />
-                              <Input
-                                id="end-date"
-                                type="date"
-                                value={endDate}
-                                onChange={(e) => handleDateChange("end", e.target.value)}
-                                min={startDate}
-                                className={`flex-1 ${
-                                  !isDateRangeValid ? "border-destructive" : ""
-                                }`}
-                              />
-                            </div>
-                            {!isDateRangeValid && (
-                              <p className="text-sm text-destructive mt-1">
-                                Data final deve ser maior ou igual à data inicial
-                              </p>
-                            )}
+                        <h3 className="font-semibold mb-3">Data de Início</h3>
+                        <div>
+                          <Label htmlFor="start-date" className="mb-2 block">
+                            Data Inicial{" "}
+                            <span className="text-destructive">*</span>
+                          </Label>
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                            <Input
+                              id="start-date"
+                              type="date"
+                              value={startDate}
+                              onChange={(e) => setStartDate(e.target.value)}
+                              className="flex-1"
+                            />
                           </div>
                         </div>
                       </div>
@@ -523,7 +391,10 @@ export default function EscalaPage() {
                         <div className="flex justify-between">
                           <span>Empresa:</span>
                           <span className="font-medium">
-                            {mockCompanies.find((c) => c.id === selectedCompany)?.name}
+                            {
+                              companies.find((c) => c.id === selectedCompany)
+                                ?.name
+                            }
                           </span>
                         </div>
                         <div className="flex justify-between">
@@ -536,20 +407,16 @@ export default function EscalaPage() {
                           <span>Escala:</span>
                           <span className="font-medium">
                             {selectedShiftId
-                              ? companyShifts.find((s) => s.id === selectedShiftId)?.name
+                              ? companyShifts.find(
+                                  (s) => s.id === selectedShiftId
+                                )?.name
                               : "Não selecionada"}
                           </span>
                         </div>
                         <div className="flex justify-between">
-                          <span>Período:</span>
+                          <span>Data de início:</span>
                           <span className="font-medium">
-                            {formatDate(startDate)} até {formatDate(endDate)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Duração:</span>
-                          <span className="font-medium">
-                            {calculateDays()} dia{calculateDays() !== 1 ? "s" : ""}
+                            {formatDate(startDate)}
                           </span>
                         </div>
                       </div>
@@ -570,12 +437,12 @@ export default function EscalaPage() {
                       selectedEmployeeIds.size === 0 ||
                       !selectedShiftId ||
                       !startDate ||
-                      !endDate ||
-                      !isDateRangeValid ||
-                      isLoading
+                      batchCreateEscalasMutation.isPending
                     }
                   >
-                    {isLoading ? "Aplicando..." : "Aplicar Escala"}
+                    {batchCreateEscalasMutation.isPending
+                      ? "Aplicando..."
+                      : "Aplicar Escala"}
                   </Button>
                 </DialogFooter>
               </>
