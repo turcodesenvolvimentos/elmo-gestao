@@ -1,4 +1,3 @@
-// app/escala/criar/page.tsx
 "use client";
 
 import { useState } from "react";
@@ -21,7 +20,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, Building, Clock, Edit, Trash2 } from "lucide-react";
+import { Search, Plus, Building, Clock, Edit, Trash2, ArrowLeft } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +31,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import Link from "next/link";
 
 // Dados mockados
 const mockCompanies = [
@@ -313,13 +313,22 @@ export default function CriarEscalaPage() {
       <div className="min-h-screen w-full p-6">
         <SidebarTrigger className="-ml-1" />
         <div className="space-y-6">
-          <div>
-            <h2 className="scroll-m-20 text-3xl font-semibold tracking-tight">
-              Criar Escalas
-            </h2>
-            <p className="text-muted-foreground mt-1">
-              Crie e gerencie escalas para cada empresa
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h2 className="scroll-m-20 text-3xl font-semibold tracking-tight">
+                Criar Escalas
+              </h2>
+              <p className="text-muted-foreground mt-1">
+                Crie e gerencie escalas para cada empresa
+              </p>
+            </div>
+            
+            <Button asChild variant="outline">
+              <Link href="/escala">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Voltar para Aplicar Escala
+              </Link>
+            </Button>
           </div>
 
           <Card>

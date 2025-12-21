@@ -1,4 +1,3 @@
-// app/escala/page.tsx
 "use client";
 
 import { useState } from "react";
@@ -22,7 +21,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, Users, Building, Calendar } from "lucide-react";
+import { Search, Plus, Users, Building, Calendar, Settings } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -41,8 +40,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import Link from "next/link";
 
-// Dados mockados
+// Dados mockados (mantendo os mesmos dados)
 const mockCompanies = [
   {
     id: "1",
@@ -92,6 +92,15 @@ const mockShifts = [
     entry2: "14:00",
     exit2: "18:00",
   },
+  {
+    id: "4",
+    name: "Escala 12x36",
+    company_id: "1",
+    entry1: "07:00",
+    exit1: "19:00",
+    entry2: undefined,
+    exit2: undefined,
+  },
 ];
 
 const mockEmployees = [
@@ -138,6 +147,8 @@ export default function EscalaPage() {
   const [startDate, setStartDate] = useState(
     new Date().toISOString().split("T")[0]
   );
+  const [endDate, setEndDate] = useState("");
+  const [isDateRangeValid, setIsDateRangeValid] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
 
   // Filtrar empresas por termo de busca
@@ -157,11 +168,30 @@ export default function EscalaPage() {
     ? mockShifts.filter((shift) => shift.company_id === selectedCompany)
     : [];
 
+  // Validar data final
+  const validateDateRange = () => {
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const isValid = end >= start;
+      setIsDateRangeValid(isValid);
+      return isValid;
+    }
+    setIsDateRangeValid(true);
+    return true;
+  };
+
   const handleOpenDialog = (companyId: string) => {
     setSelectedCompany(companyId);
     setSelectedEmployeeIds(new Set());
     setSelectedShiftId("");
-    setStartDate(new Date().toISOString().split("T")[0]);
+    const today = new Date();
+    const nextMonth = new Date(today);
+    nextMonth.setMonth(today.getMonth() + 1);
+    
+    setStartDate(today.toISOString().split("T")[0]);
+    setEndDate(nextMonth.toISOString().split("T")[0]);
+    setIsDateRangeValid(true);
     setIsDialogOpen(true);
   };
 
@@ -184,9 +214,30 @@ export default function EscalaPage() {
     }
   };
 
+  const handleDateChange = (type: "start" | "end", value: string) => {
+    if (type === "start") {
+      setStartDate(value);
+    } else {
+      setEndDate(value);
+    }
+    
+    // Validar após um pequeno delay para garantir que ambos os estados foram atualizados
+    setTimeout(validateDateRange, 10);
+  };
+
   const handleAssignShifts = async () => {
     if (!selectedCompany || selectedEmployeeIds.size === 0 || !selectedShiftId) {
       toast.error("Selecione pelo menos um funcionário e uma escala");
+      return;
+    }
+
+    if (!startDate || !endDate) {
+      toast.error("Informe a data inicial e final");
+      return;
+    }
+
+    if (!isDateRangeValid) {
+      toast.error("Data final deve ser maior ou igual à data inicial");
       return;
     }
 
@@ -194,8 +245,9 @@ export default function EscalaPage() {
     
     // Simular chamada à API
     setTimeout(() => {
+      const selectedShift = companyShifts.find((s) => s.id === selectedShiftId);
       toast.success(
-        `Escala aplicada para ${selectedEmployeeIds.size} funcionário(s)!`
+        `Escala "${selectedShift?.name}" aplicada para ${selectedEmployeeIds.size} funcionário(s) de ${formatDate(startDate)} até ${formatDate(endDate)}!`
       );
       setIsDialogOpen(false);
       setSelectedEmployeeIds(new Set());
@@ -208,19 +260,43 @@ export default function EscalaPage() {
     return time.slice(0, 5);
   };
 
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString("pt-BR");
+  };
+
+  const calculateDays = () => {
+    if (!startDate || !endDate || !isDateRangeValid) return 0;
+    
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 para incluir ambos os dias
+    return diffDays;
+  };
+
   return (
     <SidebarProvider>
       <AppSidebar collapsible="icon" />
       <div className="min-h-screen w-full p-6">
         <SidebarTrigger className="-ml-1" />
         <div className="space-y-6">
-          <div>
-            <h2 className="scroll-m-20 text-3xl font-semibold tracking-tight">
-              Gerenciar Escalas
-            </h2>
-            <p className="text-muted-foreground mt-1">
-              Aplique escalas aos funcionários das empresas
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h2 className="scroll-m-20 text-3xl font-semibold tracking-tight">
+                Gerenciar Escalas
+              </h2>
+              <p className="text-muted-foreground mt-1">
+                Aplique escalas aos funcionários das empresas
+              </p>
+            </div>
+            
+            <Button asChild variant="outline">
+              <Link href="/escala/criar">
+                <Settings className="h-4 w-4 mr-2" />
+                Gerenciar Escalas
+              </Link>
+            </Button>
           </div>
 
           <Card>
@@ -313,7 +389,7 @@ export default function EscalaPage() {
             <DialogHeader>
               <DialogTitle>Aplicar Escala</DialogTitle>
               <DialogDescription>
-                Selecione os funcionários e escolha uma escala para aplicar
+                Selecione os funcionários, escolha uma escala e defina o período
               </DialogDescription>
             </DialogHeader>
 
@@ -364,7 +440,7 @@ export default function EscalaPage() {
                     </div>
                   </div>
 
-                  {/* Seleção de escala e data */}
+                  {/* Seleção de escala e datas */}
                   <div className="space-y-4">
                     <div>
                       <h3 className="font-semibold mb-3">Escala</h3>
@@ -394,16 +470,50 @@ export default function EscalaPage() {
                       </Select>
                     </div>
 
-                    <div>
-                      <h3 className="font-semibold mb-3">Data de Início</h3>
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        <Input
-                          type="date"
-                          value={startDate}
-                          onChange={(e) => setStartDate(e.target.value)}
-                          className="flex-1"
-                        />
+                    <div className="space-y-4">
+                      <div>
+                        <h3 className="font-semibold mb-3">Período da Escala</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="start-date" className="mb-2 block">
+                              Data Inicial <span className="text-destructive">*</span>
+                            </Label>
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-4 w-4 text-muted-foreground" />
+                              <Input
+                                id="start-date"
+                                type="date"
+                                value={startDate}
+                                onChange={(e) => handleDateChange("start", e.target.value)}
+                                className="flex-1"
+                              />
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <Label htmlFor="end-date" className="mb-2 block">
+                              Data Final <span className="text-destructive">*</span>
+                            </Label>
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-4 w-4 text-muted-foreground" />
+                              <Input
+                                id="end-date"
+                                type="date"
+                                value={endDate}
+                                onChange={(e) => handleDateChange("end", e.target.value)}
+                                min={startDate}
+                                className={`flex-1 ${
+                                  !isDateRangeValid ? "border-destructive" : ""
+                                }`}
+                              />
+                            </div>
+                            {!isDateRangeValid && (
+                              <p className="text-sm text-destructive mt-1">
+                                Data final deve ser maior ou igual à data inicial
+                              </p>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
 
@@ -431,9 +541,15 @@ export default function EscalaPage() {
                           </span>
                         </div>
                         <div className="flex justify-between">
-                          <span>Data de início:</span>
+                          <span>Período:</span>
                           <span className="font-medium">
-                            {new Date(startDate).toLocaleDateString("pt-BR")}
+                            {formatDate(startDate)} até {formatDate(endDate)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Duração:</span>
+                          <span className="font-medium">
+                            {calculateDays()} dia{calculateDays() !== 1 ? "s" : ""}
                           </span>
                         </div>
                       </div>
@@ -453,6 +569,9 @@ export default function EscalaPage() {
                     disabled={
                       selectedEmployeeIds.size === 0 ||
                       !selectedShiftId ||
+                      !startDate ||
+                      !endDate ||
+                      !isDateRangeValid ||
                       isLoading
                     }
                   >
