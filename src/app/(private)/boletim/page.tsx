@@ -75,7 +75,6 @@ const ALL_VALUES = {
   POSITION: "all-positions",
   DEPARTMENT: "all-departments",
   DATE: "all-dates",
-  DAY_OF_WEEK: "all-days-of-week",
 };
 
 export default function BoletimPage() {
@@ -122,9 +121,6 @@ export default function BoletimPage() {
     ALL_VALUES.DEPARTMENT
   );
   const [dateFilter, setDateFilter] = useState(ALL_VALUES.DATE);
-  const [dayOfWeekFilter, setDayOfWeekFilter] = useState(
-    ALL_VALUES.DAY_OF_WEEK
-  );
 
   // Estado para edição
   const [editFormData, setEditFormData] = useState({
@@ -227,13 +223,6 @@ export default function BoletimPage() {
       filtered = filtered.filter((item) => item.date === dateFilter);
     }
 
-    // Filtrar por dia da semana
-    if (dayOfWeekFilter !== ALL_VALUES.DAY_OF_WEEK) {
-      filtered = filtered.filter(
-        (item) => item.day_of_week === dayOfWeekFilter
-      );
-    }
-
     // Ordenar por data e depois por horário de entrada (mais cedo para mais tarde)
     filtered.sort((a, b) => {
       // Primeiro ordenar por data
@@ -264,7 +253,6 @@ export default function BoletimPage() {
     positionFilter,
     departmentFilter,
     dateFilter,
-    dayOfWeekFilter,
   ]);
 
   // Calcular totais
@@ -334,10 +322,6 @@ export default function BoletimPage() {
   }, [boletimData]);
 
   // Obter dias da semana únicos para filtro
-  const uniqueDaysOfWeek = useMemo(() => {
-    if (!boletimData) return [];
-    return [...new Set(boletimData.map((item) => item.day_of_week))];
-  }, [boletimData]);
 
   // Validar data final
   const validateDateRange = () => {
@@ -507,7 +491,6 @@ export default function BoletimPage() {
     setPositionFilter(ALL_VALUES.POSITION);
     setDepartmentFilter(ALL_VALUES.DEPARTMENT);
     setDateFilter(ALL_VALUES.DATE);
-    setDayOfWeekFilter(ALL_VALUES.DAY_OF_WEEK);
   };
 
   const clearAllEdits = () => {
@@ -766,8 +749,8 @@ export default function BoletimPage() {
                   {/* Filtros do modal */}
                   <Card>
                     <CardContent className="p-4">
-                      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                        <div>
+                      <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+                        <div className="md:col-span-2">
                           <Label className="text-sm font-medium mb-2 block">
                             <Filter className="h-3 w-3 inline mr-1" />
                             Colaborador
@@ -855,46 +838,17 @@ export default function BoletimPage() {
                           </Select>
                         </div>
 
-                        <div>
-                          <Label className="text-sm font-medium mb-2 block">
-                            <Filter className="h-3 w-3 inline mr-1" />
-                            Dia da Semana
-                          </Label>
-                          <Select
-                            value={dayOfWeekFilter}
-                            onValueChange={setDayOfWeekFilter}
+                        <div className="flex items-end">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={clearAllFilters}
+                            className="text-sm gap-2 w-full h-10"
                           >
-                            <SelectTrigger className="text-sm">
-                              <SelectValue placeholder="Todos os dias" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value={ALL_VALUES.DAY_OF_WEEK}>
-                                Todos os dias
-                              </SelectItem>
-                              {uniqueDaysOfWeek.map((day) => (
-                                <SelectItem key={day} value={day}>
-                                  {day}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            <X className="h-3 w-3" />
+                            Limpar Filtros
+                          </Button>
                         </div>
-                      </div>
-
-                      <div className="flex justify-between items-center mt-4 pt-4 border-t">
-                        <div className="text-sm text-muted-foreground">
-                          {filteredBulletinData.length} registro(s)
-                          encontrado(s)
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={clearAllFilters}
-                          className="text-sm gap-2"
-                        >
-                          <X className="h-3 w-3" />
-                          Limpar Filtros
-                        </Button>
                       </div>
                     </CardContent>
                   </Card>
@@ -917,9 +871,6 @@ export default function BoletimPage() {
                               </th>
                               <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
                                 Dia
-                              </th>
-                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
-                                Dia da Semana
                               </th>
                               <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
                                 Entrada 1
@@ -1066,7 +1017,7 @@ export default function BoletimPage() {
                                 {/* Linha de totais */}
                                 <tr className="border-t bg-muted/50 font-semibold">
                                   <td
-                                    colSpan={9}
+                                    colSpan={8}
                                     className="p-3 align-middle text-right"
                                   >
                                     Totais:
