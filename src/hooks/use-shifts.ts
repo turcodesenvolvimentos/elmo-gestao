@@ -39,8 +39,13 @@ export function useCreateShift(): UseMutationResult<
   return useMutation({
     mutationFn: ({ companyId, data }) => createShift(companyId, data),
     onSuccess: (_, variables) => {
+      // Invalidar a query específica da empresa
       queryClient.invalidateQueries({
         queryKey: ["shifts", variables.companyId],
+      });
+      // Invalidar a query de todos os shifts
+      queryClient.invalidateQueries({
+        queryKey: ["shifts", "all"],
       });
     },
   });
@@ -57,8 +62,13 @@ export function useUpdateShift(): UseMutationResult<
     mutationFn: ({ companyId, shiftId, data }) =>
       updateShift(companyId, shiftId, data),
     onSuccess: (_, variables) => {
+      // Invalidar a query específica da empresa
       queryClient.invalidateQueries({
         queryKey: ["shifts", variables.companyId],
+      });
+      // Invalidar a query de todos os shifts
+      queryClient.invalidateQueries({
+        queryKey: ["shifts", "all"],
       });
     },
   });
@@ -74,8 +84,13 @@ export function useDeleteShift(): UseMutationResult<
   return useMutation({
     mutationFn: ({ companyId, shiftId }) => deleteShift(companyId, shiftId),
     onSuccess: (_, variables) => {
+      // Invalidar a query específica da empresa
       queryClient.invalidateQueries({
         queryKey: ["shifts", variables.companyId],
+      });
+      // Invalidar a query de todos os shifts
+      queryClient.invalidateQueries({
+        queryKey: ["shifts", "all"],
       });
     },
   });

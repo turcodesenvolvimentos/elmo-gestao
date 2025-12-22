@@ -281,7 +281,7 @@ export default function EscalaPage() {
 
         {/* Modal para aplicar escala */}
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="!max-w-6xl sm:!max-w-6xl md:!max-w-6xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Aplicar Escala</DialogTitle>
               <DialogDescription>
@@ -291,7 +291,7 @@ export default function EscalaPage() {
 
             {selectedCompany && (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   {/* Lista de funcionários */}
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
