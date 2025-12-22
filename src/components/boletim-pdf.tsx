@@ -76,22 +76,23 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   // Colunas
-  col1: { width: "12%", fontSize: 8 }, // Nome
-  col2: { width: "9%", fontSize: 7 }, // Função
-  col3: { width: "8%", fontSize: 7 }, // Setor
-  col4: { width: "6%", fontSize: 7 }, // Dia
-  col5: { width: "7%", fontSize: 7 }, // Dia Semana
-  col6: { width: "4.5%", fontSize: 7 }, // Entrada 1
-  col7: { width: "4.5%", fontSize: 7 }, // Saída 1
-  col8: { width: "4.5%", fontSize: 7 }, // Entrada 2
-  col9: { width: "4.5%", fontSize: 7 }, // Saída 2
-  col10: { width: "4.5%", fontSize: 7 }, // Total
-  col11: { width: "4.5%", fontSize: 7 }, // Normal
-  col12: { width: "4.5%", fontSize: 7 }, // 50% Dia
-  col13: { width: "4.5%", fontSize: 7 }, // 50% Noite
-  col14: { width: "4.5%", fontSize: 7 }, // 100% Dia
-  col15: { width: "4.5%", fontSize: 7 }, // 100% Noite
-  col16: { width: "8%", fontSize: 7, textAlign: "right" }, // Valor
+  col1: { width: "11%", fontSize: 8 }, // Nome
+  col2: { width: "8%", fontSize: 7 }, // Função
+  col3: { width: "7%", fontSize: 7 }, // Setor
+  col4: { width: "5.5%", fontSize: 7 }, // Dia
+  col5: { width: "6%", fontSize: 7 }, // Dia Semana
+  col6: { width: "4%", fontSize: 7 }, // Entrada 1
+  col7: { width: "4%", fontSize: 7 }, // Saída 1
+  col8: { width: "4%", fontSize: 7 }, // Entrada 2
+  col9: { width: "4%", fontSize: 7 }, // Saída 2
+  col10: { width: "4%", fontSize: 7 }, // Total
+  col11: { width: "4%", fontSize: 7 }, // Normal
+  col12: { width: "4%", fontSize: 7 }, // Adicional Noturno
+  col13: { width: "4%", fontSize: 7 }, // 50% Dia
+  col14: { width: "4%", fontSize: 7 }, // 50% Noite
+  col15: { width: "4%", fontSize: 7 }, // 100% Dia
+  col16: { width: "4%", fontSize: 7 }, // 100% Noite
+  col17: { width: "7.5%", fontSize: 7, textAlign: "right" }, // Valor
   footer: {
     position: "absolute",
     bottom: 30,
@@ -149,6 +150,7 @@ interface BoletimData {
   exit2?: string;
   total_hours: string;
   normal_hours: string;
+  night_additional?: string;
   extra_50_day: string;
   extra_50_night: string;
   extra_100_day: string;
@@ -195,6 +197,8 @@ const calculateTotals = (data: BoletimData[]) => {
       return {
         totalHours: acc.totalHours + parseTime(item.total_hours),
         normalHours: acc.normalHours + parseTime(item.normal_hours),
+        nightAdditional:
+          acc.nightAdditional + parseTime(item.night_additional || "00:00"),
         extra50Day: acc.extra50Day + parseTime(item.extra_50_day),
         extra50Night: acc.extra50Night + parseTime(item.extra_50_night),
         extra100Day: acc.extra100Day + parseTime(item.extra_100_day),
@@ -205,6 +209,7 @@ const calculateTotals = (data: BoletimData[]) => {
     {
       totalHours: 0,
       normalHours: 0,
+      nightAdditional: 0,
       extra50Day: 0,
       extra50Night: 0,
       extra100Day: 0,
@@ -216,6 +221,7 @@ const calculateTotals = (data: BoletimData[]) => {
   return {
     totalHours: formatHours(totals.totalHours),
     normalHours: formatHours(totals.normalHours),
+    nightAdditional: formatHours(totals.nightAdditional),
     extra50Day: formatHours(totals.extra50Day),
     extra50Night: formatHours(totals.extra50Night),
     extra100Day: formatHours(totals.extra100Day),
@@ -306,11 +312,12 @@ export const BoletimPDF: React.FC<BoletimPDFProps> = ({
             <Text style={styles.col9}>Saí. 2</Text>
             <Text style={styles.col10}>Total</Text>
             <Text style={styles.col11}>Normal</Text>
-            <Text style={styles.col12}>50%D</Text>
-            <Text style={styles.col13}>50%N</Text>
-            <Text style={styles.col14}>100%D</Text>
-            <Text style={styles.col15}>100%N</Text>
-            <Text style={styles.col16}>Valor</Text>
+            <Text style={styles.col12}>Ad. Not.</Text>
+            <Text style={styles.col13}>50%D</Text>
+            <Text style={styles.col14}>50%N</Text>
+            <Text style={styles.col15}>100%D</Text>
+            <Text style={styles.col16}>100%N</Text>
+            <Text style={styles.col17}>Valor</Text>
           </View>
 
           {/* Rows */}
@@ -327,11 +334,14 @@ export const BoletimPDF: React.FC<BoletimPDFProps> = ({
               <Text style={styles.col9}>{row.exit2 || "-"}</Text>
               <Text style={styles.col10}>{row.total_hours}</Text>
               <Text style={styles.col11}>{row.normal_hours}</Text>
-              <Text style={styles.col12}>{row.extra_50_day}</Text>
-              <Text style={styles.col13}>{row.extra_50_night}</Text>
-              <Text style={styles.col14}>{row.extra_100_day}</Text>
-              <Text style={styles.col15}>{row.extra_100_night}</Text>
-              <Text style={styles.col16}>{formatCurrency(row.value)}</Text>
+              <Text style={styles.col12}>
+                {row.night_additional || "00:00"}
+              </Text>
+              <Text style={styles.col13}>{row.extra_50_day}</Text>
+              <Text style={styles.col14}>{row.extra_50_night}</Text>
+              <Text style={styles.col15}>{row.extra_100_day}</Text>
+              <Text style={styles.col16}>{row.extra_100_night}</Text>
+              <Text style={styles.col17}>{formatCurrency(row.value)}</Text>
             </View>
           ))}
 
@@ -340,11 +350,12 @@ export const BoletimPDF: React.FC<BoletimPDFProps> = ({
             <Text style={{ width: "58%" }}>TOTAIS</Text>
             <Text style={styles.col10}>{totals.totalHours}</Text>
             <Text style={styles.col11}>{totals.normalHours}</Text>
-            <Text style={styles.col12}>{totals.extra50Day}</Text>
-            <Text style={styles.col13}>{totals.extra50Night}</Text>
-            <Text style={styles.col14}>{totals.extra100Day}</Text>
-            <Text style={styles.col15}>{totals.extra100Night}</Text>
-            <Text style={styles.col16}>
+            <Text style={styles.col12}>{totals.nightAdditional}</Text>
+            <Text style={styles.col13}>{totals.extra50Day}</Text>
+            <Text style={styles.col14}>{totals.extra50Night}</Text>
+            <Text style={styles.col15}>{totals.extra100Day}</Text>
+            <Text style={styles.col16}>{totals.extra100Night}</Text>
+            <Text style={styles.col17}>
               {formatCurrency(totals.totalValue)}
             </Text>
           </View>

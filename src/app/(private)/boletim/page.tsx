@@ -53,6 +53,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { useCompanies } from "@/hooks/use-companies";
 import { useBoletim, useExportBoletimPDF } from "@/hooks/use-boletim";
+import type { BoletimData } from "@/services/boletim.service";
 
 // Importação dinâmica do PDFViewer (só funciona no client-side)
 const PDFViewer = dynamic(
@@ -132,6 +133,7 @@ export default function BoletimPage() {
     exit2: "",
     total_hours: "",
     normal_hours: "",
+    night_additional: "",
     extra_50_day: "",
     extra_50_night: "",
     extra_100_day: "",
@@ -178,7 +180,7 @@ export default function BoletimPage() {
   }, [companies, searchTerm]);
 
   // Filtrar dados do boletim e aplicar edições locais
-  const filteredBulletinData = useMemo(() => {
+  const filteredBulletinData = useMemo((): BoletimData[] => {
     if (!boletimData) return [];
 
     // Aplicar edições locais primeiro
@@ -274,6 +276,10 @@ export default function BoletimPage() {
       (sum, item) => sum + parseTime(item.normal_hours),
       0
     );
+    const totalNightAdditional = filteredBulletinData.reduce(
+      (sum, item) => sum + parseTime(item.night_additional || "00:00"),
+      0
+    );
     const totalExtra50Day = filteredBulletinData.reduce(
       (sum, item) => sum + parseTime(item.extra_50_day),
       0
@@ -295,6 +301,7 @@ export default function BoletimPage() {
       totalValue,
       totalHours,
       totalNormalHours,
+      totalNightAdditional,
       totalExtra50Day,
       totalExtra50Night,
       totalExtra100Day,
@@ -409,6 +416,7 @@ export default function BoletimPage() {
       exit2: rowData.exit2 || "",
       total_hours: rowData.total_hours,
       normal_hours: rowData.normal_hours,
+      night_additional: rowData.night_additional || "",
       extra_50_day: rowData.extra_50_day,
       extra_50_night: rowData.extra_50_night,
       extra_100_day: rowData.extra_100_day,
@@ -435,6 +443,7 @@ export default function BoletimPage() {
           exit2: editFormData.exit2,
           total_hours: editFormData.total_hours,
           normal_hours: editFormData.normal_hours,
+          night_additional: editFormData.night_additional,
           extra_50_day: editFormData.extra_50_day,
           extra_50_night: editFormData.extra_50_night,
           extra_100_day: editFormData.extra_100_day,
@@ -457,6 +466,7 @@ export default function BoletimPage() {
         exit2: "",
         total_hours: "",
         normal_hours: "",
+        night_additional: "",
         extra_50_day: "",
         extra_50_night: "",
         extra_100_day: "",
@@ -478,6 +488,7 @@ export default function BoletimPage() {
       exit2: "",
       total_hours: "",
       normal_hours: "",
+      night_additional: "",
       extra_50_day: "",
       extra_50_night: "",
       extra_100_day: "",
@@ -891,6 +902,9 @@ export default function BoletimPage() {
                                 Hora Normal
                               </th>
                               <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
+                                Adicional Noturno
+                              </th>
+                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
                                 50% Diurna
                               </th>
                               <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
@@ -973,6 +987,9 @@ export default function BoletimPage() {
                                         {item.normal_hours}
                                       </td>
                                       <td className="p-3 align-middle whitespace-nowrap">
+                                        {item.night_additional || "00:00"}
+                                      </td>
+                                      <td className="p-3 align-middle whitespace-nowrap">
                                         {item.extra_50_day}
                                       </td>
                                       <td className="p-3 align-middle whitespace-nowrap">
@@ -1027,6 +1044,9 @@ export default function BoletimPage() {
                                   </td>
                                   <td className="p-3 align-middle whitespace-nowrap">
                                     {formatHours(totals.totalNormalHours)}
+                                  </td>
+                                  <td className="p-3 align-middle whitespace-nowrap">
+                                    {formatHours(totals.totalNightAdditional)}
                                   </td>
                                   <td className="p-3 align-middle whitespace-nowrap">
                                     {formatHours(totals.totalExtra50Day)}
@@ -1270,6 +1290,21 @@ export default function BoletimPage() {
                     setEditFormData({
                       ...editFormData,
                       normal_hours: e.target.value,
+                    })
+                  }
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="edit-night-additional">Adicional Noturno</Label>
+                <Input
+                  id="edit-night-additional"
+                  type="time"
+                  value={editFormData.night_additional}
+                  onChange={(e) =>
+                    setEditFormData({
+                      ...editFormData,
+                      night_additional: e.target.value,
                     })
                   }
                 />

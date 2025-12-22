@@ -13,6 +13,7 @@ export interface BoletimData {
   exit2?: string;
   total_hours: string;
   normal_hours: string;
+  night_additional?: string;
   extra_50_day: string;
   extra_50_night: string;
   extra_100_day: string;

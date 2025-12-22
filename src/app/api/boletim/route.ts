@@ -213,8 +213,13 @@ export async function GET(request: NextRequest) {
 
         // Calcular valor monetário
         const hourValue = position?.hour_value || 0;
+        const ADICIONAL_NOTURNO_FATOR = 0.142857; // 20% de adicional noturno
 
         const valorNormal = horasCalculadas.horasNormais * hourValue;
+        const valorAdicionalNoturno =
+          horasCalculadas.adicionalNoturno *
+          hourValue *
+          ADICIONAL_NOTURNO_FATOR;
         const valorExtra50 =
           (horasCalculadas.extra50Diurno + horasCalculadas.extra50Noturno) *
           hourValue *
@@ -224,7 +229,8 @@ export async function GET(request: NextRequest) {
           hourValue *
           2;
 
-        const valorTotal = valorNormal + valorExtra50 + valorExtra100;
+        const valorTotal =
+          valorNormal + valorAdicionalNoturno + valorExtra50 + valorExtra100;
 
         // Obter dia da semana
         const dateObj = new Date(date + "T12:00:00Z");
@@ -243,6 +249,7 @@ export async function GET(request: NextRequest) {
           exit2,
           total_hours: formatarHoras(horasCalculadas.totalHoras),
           normal_hours: formatarHoras(horasCalculadas.horasNormais),
+          night_additional: formatarHoras(horasCalculadas.adicionalNoturno),
           extra_50_day: formatarHoras(horasCalculadas.extra50Diurno),
           extra_50_night: formatarHoras(horasCalculadas.extra50Noturno),
           extra_100_day: formatarHoras(horasCalculadas.extra100Diurno),
