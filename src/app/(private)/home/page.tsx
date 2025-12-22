@@ -1,6 +1,6 @@
 "use client";
 
-import { Utensils, Clock, Users, File, LogOut, Building } from "lucide-react";
+import { Utensils, Clock, Users, File, LogOut, Building, CalendarDays } from "lucide-react";
 import banner from "@/assets/banner.png";
 import Image from "next/image";
 import Link from "next/link";
@@ -34,7 +34,7 @@ export default function Page() {
       />
 
       <div className="flex flex-col gap-6 w-full max-w-4xl px-4 sm:px-0">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 max-w-2xl mx-auto w-full">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 max-w-5xl mx-auto w-full">
           <Link
             href="/empresas-e-funcionarios"
             className="bg-white flex justify-center items-center flex-col py-8 px-6 rounded-2xl border border-green-800/20 hover:border-green-900/50 transition-all duration-300 cursor-pointer hover:scale-105 hover:bg-transparent shadow-lg hover:shadow-xl backdrop-blur-sm"
@@ -78,6 +78,16 @@ export default function Page() {
             <File size={40} className="mb-2 transition-colors duration-300" />
             <span className="text-gray-700 font-medium group-hover:text-gray-900 transition-colors duration-300 text-sm sm:text-base">
               Boletim
+            </span>
+          </Link>
+
+          <Link
+            href="/escala"
+            className="bg-white flex justify-center items-center flex-col py-8 px-6 rounded-2xl border border-green-800/20 hover:border-green-900/50 transition-all duration-300 cursor-pointer hover:scale-105 hover:bg-transparent shadow-lg hover:shadow-xl backdrop-blur-sm"
+          >
+            <CalendarDays size={40} className="mb-2 transition-colors duration-300" />
+            <span className="text-gray-700 font-medium group-hover:text-gray-900 transition-colors duration-300 text-sm sm:text-base">
+              Escalas
             </span>
           </Link>
         </div>
