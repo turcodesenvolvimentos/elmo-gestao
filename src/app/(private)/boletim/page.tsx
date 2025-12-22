@@ -1,7 +1,7 @@
 // app/(private)/boletim/page.tsx
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -95,6 +95,26 @@ export default function BoletimPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingRow, setEditingRow] = useState<number | null>(null);
   const [showPDFPreview, setShowPDFPreview] = useState(false);
+  const [logoBase64, setLogoBase64] = useState<string>("");
+
+  // Carregar logo como base64
+  useEffect(() => {
+    const loadLogo = async () => {
+      try {
+        const response = await fetch("/assets/logo.png");
+        const blob = await response.blob();
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setLogoBase64(reader.result as string);
+        };
+        reader.readAsDataURL(blob);
+      } catch (error) {
+        console.warn("Erro ao carregar logo:", error);
+      }
+    };
+    loadLogo();
+  }, []);
+
   // Filtros do modal
   const [employeeFilter, setEmployeeFilter] = useState("");
   const [positionFilter, setPositionFilter] = useState(ALL_VALUES.POSITION);
@@ -150,7 +170,9 @@ export default function BoletimPage() {
     useExportBoletimPDF();
 
   // Estado local para armazenar edições temporárias (key: employee_id-date)
-  const [editedData, setEditedData] = useState<Record<string, Partial<typeof editFormData>>>({});
+  const [editedData, setEditedData] = useState<
+    Record<string, Partial<typeof editFormData>>
+  >({});
 
   // Filtrar empresas por termo de busca
   const filteredCompanies = useMemo(() => {
@@ -415,7 +437,9 @@ export default function BoletimPage() {
         },
       }));
 
-      toast.success("Valores atualizados! Lembre-se: as edições são temporárias e serão perdidas ao fechar o boletim.");
+      toast.success(
+        "Valores atualizados! Lembre-se: as edições são temporárias e serão perdidas ao fechar o boletim."
+      );
       setIsEditDialogOpen(false);
       setEditingRow(null);
       setEditFormData({
@@ -711,6 +735,7 @@ export default function BoletimPage() {
                       startDate={startDate}
                       endDate={endDate}
                       data={filteredBulletinData}
+                      logoBase64={logoBase64}
                     />
                   </PDFViewer>
                 </div>
@@ -930,73 +955,89 @@ export default function BoletimPage() {
                                   const isEdited = !!editedData[key];
 
                                   return (
-                                  <tr
-                                    key={`${item.employee_id}-${item.date}-${index}`}
-                                    className={`border-b hover:bg-muted/50 ${isEdited ? 'bg-yellow-50 dark:bg-yellow-950/20' : ''}`}
-                                  >
-                                    <td className={`p-3 align-middle font-medium whitespace-nowrap sticky left-0 ${isEdited ? 'bg-yellow-50 dark:bg-yellow-950/20' : 'bg-background'}`}>
-                                      {item.employee_name}
-                                    </td>
-                                    <td className="p-3 align-middle whitespace-nowrap">
-                                      {item.position}
-                                    </td>
-                                    <td className="p-3 align-middle whitespace-nowrap">
-                                      {item.department}
-                                    </td>
-                                    <td className="p-3 align-middle whitespace-nowrap">
-                                      {formatDate(item.date)}
-                                    </td>
-                                    <td className="p-3 align-middle whitespace-nowrap">
-                                      {item.entry1}
-                                    </td>
-                                    <td className="p-3 align-middle whitespace-nowrap">
-                                      {item.exit1}
-                                    </td>
-                                    <td className="p-3 align-middle whitespace-nowrap">
-                                      {item.entry2 || "-"}
-                                    </td>
-                                    <td className="p-3 align-middle whitespace-nowrap">
-                                      {item.exit2 || "-"}
-                                    </td>
-                                    <td className="p-3 align-middle whitespace-nowrap font-medium">
-                                      {item.total_hours}
-                                    </td>
-                                    <td className="p-3 align-middle whitespace-nowrap">
-                                      {item.normal_hours}
-                                    </td>
-                                    <td className="p-3 align-middle whitespace-nowrap">
-                                      {item.extra_50_day}
-                                    </td>
-                                    <td className="p-3 align-middle whitespace-nowrap">
-                                      {item.extra_50_night}
-                                    </td>
-                                    <td className="p-3 align-middle whitespace-nowrap">
-                                      {item.extra_100_day}
-                                    </td>
-                                    <td className="p-3 align-middle whitespace-nowrap">
-                                      {item.extra_100_night}
-                                    </td>
-                                    <td className="p-3 align-middle whitespace-nowrap font-medium">
-                                      {formatCurrency(item.value)}
-                                    </td>
-                                    <td className={`p-3 align-middle whitespace-nowrap sticky right-0 ${isEdited ? 'bg-yellow-50 dark:bg-yellow-950/20' : 'bg-background'}`}>
-                                      <div className="flex items-center gap-2">
-                                        {isEdited && (
-                                          <span className="text-xs text-yellow-600 dark:text-yellow-400">
-                                            Editado
-                                          </span>
-                                        )}
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() => handleEditRow(index)}
-                                          className="h-8 w-8 p-0"
-                                        >
-                                          <Edit className="h-4 w-4" />
-                                        </Button>
-                                      </div>
-                                    </td>
-                                  </tr>
+                                    <tr
+                                      key={`${item.employee_id}-${item.date}-${index}`}
+                                      className={`border-b hover:bg-muted/50 ${
+                                        isEdited
+                                          ? "bg-yellow-50 dark:bg-yellow-950/20"
+                                          : ""
+                                      }`}
+                                    >
+                                      <td
+                                        className={`p-3 align-middle font-medium whitespace-nowrap sticky left-0 ${
+                                          isEdited
+                                            ? "bg-yellow-50 dark:bg-yellow-950/20"
+                                            : "bg-background"
+                                        }`}
+                                      >
+                                        {item.employee_name}
+                                      </td>
+                                      <td className="p-3 align-middle whitespace-nowrap">
+                                        {item.position}
+                                      </td>
+                                      <td className="p-3 align-middle whitespace-nowrap">
+                                        {item.department}
+                                      </td>
+                                      <td className="p-3 align-middle whitespace-nowrap">
+                                        {formatDate(item.date)}
+                                      </td>
+                                      <td className="p-3 align-middle whitespace-nowrap">
+                                        {item.entry1}
+                                      </td>
+                                      <td className="p-3 align-middle whitespace-nowrap">
+                                        {item.exit1}
+                                      </td>
+                                      <td className="p-3 align-middle whitespace-nowrap">
+                                        {item.entry2 || "-"}
+                                      </td>
+                                      <td className="p-3 align-middle whitespace-nowrap">
+                                        {item.exit2 || "-"}
+                                      </td>
+                                      <td className="p-3 align-middle whitespace-nowrap font-medium">
+                                        {item.total_hours}
+                                      </td>
+                                      <td className="p-3 align-middle whitespace-nowrap">
+                                        {item.normal_hours}
+                                      </td>
+                                      <td className="p-3 align-middle whitespace-nowrap">
+                                        {item.extra_50_day}
+                                      </td>
+                                      <td className="p-3 align-middle whitespace-nowrap">
+                                        {item.extra_50_night}
+                                      </td>
+                                      <td className="p-3 align-middle whitespace-nowrap">
+                                        {item.extra_100_day}
+                                      </td>
+                                      <td className="p-3 align-middle whitespace-nowrap">
+                                        {item.extra_100_night}
+                                      </td>
+                                      <td className="p-3 align-middle whitespace-nowrap font-medium">
+                                        {formatCurrency(item.value)}
+                                      </td>
+                                      <td
+                                        className={`p-3 align-middle whitespace-nowrap sticky right-0 ${
+                                          isEdited
+                                            ? "bg-yellow-50 dark:bg-yellow-950/20"
+                                            : "bg-background"
+                                        }`}
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          {isEdited && (
+                                            <span className="text-xs text-yellow-600 dark:text-yellow-400">
+                                              Editado
+                                            </span>
+                                          )}
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleEditRow(index)}
+                                            className="h-8 w-8 p-0"
+                                          >
+                                            <Edit className="h-4 w-4" />
+                                          </Button>
+                                        </div>
+                                      </td>
+                                    </tr>
                                   );
                                 })}
 

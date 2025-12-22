@@ -5,14 +5,8 @@ import {
   Text,
   View,
   StyleSheet,
-  Font,
+  Image,
 } from "@react-pdf/renderer";
-
-// Registrar fonte (opcional - se quiser usar fontes customizadas)
-// Font.register({
-//   family: 'Roboto',
-//   src: 'https://fonts.gstatic.com/s/roboto/v30/KFOmCnqEu92Fr1Me5WZLCzYlKw.ttf',
-// });
 
 const styles = StyleSheet.create({
   page: {
@@ -21,23 +15,39 @@ const styles = StyleSheet.create({
     fontFamily: "Helvetica",
   },
   header: {
-    marginBottom: 20,
+    marginBottom: 15,
+    borderBottom: "2px solid #333",
+    paddingBottom: 12,
+  },
+  headerTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  logoContainer: {
+    marginRight: 15,
+  },
+  logo: {
+    width: 60,
+    height: 60,
+  },
+  headerText: {
+    flex: 1,
   },
   title: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "bold",
-    marginBottom: 5,
-    textAlign: "center",
+    marginBottom: 0,
+    marginTop: 0,
   },
   subtitle: {
-    fontSize: 11,
-    marginBottom: 3,
-    textAlign: "center",
+    fontSize: 10,
+    marginBottom: 6,
   },
   info: {
-    fontSize: 9,
+    fontSize: 8,
     color: "#666",
-    textAlign: "center",
+    marginBottom: 2,
   },
   table: {
     width: "100%",
@@ -151,6 +161,7 @@ interface BoletimPDFProps {
   startDate: string;
   endDate: string;
   data: BoletimData[];
+  logoBase64?: string;
 }
 
 const formatDate = (dateString: string) => {
@@ -220,6 +231,7 @@ export const BoletimPDF: React.FC<BoletimPDFProps> = ({
   startDate,
   endDate,
   data,
+  logoBase64,
 }) => {
   const totals = calculateTotals(data);
 
@@ -228,14 +240,26 @@ export const BoletimPDF: React.FC<BoletimPDFProps> = ({
       <Page size="A4" orientation="landscape" style={styles.page}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Boletim de Ponto</Text>
-          <Text style={styles.subtitle}>{companyName}</Text>
-          <Text style={styles.info}>
-            Período: {formatDate(startDate)} até {formatDate(endDate)}
-          </Text>
-          <Text style={styles.info}>
-            Gerado em: {new Date().toLocaleString("pt-BR")}
-          </Text>
+          <View style={styles.headerTop}>
+            {/* Logo no canto superior esquerdo */}
+            {logoBase64 && (
+              <View style={styles.logoContainer}>
+                <Image style={styles.logo} src={logoBase64} />
+              </View>
+            )}
+
+            {/* Texto do header */}
+            <View style={styles.headerText}>
+              <Text style={styles.title}>Elmo Gestão - Boletim de Ponto</Text>
+              <Text style={styles.subtitle}>{companyName}</Text>
+              <Text style={styles.info}>
+                Período: {formatDate(startDate)} até {formatDate(endDate)}
+              </Text>
+              <Text style={styles.info}>
+                Gerado em: {new Date().toLocaleString("pt-BR")}
+              </Text>
+            </View>
+          </View>
         </View>
 
         {/* Summary Section */}
@@ -320,7 +344,9 @@ export const BoletimPDF: React.FC<BoletimPDFProps> = ({
             <Text style={styles.col13}>{totals.extra50Night}</Text>
             <Text style={styles.col14}>{totals.extra100Day}</Text>
             <Text style={styles.col15}>{totals.extra100Night}</Text>
-            <Text style={styles.col16}>{formatCurrency(totals.totalValue)}</Text>
+            <Text style={styles.col16}>
+              {formatCurrency(totals.totalValue)}
+            </Text>
           </View>
         </View>
 

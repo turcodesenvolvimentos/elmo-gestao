@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { BoletimPDF } from "@/components/boletim-pdf";
 import React from "react";
+import fs from "fs";
+import path from "path";
 
 interface BoletimData {
   employee_name: string;
@@ -32,8 +34,7 @@ export async function POST(request: NextRequest) {
     if (!companyName || !startDate || !endDate || !data) {
       return NextResponse.json(
         {
-          error:
-            "Campos obrigatórios: companyName, startDate, endDate, data",
+          error: "Campos obrigatórios: companyName, startDate, endDate, data",
         },
         { status: 400 }
       );
@@ -46,12 +47,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Carregar logo como base64
+    const logoPath = path.join(process.cwd(), "public", "assets", "logo.png");
+    let logoBase64 = "";
+
+    try {
+      if (fs.existsSync(logoPath)) {
+        const logoBuffer = fs.readFileSync(logoPath);
+        logoBase64 = `data:image/png;base64,${logoBuffer.toString("base64")}`;
+      }
+    } catch (error) {
+      console.warn("Erro ao carregar logo:", error);
+    }
+
     // Gerar PDF
     const pdfDocument = React.createElement(BoletimPDF, {
       companyName,
       startDate,
       endDate,
       data: data as BoletimData[],
+      logoBase64,
     });
 
     const pdfBuffer = await renderToBuffer(pdfDocument);
