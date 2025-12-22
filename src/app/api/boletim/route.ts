@@ -166,8 +166,9 @@ export async function GET(request: NextRequest) {
       // Processar cada dia
       punchesByDate.forEach((dayPunches, date) => {
         // Ordenar punches do dia por horário de entrada
-        const sortedPunches = dayPunches.sort((a, b) =>
-          new Date(a.date_in).getTime() - new Date(b.date_in).getTime()
+        const sortedPunches = dayPunches.sort(
+          (a, b) =>
+            new Date(a.date_in).getTime() - new Date(b.date_in).getTime()
         );
 
         // Pegar os dois primeiros períodos (entry1/exit1, entry2/exit2)
@@ -251,10 +252,26 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Ordenar por data e nome do funcionário
+    // Ordenar por data e depois por horário de entrada (mais cedo para mais tarde)
     boletimData.sort((a, b) => {
+      // Primeiro ordenar por data
       const dateCompare = a.date.localeCompare(b.date);
       if (dateCompare !== 0) return dateCompare;
+
+      // Se a data for igual, ordenar por horário de entrada
+      // Converter horário para minutos para comparação
+      const parseTime = (time?: string): number => {
+        if (!time || time === "-") return Infinity; // Sem horário vai para o final
+        const [hours, minutes] = time.split(":").map(Number);
+        return hours * 60 + minutes;
+      };
+
+      const timeA = parseTime(a.entry1);
+      const timeB = parseTime(b.entry1);
+
+      if (timeA !== timeB) return timeA - timeB;
+
+      // Se o horário for igual, ordenar por nome do funcionário como critério de desempate
       return a.employee_name.localeCompare(b.employee_name);
     });
 

@@ -234,6 +234,28 @@ export default function BoletimPage() {
       );
     }
 
+    // Ordenar por data e depois por horário de entrada (mais cedo para mais tarde)
+    filtered.sort((a, b) => {
+      // Primeiro ordenar por data
+      const dateCompare = a.date.localeCompare(b.date);
+      if (dateCompare !== 0) return dateCompare;
+
+      // Se a data for igual, ordenar por horário de entrada
+      const parseTime = (time?: string): number => {
+        if (!time || time === "-") return Infinity; // Sem horário vai para o final
+        const [hours, minutes] = time.split(":").map(Number);
+        return hours * 60 + minutes;
+      };
+
+      const timeA = parseTime(a.entry1);
+      const timeB = parseTime(b.entry1);
+
+      if (timeA !== timeB) return timeA - timeB;
+
+      // Se o horário for igual, ordenar por nome do funcionário como critério de desempate
+      return a.employee_name.localeCompare(b.employee_name);
+    });
+
     return filtered;
   }, [
     boletimData,
