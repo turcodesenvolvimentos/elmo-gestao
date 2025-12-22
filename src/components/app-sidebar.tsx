@@ -9,6 +9,7 @@ import {
   File,
   LogOut,
   Building,
+  CalendarDays,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -54,6 +55,11 @@ const data = {
       title: "Boletim",
       url: "/boletim",
       icon: File,
+    },
+    {
+      title: "Escalas",
+      url: "/escala",
+      icon: CalendarDays,
     },
   ],
 };
