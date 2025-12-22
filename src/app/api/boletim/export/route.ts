@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
       logoBase64,
     });
 
-    const pdfBuffer = await renderToBuffer(pdfDocument);
+    const pdfBuffer = await renderToBuffer(pdfDocument as React.ReactElement);
 
     // Retornar PDF como resposta
     return new NextResponse(pdfBuffer, {
