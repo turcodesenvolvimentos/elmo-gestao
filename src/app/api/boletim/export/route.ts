@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { renderToBuffer } from "@react-pdf/renderer";
+import { renderToBuffer, DocumentProps } from "@react-pdf/renderer";
 import { BoletimPDF } from "@/components/boletim-pdf";
 import React from "react";
 import fs from "fs";
@@ -70,7 +70,9 @@ export async function POST(request: NextRequest) {
       logoBase64,
     });
 
-    const pdfBuffer = await renderToBuffer(pdfDocument as React.ReactElement);
+    const pdfBuffer = await renderToBuffer(
+      pdfDocument as React.ReactElement<DocumentProps>
+    );
 
     // Retornar PDF como resposta
     return new NextResponse(pdfBuffer, {
