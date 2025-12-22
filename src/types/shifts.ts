@@ -12,7 +12,6 @@ export interface Shift {
 
 export interface CreateShiftData {
   name: string;
-  company_id: string;
   entry1: string; // formato "HH:MM" do input type="time"
   exit1: string;
   entry2?: string | null;
