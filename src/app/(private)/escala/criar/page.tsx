@@ -333,7 +333,7 @@ export default function CriarEscalaPage() {
                     Nenhuma empresa encontrada
                   </div>
                 ) : (
-                  <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {filteredCompanies.map((company) => {
                       // Buscar shifts desta empresa - vamos usar o hook quando a empresa estiver selecionada
                       // Por enquanto, vamos fazer uma query separada para cada empresa
@@ -345,7 +345,7 @@ export default function CriarEscalaPage() {
                       return (
                         <Card key={company.id} className="border">
                           <CardHeader className="pb-3">
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-start justify-between gap-4">
                               <div className="flex items-center gap-3">
                                 <Building className="h-5 w-5 text-muted-foreground" />
                                 <div>
