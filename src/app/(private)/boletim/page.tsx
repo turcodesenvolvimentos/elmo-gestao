@@ -5,6 +5,7 @@ import { useState, useMemo, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Card,
   CardContent,
@@ -33,6 +34,7 @@ import {
   X,
   Edit,
   Loader2,
+  History,
 } from "lucide-react";
 import {
   Dialog,
@@ -52,8 +54,13 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useCompanies } from "@/hooks/use-companies";
-import { useBoletim, useExportBoletimPDF } from "@/hooks/use-boletim";
+import {
+  useBoletim,
+  useExportBoletimPDF,
+  useSaveBoletimToHistory,
+} from "@/hooks/use-boletim";
 import type { BoletimData } from "@/services/boletim.service";
+import { BoletimHistory } from "./components/boletim-history";
 
 // Importação dinâmica do PDFViewer (só funciona no client-side)
 const PDFViewer = dynamic(
@@ -79,6 +86,7 @@ const ALL_VALUES = {
 };
 
 export default function BoletimPage() {
+  const [activeTab, setActiveTab] = useState("gerar");
   const [searchTerm, setSearchTerm] = useState("");
   const [startDate, setStartDate] = useState(
     new Date(new Date().getFullYear(), new Date().getMonth(), 1)
@@ -166,6 +174,10 @@ export default function BoletimPage() {
   // Mutation para exportar PDF
   const { mutate: exportPDF, isPending: isExportingPDF } =
     useExportBoletimPDF();
+
+  // Mutation para salvar no histórico
+  const { mutate: saveToHistory, isPending: isSavingToHistory } =
+    useSaveBoletimToHistory();
 
   // Estado local para armazenar edições temporárias (key: employee_id-date)
   const [editedData, setEditedData] = useState<
@@ -393,14 +405,42 @@ export default function BoletimPage() {
   };
 
   const handleExportBulletin = () => {
-    if (!selectedCompanyName || !boletimData) return;
+    if (!selectedCompanyName || !boletimData || !selectedCompany) return;
 
-    exportPDF({
-      companyName: selectedCompanyName,
-      startDate,
-      endDate,
-      data: filteredBulletinData,
-    });
+    // Salvar no histórico e exportar PDF
+    saveToHistory(
+      {
+        companyId: selectedCompany,
+        companyName: selectedCompanyName,
+        startDate,
+        endDate,
+        data: filteredBulletinData,
+        manualEdits: editedData,
+        filtersApplied: {
+          employee: employeeFilter || undefined,
+          position:
+            positionFilter !== ALL_VALUES.POSITION
+              ? positionFilter
+              : undefined,
+          department:
+            departmentFilter !== ALL_VALUES.DEPARTMENT
+              ? departmentFilter
+              : undefined,
+          date: dateFilter !== ALL_VALUES.DATE ? dateFilter : undefined,
+        },
+      },
+      {
+        onSuccess: () => {
+          // Após salvar no histórico, fazer download do PDF
+          exportPDF({
+            companyName: selectedCompanyName,
+            startDate,
+            endDate,
+            data: filteredBulletinData,
+          });
+        },
+      }
+    );
   };
 
   // Funções de edição
@@ -546,6 +586,20 @@ export default function BoletimPage() {
             </p>
           </div>
 
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="gerar" className="gap-2">
+                <FileText className="h-4 w-4" />
+                Gerar Boletim
+              </TabsTrigger>
+              <TabsTrigger value="historico" className="gap-2">
+                <History className="h-4 w-4" />
+                Histórico
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="gerar" className="space-y-6 mt-6">{/* Conteúdo existente de geração de boletim */}
+
           <Card>
             <CardHeader>
               <CardTitle>Filtros do Boletim</CardTitle>
@@ -690,6 +744,12 @@ export default function BoletimPage() {
               </div>
             </CardContent>
           </Card>
+            </TabsContent>
+
+            <TabsContent value="historico" className="mt-6">
+              <BoletimHistory />
+            </TabsContent>
+          </Tabs>
         </div>
 
         {/* Modal principal do Boletim */}
@@ -722,14 +782,16 @@ export default function BoletimPage() {
                   <Button
                     onClick={handleExportBulletin}
                     disabled={
-                      isExportingPDF || filteredBulletinData.length === 0
+                      isSavingToHistory ||
+                      isExportingPDF ||
+                      filteredBulletinData.length === 0
                     }
                     className="gap-2"
                   >
-                    {isExportingPDF ? (
+                    {isSavingToHistory || isExportingPDF ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        Exportando...
+                        {isSavingToHistory ? "Salvando..." : "Exportando..."}
                       </>
                     ) : (
                       <>

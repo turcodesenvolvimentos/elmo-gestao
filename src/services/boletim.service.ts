@@ -51,3 +51,98 @@ export const exportBoletimPDF = async (
   });
   return data;
 };
+
+// Tipos para histórico de boletins
+export interface BoletimExport {
+  id: string;
+  company_id: string;
+  company_name: string;
+  start_date: string;
+  end_date: string;
+  pdf_storage_path: string;
+  pdf_url: string;
+  file_size_bytes: number;
+  total_hours: number;
+  total_value: number;
+  total_employees: number;
+  total_records: number;
+  manual_edits: Record<string, any>;
+  filters_applied: {
+    employee?: string;
+    position?: string;
+    department?: string;
+    date?: string;
+  };
+  exported_at: string;
+  exported_by: string | null;
+}
+
+export interface SaveBoletimToHistoryParams {
+  companyId: string;
+  companyName: string;
+  startDate: string;
+  endDate: string;
+  data: BoletimData[];
+  manualEdits?: Record<string, any>;
+  filtersApplied?: {
+    employee?: string;
+    position?: string;
+    department?: string;
+    date?: string;
+  };
+}
+
+export interface BoletimHistoryResponse {
+  data: BoletimExport[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+export interface FetchBoletimHistoryParams {
+  company_id?: string;
+  page?: number;
+  page_size?: number;
+}
+
+// Salvar boletim no histórico
+export const saveBoletimToHistory = async (
+  params: SaveBoletimToHistoryParams
+): Promise<BoletimExport> => {
+  const { data } = await axios.post<{ data: BoletimExport }>(
+    "/api/boletim/history",
+    params
+  );
+  return data.data;
+};
+
+// Listar histórico de boletins
+export const fetchBoletimHistory = async (
+  params: FetchBoletimHistoryParams = {}
+): Promise<BoletimHistoryResponse> => {
+  const { data } = await axios.get<BoletimHistoryResponse>(
+    "/api/boletim/history",
+    {
+      params,
+    }
+  );
+  return data;
+};
+
+// Download de boletim do histórico
+export const downloadBoletimFromHistory = async (
+  id: string
+): Promise<Blob> => {
+  const { data } = await axios.get(`/api/boletim/history/${id}`, {
+    responseType: "blob",
+  });
+  return data;
+};
+
+// Deletar boletim do histórico
+export const deleteBoletimFromHistory = async (id: string): Promise<void> => {
+  await axios.delete(`/api/boletim/history/${id}`);
+};

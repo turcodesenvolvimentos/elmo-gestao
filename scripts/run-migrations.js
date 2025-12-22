@@ -45,6 +45,7 @@ function getMigrations() {
     "update_punches_table_with_foreign_keys.sql",
     "create_shifts_table.sql",
     "create_escalas_table.sql",
+    "create_boletim_exports_table.sql",
   ];
 
   const orderedFiles = executionOrder.filter((file) => allFiles.includes(file));
