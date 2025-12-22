@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { renderToBuffer } from "@react-pdf/renderer";
+import { renderToBuffer, DocumentProps } from "@react-pdf/renderer";
 import { BoletimPDF } from "@/components/boletim-pdf";
 import React from "react";
 import fs from "fs";
@@ -96,7 +96,9 @@ export async function POST(request: NextRequest) {
       logoBase64,
     });
 
-    const pdfBuffer = await renderToBuffer(pdfDocument);
+    const pdfBuffer = await renderToBuffer(
+      pdfDocument as React.ReactElement<DocumentProps>
+    );
 
     // Criar nome do arquivo
     const timestamp = new Date().getTime();
@@ -165,9 +167,7 @@ export async function POST(request: NextRequest) {
     if (dbError) {
       console.error("Erro ao salvar registro no banco:", dbError);
       // Tentar deletar o arquivo do storage se falhar ao salvar no DB
-      await supabaseAdmin.storage
-        .from("boletim-exports")
-        .remove([storagePath]);
+      await supabaseAdmin.storage.from("boletim-exports").remove([storagePath]);
       throw new Error(`Erro ao salvar registro: ${dbError.message}`);
     }
 
