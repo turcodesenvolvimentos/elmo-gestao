@@ -30,7 +30,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         try {
           const { data: user, error } = await supabaseAdmin
             .from("users")
-            .select("id, email, password_hash, name")
+            .select("id, email, password_hash, name, permissions")
             .eq("email", credentials.email)
             .single();
 
@@ -52,6 +52,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             id: user.id.toString(),
             email: user.email,
             name: user.name || "",
+            permissions: user.permissions || [],
           };
         } catch (error) {
           console.error("Erro na autenticação:", error);
@@ -67,12 +68,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
+        token.permissions = (user as any).permissions || [];
       }
       return token;
     },
     async session({ session, token }) {
       if (token) {
         session.user.id = token.id as string;
+        session.user.permissions = (token.permissions as string[]) || [];
       }
       return session;
     },

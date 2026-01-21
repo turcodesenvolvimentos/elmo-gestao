@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { supabaseAdmin } from "@/lib/db/client";
 import { calcularHorasPorPeriodo, formatarHoras } from "@/lib/ponto-calculator";
+import { Permission } from "@/types/permissions";
+import { checkPermission } from "@/lib/auth/permissions";
 
 const DAYS_OF_WEEK = [
   "Domingo",
@@ -29,6 +32,22 @@ interface EmployeeWithPunches {
 
 // GET - Buscar dados do boletim por empresa e período
 export async function GET(request: NextRequest) {
+  const session = await auth();
+
+  if (!session?.user) {
+    return NextResponse.json(
+      { error: "Não autenticado" },
+      { status: 401 }
+    );
+  }
+
+    if (!checkPermission(session, Permission.BOLETIM)) {
+    return NextResponse.json(
+      { error: "Sem permissão para gerenciar boletim" },
+      { status: 403 }
+    );
+  }
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const companyId = searchParams.get("company_id");

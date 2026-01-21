@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { supabaseAdmin } from "@/lib/db/client";
+import { Permission } from "@/types/permissions";
+import { checkPermission } from "@/lib/auth/permissions";
 
 export async function PUT(
   request: NextRequest,
@@ -140,6 +143,22 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await auth();
+
+  if (!session?.user) {
+    return NextResponse.json(
+      { error: "Não autenticado" },
+      { status: 401 }
+    );
+  }
+
+    if (!checkPermission(session, Permission.COMPANIES)) {
+    return NextResponse.json(
+      { error: "Sem permissão para gerenciar empresas" },
+      { status: 403 }
+    );
+  }
+
   try {
     const { id } = await params;
 

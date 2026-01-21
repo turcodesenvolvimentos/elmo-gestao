@@ -1,8 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { supabaseAdmin } from "@/lib/db/client";
+import { Permission } from "@/types/permissions";
+import { checkPermission } from "@/lib/auth/permissions";
 
 // GET - Listar escalas aplicadas (com filtros opcionais)
 export async function GET(request: NextRequest) {
+  const session = await auth();
+
+  if (!session?.user) {
+    return NextResponse.json(
+      { error: "Não autenticado" },
+      { status: 401 }
+    );
+  }
+
+    if (!checkPermission(session, Permission.ESCALAS)) {
+    return NextResponse.json(
+      { error: "Sem permissão para gerenciar escalas" },
+      { status: 403 }
+    );
+  }
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const employee_id = searchParams.get("employee_id");

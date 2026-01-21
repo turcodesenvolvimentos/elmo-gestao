@@ -1,9 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { solidesApiClient } from "@/lib/axios/solides.client";
 import { handleSolidesError } from "@/lib/axios/error-handler";
 import { AxiosError } from "axios";
+import { Permission } from "@/types/permissions";
+import { checkPermission } from "@/lib/auth/permissions";
 
 export async function GET(request: NextRequest) {
+  const session = await auth();
+
+  if (!session?.user) {
+    return NextResponse.json(
+      { error: "Não autenticado" },
+      { status: 401 }
+    );
+  }
+
+    if (!checkPermission(session, Permission.PONTO)) {
+    return NextResponse.json(
+      { error: "Sem permissão para gerenciar ponto" },
+      { status: 403 }
+    );
+  }
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const page = parseInt(searchParams.get("page") || "0");

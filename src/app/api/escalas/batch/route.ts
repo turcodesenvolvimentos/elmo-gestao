@@ -1,8 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { supabaseAdmin } from "@/lib/db/client";
+import { Permission } from "@/types/permissions";
+import { checkPermission } from "@/lib/auth/permissions";
 
 // POST - Aplicar escala em lote para vários funcionários
 export async function POST(request: NextRequest) {
+  const session = await auth();
+
+  if (!session?.user) {
+    return NextResponse.json(
+      { error: "Não autenticado" },
+      { status: 401 }
+    );
+  }
+
+    if (!checkPermission(session, Permission.ESCALAS)) {
+    return NextResponse.json(
+      { error: "Sem permissão para gerenciar escalas" },
+      { status: 403 }
+    );
+  }
+
   try {
     const body = await request.json();
     const { employee_ids, shift_id, start_date, end_date } = body;

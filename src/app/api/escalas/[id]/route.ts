@@ -1,11 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { supabaseAdmin } from "@/lib/db/client";
+import { Permission } from "@/types/permissions";
+import { checkPermission } from "@/lib/auth/permissions";
 
 // GET - Obter uma escala específica
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await auth();
+
+  if (!session?.user) {
+    return NextResponse.json(
+      { error: "Não autenticado" },
+      { status: 401 }
+    );
+  }
+
+    if (!checkPermission(session, Permission.ESCALAS)) {
+    return NextResponse.json(
+      { error: "Sem permissão para gerenciar escalas" },
+      { status: 403 }
+    );
+  }
+
   try {
     const { id } = await params;
 
@@ -53,6 +72,22 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await auth();
+
+  if (!session?.user) {
+    return NextResponse.json(
+      { error: "Não autenticado" },
+      { status: 401 }
+    );
+  }
+
+    if (!checkPermission(session, Permission.ESCALAS)) {
+    return NextResponse.json(
+      { error: "Sem permissão para gerenciar escalas" },
+      { status: 403 }
+    );
+  }
+
   try {
     const { id } = await params;
 

@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { canAccessRoute } from "@/lib/auth/permissions";
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;
-  const isLoggedIn = !!req.auth;
+  const session = req.auth;
+  const isLoggedIn = !!session;
 
   const publicRoutes = ["/login"];
 
@@ -19,6 +21,13 @@ export default auth((req) => {
   if (!isLoggedIn) {
     const loginUrl = new URL("/login", req.url);
     return NextResponse.redirect(loginUrl);
+  }
+
+  // Verificar permissões para rotas protegidas
+  if (!canAccessRoute(session, pathname)) {
+    const forbiddenUrl = new URL("/home", req.url);
+    forbiddenUrl.searchParams.set("error", "sem-permissao");
+    return NextResponse.redirect(forbiddenUrl);
   }
 
   return NextResponse.next();

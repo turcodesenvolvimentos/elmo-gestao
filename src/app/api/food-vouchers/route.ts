@@ -1,7 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { supabaseAdmin } from "@/lib/db/client";
+import { Permission } from "@/types/permissions";
+import { checkPermission } from "@/lib/auth/permissions";
 
 export async function POST(request: NextRequest) {
+  const session = await auth();
+
+  if (!session?.user) {
+    return NextResponse.json(
+      { error: "Não autenticado" },
+      { status: 401 }
+    );
+  }
+
+    if (!checkPermission(session, Permission.VALE_ALIMENTACAO)) {
+    return NextResponse.json(
+      { error: "Sem permissão para gerenciar vale alimentação" },
+      { status: 403 }
+    );
+  }
+
   try {
     const body = await request.json();
     const {
@@ -73,6 +92,22 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
+  const session = await auth();
+
+  if (!session?.user) {
+    return NextResponse.json(
+      { error: "Não autenticado" },
+      { status: 401 }
+    );
+  }
+
+    if (!checkPermission(session, Permission.VALE_ALIMENTACAO)) {
+    return NextResponse.json(
+      { error: "Sem permissão para gerenciar vale alimentação" },
+      { status: 403 }
+    );
+  }
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const employee_id = searchParams.get("employee_id");
