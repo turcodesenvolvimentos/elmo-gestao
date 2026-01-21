@@ -31,6 +31,9 @@ import {
   getCompanyFromPunch,
   getMappedCompanies,
 } from "@/utils/company-mapping";
+import { useSyncPunches, useLastSyncDate } from "@/hooks/use-sync";
+import { Button } from "@/components/ui/button";
+import { RefreshCw } from "lucide-react";
 
 interface GroupedPunch {
   key: string;
@@ -133,6 +136,9 @@ export default function PontoPage() {
     canFetch
   );
 
+  const syncMutation = useSyncPunches();
+  const { data: lastSyncData } = useLastSyncDate();
+
   const loadMoreRef = useRef<HTMLTableRowElement>(null);
 
   const { groupedPunches, maxPunchPairs, totals } = useMemo(() => {
@@ -146,10 +152,10 @@ export default function PontoPage() {
             ? punch.date.split("T")[0]
             : punch.date.substring(0, 10)
           : punch.dateIn
-          ? punch.dateIn.split("T")[0]
-          : punch.dateOut
-          ? punch.dateOut.split("T")[0]
-          : null;
+            ? punch.dateIn.split("T")[0]
+            : punch.dateOut
+              ? punch.dateOut.split("T")[0]
+              : null;
 
         if (!punchDateStr) return false;
 
@@ -531,9 +537,31 @@ export default function PontoPage() {
               </AlertDescription>
             </Alert>
           )}
-          <h2 className="scroll-m-20 text-3xl font-semibold tracking-tight">
-            Pontos registrados
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="scroll-m-20 text-3xl font-semibold tracking-tight">
+              Pontos registrados
+            </h2>
+            <div className="flex items-center gap-4">
+              {lastSyncData && (
+                <span className="text-sm text-muted-foreground">
+                  Última sincronização:{" "}
+                  {new Date(lastSyncData.lastSyncAt).toLocaleString("pt-BR")}
+                </span>
+              )}
+              <Button
+                onClick={() => syncMutation.mutate()}
+                disabled={syncMutation.isPending}
+                variant="outline"
+                className="gap-2"
+              >
+                <RefreshCw
+                  size={16}
+                  className={syncMutation.isPending ? "animate-spin" : ""}
+                />
+                {syncMutation.isPending ? "Sincronizando..." : "Sincronizar"}
+              </Button>
+            </div>
+          </div>
           <div className="flex flex-row gap-4 items-end flex-wrap">
             <div className="flex items-center gap-2">
               <Label className="whitespace-nowrap">Funcionário:</Label>
@@ -546,7 +574,7 @@ export default function PontoPage() {
                     ...prev,
                     employeeId: value ? parseInt(value, 10) : 0,
                   }));
-                  setEmployeeSearchTerm(""); 
+                  setEmployeeSearchTerm("");
                 }}
               >
                 <SelectTrigger className="w-[180px]">
