@@ -178,10 +178,10 @@ export default function ValeAlimentacaoPage() {
           ? punch.date.split("T")[0]
           : punch.date.substring(0, 10)
         : punch.dateIn
-        ? punch.dateIn.split("T")[0]
-        : punch.dateOut
-        ? punch.dateOut.split("T")[0]
-        : null;
+          ? punch.dateIn.split("T")[0]
+          : punch.dateOut
+            ? punch.dateOut.split("T")[0]
+            : null;
 
       if (!punchDateStr) return false;
 
@@ -243,10 +243,10 @@ export default function ValeAlimentacaoPage() {
           ? punch.date.split("T")[0]
           : punch.date.substring(0, 10)
         : punch.dateIn
-        ? punch.dateIn.split("T")[0]
-        : punch.dateOut
-        ? punch.dateOut.split("T")[0]
-        : null;
+          ? punch.dateIn.split("T")[0]
+          : punch.dateOut
+            ? punch.dateOut.split("T")[0]
+            : null;
 
       if (!punchDateStr) return;
 
@@ -355,26 +355,32 @@ export default function ValeAlimentacaoPage() {
         const punches = group.punches.filter(
           (p: { dateIn?: string; dateOut?: string }) => p.dateIn && p.dateOut
         );
-        const entry1 = punches[0]?.dateIn
-          ? new Date(punches[0].dateIn).toLocaleTimeString("pt-BR", {
+
+        const sortedPunches = [...punches].sort((a, b) => {
+          if (!a.dateIn || !b.dateIn) return 0;
+          return new Date(a.dateIn).getTime() - new Date(b.dateIn).getTime();
+        });
+
+        const entry1 = sortedPunches[0]?.dateIn
+          ? new Date(sortedPunches[0].dateIn).toLocaleTimeString("pt-BR", {
               hour: "2-digit",
               minute: "2-digit",
             })
           : "-";
-        const exit1 = punches[0]?.dateOut
-          ? new Date(punches[0].dateOut).toLocaleTimeString("pt-BR", {
+        const exit1 = sortedPunches[0]?.dateOut
+          ? new Date(sortedPunches[0].dateOut).toLocaleTimeString("pt-BR", {
               hour: "2-digit",
               minute: "2-digit",
             })
           : "-";
-        const entry2 = punches[1]?.dateIn
-          ? new Date(punches[1].dateIn).toLocaleTimeString("pt-BR", {
+        const entry2 = sortedPunches[1]?.dateIn
+          ? new Date(sortedPunches[1].dateIn).toLocaleTimeString("pt-BR", {
               hour: "2-digit",
               minute: "2-digit",
             })
           : undefined;
-        const exit2 = punches[1]?.dateOut
-          ? new Date(punches[1].dateOut).toLocaleTimeString("pt-BR", {
+        const exit2 = sortedPunches[1]?.dateOut
+          ? new Date(sortedPunches[1].dateOut).toLocaleTimeString("pt-BR", {
               hour: "2-digit",
               minute: "2-digit",
             })
