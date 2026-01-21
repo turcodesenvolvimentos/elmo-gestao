@@ -222,14 +222,28 @@ export function calcularHorasPorPeriodo(
     const jornadaTotal = horasDiurnasReaisHoras + horasNoturnas;
     const cargaHorariaDiaria = 8;
 
-    if (jornadaTotal < cargaHorariaDiaria) {
+    const horasReaisTrabalhadas =
+      horasDiurnasReaisHoras + horasNoturnasReaisHoras;
+
+    if (jornadaTotal <= cargaHorariaDiaria) {
       horasNormaisHoras = jornadaTotal;
+    } else {
+      if (horasReaisTrabalhadas <= cargaHorariaDiaria) {
+        horasNormaisHoras = cargaHorariaDiaria;
+      }
     }
 
     horasTotal = horasDiurnasReaisHoras + horasNoturnas;
-    extra50Noturno =
+
+    const extra50NoturnoCalculado =
       extra50NoturnoReaisHoras * FATOR_NOTURNO +
       horasAdicionalHoras * ADICIONAL_NOTURNO_FATOR;
+
+    if (horasReaisTrabalhadas <= cargaHorariaDiaria) {
+      extra50Noturno = 0;
+    } else {
+      extra50Noturno = extra50NoturnoCalculado;
+    }
   } else if (ehSabado) {
     horasNoturnas = horasNoturnasReaisHoras * FATOR_NOTURNO;
     const jornadaTotal = horasDiurnasReaisHoras + horasNoturnas;
@@ -275,8 +289,8 @@ export function calcularHorasPorPeriodo(
     ehDomingo || ehFeriado
       ? horasNormaisHoras
       : horasNoturnasReaisHoras +
-        horasFictas -
-        (extra50NoturnoReaisHoras + horasFictas);
+      horasFictas -
+      (extra50NoturnoReaisHoras + horasFictas);
 
   if (ehDomingo || ehFeriado) {
     if (extra100NoturnoHoras + extra100DiurnoHoras >= 8) {
