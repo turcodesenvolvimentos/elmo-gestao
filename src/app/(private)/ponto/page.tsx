@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Search } from "lucide-react";
 import {
   Table,
   TableHead,
@@ -80,6 +81,7 @@ export default function PontoPage() {
     company: "Todos",
     status: "APPROVED",
   });
+  const [employeeSearchTerm, setEmployeeSearchTerm] = useState("");
 
   const {
     data: employees,
@@ -471,6 +473,18 @@ export default function PontoPage() {
     ...mappedCompanies.sort((a, b) => a.localeCompare(b)),
   ];
 
+  const filteredEmployees = useMemo(() => {
+    if (!employees?.content) return [];
+    const sorted = [...employees.content].sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
+    if (!employeeSearchTerm.trim()) return sorted;
+    const searchLower = employeeSearchTerm.toLowerCase().trim();
+    return sorted.filter((employee) =>
+      employee.name.toLowerCase().includes(searchLower)
+    );
+  }, [employees, employeeSearchTerm]);
+
   const dynamicColumns = useMemo(() => {
     const baseColumns = ["Funcionário", "Empresa", "Data", "Dia da semana"];
     const punchColumns: string[] = [];
@@ -527,12 +541,13 @@ export default function PontoPage() {
                 value={
                   filter.employeeId > 0 ? filter.employeeId.toString() : ""
                 }
-                onValueChange={(value) =>
+                onValueChange={(value) => {
                   setFilter((prev) => ({
                     ...prev,
                     employeeId: value ? parseInt(value, 10) : 0,
-                  }))
-                }
+                  }));
+                  setEmployeeSearchTerm(""); 
+                }}
               >
                 <SelectTrigger className="w-[180px]">
                   <SelectValue
@@ -544,6 +559,22 @@ export default function PontoPage() {
                   />
                 </SelectTrigger>
                 <SelectContent>
+                  <div className="px-2 py-1.5 border-b">
+                    <div className="relative">
+                      <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                      <Input
+                        placeholder="Buscar funcionário..."
+                        className="pl-8 h-8 text-sm"
+                        value={employeeSearchTerm}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          setEmployeeSearchTerm(e.target.value);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                  </div>
                   {employeesLoading ? (
                     <SelectItem value="loading" disabled>
                       Carregando...
@@ -552,20 +583,20 @@ export default function PontoPage() {
                     <SelectItem value="error" disabled>
                       Erro ao carregar
                     </SelectItem>
-                  ) : employees?.content?.length ? (
-                    [...employees.content]
-                      .sort((a, b) => a.name.localeCompare(b.name))
-                      .map((employee) => (
-                        <SelectItem
-                          key={employee.id}
-                          value={employee.id.toString()}
-                        >
-                          {employee.name}
-                        </SelectItem>
-                      ))
+                  ) : filteredEmployees.length > 0 ? (
+                    filteredEmployees.map((employee) => (
+                      <SelectItem
+                        key={employee.id}
+                        value={employee.id.toString()}
+                      >
+                        {employee.name}
+                      </SelectItem>
+                    ))
                   ) : (
                     <SelectItem value="empty" disabled>
-                      Nenhum funcionário encontrado
+                      {employeeSearchTerm.trim()
+                        ? "Nenhum funcionário encontrado"
+                        : "Nenhum funcionário disponível"}
                     </SelectItem>
                   )}
                 </SelectContent>
