@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Permission, ALL_PERMISSIONS } from "@/types/permissions";
+import { Permission } from "@/types/permissions";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -23,16 +23,7 @@ export const createUserSchema = z.object({
     .max(100, "Senha deve ter no máximo 100 caracteres"),
   permissions: z
     .array(z.nativeEnum(Permission))
-    .default([])
-    .refine(
-      (permissions) => {
-        // Verifica se todas as permissões são válidas
-        return permissions.every((p) => ALL_PERMISSIONS.includes(p));
-      },
-      {
-        message: "Permissões inválidas",
-      }
-    ),
+    .default([]),
 });
 
 export type CreateUserInput = z.infer<typeof createUserSchema>;
@@ -58,15 +49,6 @@ export const updateUserSchema = z.object({
     .optional(),
   permissions: z
     .array(z.nativeEnum(Permission))
-    .refine(
-      (permissions) => {
-        if (!permissions) return true;
-        return permissions.every((p) => ALL_PERMISSIONS.includes(p));
-      },
-      {
-        message: "Permissões inválidas",
-      }
-    )
     .optional(),
 });
 

@@ -77,6 +77,8 @@ export async function POST(request: NextRequest) {
     // Validar dados
     const validationResult = createUserSchema.safeParse(body);
     if (!validationResult.success) {
+      console.error("Erro de validação:", validationResult.error.errors);
+      console.error("Dados recebidos:", JSON.stringify(body, null, 2));
       return NextResponse.json(
         {
           error: "Dados inválidos",

@@ -132,22 +132,26 @@ export default function UsuariosPage() {
       return;
     }
 
-    try {
-      await createUserMutation.mutateAsync({
-        name: formData.name.trim(),
-        email: formData.email.trim(),
-        password: formData.password,
-        permissions: selectedPermissions,
-      });
+    const userData = {
+      name: formData.name.trim(),
+      email: formData.email.trim(),
+      password: formData.password,
+      permissions: selectedPermissions || [],
+    };
 
-      toast.success("Usuário criado com sucesso!");
-      setIsDialogOpen(false);
-      resetForm();
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Erro ao criar usuário"
-      );
-    }
+    createUserMutation.mutate(userData, {
+      onSuccess: () => {
+        toast.success("Usuário criado com sucesso!");
+        setIsDialogOpen(false);
+        resetForm();
+      },
+      onError: (error) => {
+        console.error("Erro ao criar usuário:", error);
+        toast.error(
+          error instanceof Error ? error.message : "Erro ao criar usuário"
+        );
+      },
+    });
   };
 
   const handleEditClick = (user: UserType) => {
@@ -263,7 +267,9 @@ export default function UsuariosPage() {
         {error && (
           <Alert variant="destructive">
             <AlertDescription>
-              {error instanceof Error ? error.message : "Erro ao carregar usuários"}
+              {error instanceof Error
+                ? error.message
+                : "Erro ao carregar usuários"}
             </AlertDescription>
           </Alert>
         )}
@@ -299,7 +305,9 @@ export default function UsuariosPage() {
                         </TableCell>
                         <TableCell>{user.email}</TableCell>
                         <TableCell>
-                          <PermissionBadges permissions={user.permissions || []} />
+                          <PermissionBadges
+                            permissions={user.permissions || []}
+                          />
                         </TableCell>
                         <TableCell>{formatDate(user.created_at)}</TableCell>
                         <TableCell>
@@ -439,11 +447,10 @@ export default function UsuariosPage() {
                 >
                   Cancelar
                 </Button>
-                <Button
-                  type="submit"
-                  disabled={createUserMutation.isPending}
-                >
-                  {createUserMutation.isPending ? "Criando..." : "Criar Usuário"}
+                <Button type="submit" disabled={createUserMutation.isPending}>
+                  {createUserMutation.isPending
+                    ? "Criando..."
+                    : "Criar Usuário"}
                 </Button>
               </DialogFooter>
             </form>
@@ -497,7 +504,9 @@ export default function UsuariosPage() {
                 </Field>
 
                 <Field>
-                  <FieldLabel>Senha (deixe em branco para não alterar)</FieldLabel>
+                  <FieldLabel>
+                    Senha (deixe em branco para não alterar)
+                  </FieldLabel>
                   <FieldContent>
                     <Input
                       type="password"
@@ -546,11 +555,10 @@ export default function UsuariosPage() {
                 >
                   Cancelar
                 </Button>
-                <Button
-                  type="submit"
-                  disabled={updateUserMutation.isPending}
-                >
-                  {updateUserMutation.isPending ? "Salvando..." : "Salvar Alterações"}
+                <Button type="submit" disabled={updateUserMutation.isPending}>
+                  {updateUserMutation.isPending
+                    ? "Salvando..."
+                    : "Salvar Alterações"}
                 </Button>
               </DialogFooter>
             </form>
