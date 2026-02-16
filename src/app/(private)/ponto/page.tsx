@@ -1,10 +1,11 @@
 "use client";
 
-import { Fragment } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { calcularHorasPorPeriodo, formatarHoras } from "@/lib/ponto-calculator";
 import Holidays from "date-holidays";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -21,15 +22,29 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { AppSidebar } from "@/components/app-sidebar";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { Separator } from "@/components/ui/separator";
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Card, CardContent } from "@/components/ui/card";
 import { useEmployees } from "@/hooks/use-employees";
 import { usePunchesInfinite } from "@/hooks/use-punches";
-import { useState, useEffect, useRef, useMemo } from "react";
 import {
   getCompanyFromPunch,
   getMappedCompanies,
 } from "@/utils/company-mapping";
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from "@/components/ui/combobox";
+import { X } from "lucide-react";
 
 interface GroupedPunch {
   key: string;
@@ -81,14 +96,53 @@ export default function PontoPage() {
     status: "APPROVED",
   });
 
-  const {
-    data: employees,
-    isLoading: employeesLoading,
-    error: employeesError,
-  } = useEmployees({
+  const removeAccents = (str: string) => {
+    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  };
+
+  const normalizeSearch = (str: string) => {
+    return removeAccents(str.toLowerCase().trim());
+  };
+
+  const [employeeSearchTerm, setEmployeeSearchTerm] = useState("");
+
+  const { data: employees, isLoading: employeesLoading } = useEmployees({
     page: 1,
     size: 100,
   });
+
+  // Lista de nomes de funcionários para o Combobox
+  const employeeNames = useMemo(() => {
+    if (!employees?.content) return [];
+    return employees.content
+      .map(emp => emp.name)
+      .sort((a, b) => a.localeCompare(b));
+  }, [employees?.content]);
+
+  // Função para filtrar funcionários baseado na busca (ignorando acentos)
+  const filterEmployees = useMemo(() => {
+    return (searchTerm: string) => {
+      if (!employees?.content) return [];
+
+      if (!searchTerm.trim()) {
+        return employeeNames;
+      }
+
+      const normalizedSearch = normalizeSearch(searchTerm);
+
+      return employeeNames.filter(name => {
+        const normalizedName = normalizeSearch(name);
+        return normalizedName.includes(normalizedSearch);
+      });
+    };
+  }, [employeeNames, employees?.content]);
+
+  // Obter nome do funcionário selecionado
+  const selectedEmployeeName = useMemo(() => {
+    if (!filter.employeeId || !employees?.content) return "";
+    const employee = employees.content.find(e => e.id === filter.employeeId);
+    return employee?.name || "";
+  }, [filter.employeeId, employees?.content]);
 
   const hasFilters = filter.employeeId > 0;
   const shouldSendDates = !!(filter.startDate && filter.endDate);
@@ -103,16 +157,16 @@ export default function PontoPage() {
   const startDateTimestamp =
     shouldSendDates && isDateRangeValid && filter.startDate
       ? (() => {
-          const date = new Date(filter.startDate + "T00:00:00Z");
-          return date.getTime().toString();
-        })()
+        const date = new Date(filter.startDate + "T00:00:00Z");
+        return date.getTime().toString();
+      })()
       : undefined;
   const endDateTimestamp =
     shouldSendDates && isDateRangeValid && filter.endDate
       ? (() => {
-          const date = new Date(filter.endDate + "T23:59:59.999Z");
-          return date.getTime().toString();
-        })()
+        const date = new Date(filter.endDate + "T23:59:59.999Z");
+        return date.getTime().toString();
+      })()
       : undefined;
 
   const {
@@ -131,6 +185,8 @@ export default function PontoPage() {
     canFetch
   );
 
+
+
   const loadMoreRef = useRef<HTMLTableRowElement>(null);
 
   const { groupedPunches, maxPunchPairs, totals } = useMemo(() => {
@@ -144,10 +200,10 @@ export default function PontoPage() {
             ? punch.date.split("T")[0]
             : punch.date.substring(0, 10)
           : punch.dateIn
-          ? punch.dateIn.split("T")[0]
-          : punch.dateOut
-          ? punch.dateOut.split("T")[0]
-          : null;
+            ? punch.dateIn.split("T")[0]
+            : punch.dateOut
+              ? punch.dateOut.split("T")[0]
+              : null;
 
         if (!punchDateStr) return false;
 
@@ -463,7 +519,7 @@ export default function PontoPage() {
     };
   }, [canFetch, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  const hasAnyError = !!(employeesError || punchesError);
+  const hasAnyError = !!punchesError;
 
   const mappedCompanies = getMappedCompanies();
   const companiesList = [
@@ -506,9 +562,16 @@ export default function PontoPage() {
   return (
     <SidebarProvider>
       <AppSidebar collapsible="icon" />
-      <div className="min-h-screen w-full p-6">
-        <SidebarTrigger className="-ml-1" />
-        <div className="space-y-6">
+      <SidebarInset>
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+          <div className="flex items-center gap-2">
+            <SidebarTrigger />
+            <Separator orientation="vertical" className="mr-2 h-4" />
+            <h1 className="text-xl font-semibold">Ponto</h1>
+          </div>
+        </header>
+
+        <div className="flex flex-1 flex-col gap-6 p-6">
           {hasAnyError && (
             <Alert variant="destructive">
               <AlertDescription>
@@ -517,355 +580,385 @@ export default function PontoPage() {
               </AlertDescription>
             </Alert>
           )}
-          <h2 className="scroll-m-20 text-3xl font-semibold tracking-tight">
-            Pontos registrados
-          </h2>
-          <div className="flex flex-row gap-4 items-end flex-wrap">
-            <div className="flex items-center gap-2">
-              <Label className="whitespace-nowrap">Funcionário:</Label>
-              <Select
-                value={
-                  filter.employeeId > 0 ? filter.employeeId.toString() : ""
-                }
-                onValueChange={(value) =>
-                  setFilter((prev) => ({
-                    ...prev,
-                    employeeId: value ? parseInt(value, 10) : 0,
-                  }))
-                }
-              >
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue
-                    placeholder={
-                      employeesLoading
-                        ? "Carregando..."
-                        : "Selecione um funcionário"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {employeesLoading ? (
-                    <SelectItem value="loading" disabled>
-                      Carregando...
-                    </SelectItem>
-                  ) : employeesError ? (
-                    <SelectItem value="error" disabled>
-                      Erro ao carregar
-                    </SelectItem>
-                  ) : employees?.content?.length ? (
-                    [...employees.content]
-                      .sort((a, b) => a.name.localeCompare(b.name))
-                      .map((employee) => (
-                        <SelectItem
-                          key={employee.id}
-                          value={employee.id.toString()}
-                        >
-                          {employee.name}
-                        </SelectItem>
-                      ))
-                  ) : (
-                    <SelectItem value="empty" disabled>
-                      Nenhum funcionário encontrado
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-2">
-              <Label className="whitespace-nowrap">Empresa:</Label>
-              <Select
-                value={filter.company}
-                onValueChange={(value) =>
-                  setFilter((prev) => ({ ...prev, company: value }))
-                }
-              >
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="Todos" />
-                </SelectTrigger>
-                <SelectContent>
-                  {companiesList.map((company) => (
-                    <SelectItem key={company} value={company}>
-                      {company}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-2">
-              <Label className="whitespace-nowrap">Data inicial:</Label>
-              <Input
-                type="date"
-                className="w-[140px]"
-                value={filter.startDate}
-                onChange={(e) =>
-                  setFilter((prev) => ({ ...prev, startDate: e.target.value }))
-                }
-                max={filter.endDate || undefined}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <Label className="whitespace-nowrap">Data final:</Label>
-              <div className="flex flex-col">
-                <Input
-                  type="date"
-                  className={`w-[140px] ${
-                    shouldSendDates && !isDateRangeValid ? "border-red-500" : ""
-                  }`}
-                  value={filter.endDate}
-                  onChange={(e) =>
-                    setFilter((prev) => ({ ...prev, endDate: e.target.value }))
-                  }
-                  min={filter.startDate || undefined}
-                />
-                {shouldSendDates && !isDateRangeValid && (
-                  <span className="text-xs text-red-500 mt-1">
-                    Data final deve ser maior ou igual à data inicial
-                  </span>
-                )}
+
+          <Card>
+            <CardContent className="">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold">Filtros</h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Selecione os filtros para visualizar os pontos
+                  </p>
+                </div>
               </div>
-            </div>
-          </div>
-          <h3 className="scroll-m-20 text-2xl font-semibold tracking-tight">
-            Resultado
-          </h3>
-          <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <tr className="bg-gray-50/50">
-                    {dynamicColumns.map((item, index) => (
-                      <TableHead
-                        key={item}
-                        className={`px-4 py-3 text-left text-sm font-medium text-gray-700 whitespace-nowrap ${
-                          index < dynamicColumns.length - 1
+
+              <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-end lg:gap-6">
+                <div className="flex-1 space-y-4 lg:space-y-0 lg:flex lg:items-center lg:gap-4">
+                  <div className="flex items-center gap-2">
+                    <Label className="whitespace-nowrap text-sm font-medium">
+                      Funcionário:
+                    </Label>
+                    <div className="flex items-center gap-1">
+                      <Combobox
+                        items={employeeNames}
+                        value={selectedEmployeeName}
+                        onValueChange={(value) => {
+                          if (!value) {
+                            setFilter((prev) => ({ ...prev, employeeId: 0 }));
+                          } else {
+                            const employee = employees?.content.find(e => e.name === value);
+                            if (employee) {
+                              setFilter((prev) => ({ ...prev, employeeId: employee.id }));
+                            }
+                          }
+                        }}
+                      >
+                        <ComboboxInput placeholder="Selecione ou digite um funcionário..." className="w-[300px]" />
+                        <ComboboxContent>
+                          <ComboboxEmpty>Nenhum funcionário encontrado.</ComboboxEmpty>
+                          <ComboboxList>
+                            {(item) => (
+                              <ComboboxItem key={item} value={item}>
+                                {item}
+                              </ComboboxItem>
+                            )}
+                          </ComboboxList>
+                        </ComboboxContent>
+                      </Combobox>
+
+                      {filter.employeeId > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => {
+                            setFilter((prev) => ({ ...prev, employeeId: 0 }));
+                            setEmployeeSearchTerm("");
+                          }}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Label className="whitespace-nowrap text-sm font-medium">
+                      Empresa:
+                    </Label>
+                    <Select
+                      value={filter.company}
+                      onValueChange={(value) =>
+                        setFilter((prev) => ({ ...prev, company: value }))
+                      }
+                    >
+                      <SelectTrigger className="w-[200px]">
+                        <SelectValue placeholder="Todos" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {companiesList.map((company) => (
+                          <SelectItem key={company} value={company}>
+                            {company}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Label className="whitespace-nowrap text-sm font-medium">
+                      Data inicial:
+                    </Label>
+                    <Input
+                      type="date"
+                      className="w-[140px]"
+                      value={filter.startDate}
+                      onChange={(e) =>
+                        setFilter((prev) => ({
+                          ...prev,
+                          startDate: e.target.value,
+                        }))
+                      }
+                      max={filter.endDate || undefined}
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Label className="whitespace-nowrap text-sm font-medium">
+                      Data final:
+                    </Label>
+                    <div className="flex flex-col">
+                      <Input
+                        type="date"
+                        className={`w-[140px] ${shouldSendDates && !isDateRangeValid
+                          ? "border-red-500"
+                          : ""
+                          }`}
+                        value={filter.endDate}
+                        onChange={(e) =>
+                          setFilter((prev) => ({
+                            ...prev,
+                            endDate: e.target.value,
+                          }))
+                        }
+                        min={filter.startDate || undefined}
+                      />
+                      {shouldSendDates && !isDateRangeValid && (
+                        <span className="text-xs text-red-500 mt-1">
+                          Data final deve ser maior ou igual à data inicial
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="flex-1 overflow-hidden">
+            <CardContent className="">
+              <div className="border-b">
+                <h3 className="text-lg font-semibold">Resultado</h3>
+                <p className="text-sm text-muted-foreground mt-1 mb-4">
+                  Visualização dos pontos registrados
+                </p>
+              </div>
+
+              <div className="overflow-x-auto rounded-md border text-center">
+                <Table>
+                  <TableHeader>
+                    <tr className="bg-gray-50/50">
+                      {dynamicColumns.map((item, index) => (
+                        <TableHead
+                          key={item}
+                          className={`px-4 py-3 text-left text-center font-medium text-gray-700 whitespace-nowrap ${index < dynamicColumns.length - 1
                             ? "border-r border-gray-200"
                             : ""
-                        }`}
-                      >
-                        {item}
-                      </TableHead>
-                    ))}
-                  </tr>
-                </TableHeader>
-                <TableBody>
-                  {!hasFilters ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={dynamicColumns.length}
-                        className="text-center py-8 text-gray-500"
-                      >
-                        Selecione um funcionário para visualizar os pontos
-                      </TableCell>
-                    </TableRow>
-                  ) : shouldSendDates && !isDateRangeValid ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={dynamicColumns.length}
-                        className="text-center py-8 text-red-500"
-                      >
-                        Data final deve ser maior ou igual à data inicial
-                      </TableCell>
-                    </TableRow>
-                  ) : punchesLoading ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={dynamicColumns.length}
-                        className="text-center py-8"
-                      >
-                        Carregando pontos...
-                      </TableCell>
-                    </TableRow>
-                  ) : punchesError ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={dynamicColumns.length}
-                        className="text-center py-8 text-red-500"
-                      >
-                        {punchesError
-                          ? String(punchesError)
-                          : "Erro ao carregar pontos"}
-                      </TableCell>
-                    </TableRow>
-                  ) : groupedPunches.length > 0 ? (
-                    <>
-                      {groupedPunches.map((group, index) => (
-                        <TableRow
-                          key={group.key}
-                          className={
-                            index % 2 === 0 ? "bg-white" : "bg-gray-100"
-                          }
+                            }`}
                         >
-                          <TableCell className="px-4 py-3 border-r border-gray-200">
-                            {group.employeeName}
-                          </TableCell>
-                          <TableCell className="px-4 py-3 border-r border-gray-200">
-                            {group.company}
-                          </TableCell>
-                          <TableCell
-                            className={`px-4 py-3 border-r border-gray-200 ${
-                              group.isHoliday || group.dayOfWeekNumber === 0
-                                ? "bg-blue-100 text-blue-800 font-medium"
-                                : ""
-                            }`}
-                          >
-                            {group.formattedDate}
-                          </TableCell>
-                          <TableCell
-                            className={`px-4 py-3 border-r border-gray-200 capitalize ${
-                              group.isHoliday || group.dayOfWeekNumber === 0
-                                ? "bg-blue-100 text-blue-800 font-medium"
-                                : ""
-                            }`}
-                          >
-                            {group.dayOfWeek}
-                          </TableCell>
-
-                          {Array.from({ length: maxPunchPairs }).map(
-                            (_, index) => {
-                              const punch = group.punches[index];
-                              const entryTime = punch?.dateIn
-                                ? new Date(punch.dateIn).toLocaleTimeString(
-                                    "pt-BR",
-                                    {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    }
-                                  )
-                                : "-";
-                              const exitTime = punch?.dateOut
-                                ? new Date(punch.dateOut).toLocaleTimeString(
-                                    "pt-BR",
-                                    {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    }
-                                  )
-                                : "-";
-
-                              return (
-                                <Fragment key={`punch-${group.key}-${index}`}>
-                                  <TableCell className="px-4 py-3 border-r border-gray-200">
-                                    {entryTime}
-                                  </TableCell>
-                                  <TableCell className="px-4 py-3 border-r border-gray-200">
-                                    {exitTime}
-                                  </TableCell>
-                                </Fragment>
-                              );
-                            }
-                          )}
-
-                          <TableCell className="px-4 py-3 border-r border-gray-200">
-                            {group.horasDiurnas}
-                          </TableCell>
-                          <TableCell className="px-4 py-3 border-r border-gray-200">
-                            {group.horasNoturnas}
-                          </TableCell>
-                          <TableCell className="px-4 py-3 border-r border-gray-200">
-                            {group.horasFictas}
-                          </TableCell>
-                          <TableCell className="px-4 py-3 border-r border-gray-200">
-                            {group.totalHoras}
-                          </TableCell>
-                          <TableCell className="px-4 py-3 border-r border-gray-200">
-                            {group.horasNormais}
-                          </TableCell>
-                          <TableCell className="px-4 py-3 border-r border-gray-200">
-                            {group.adicionalNoturno}
-                          </TableCell>
-                          <TableCell className="px-4 py-3 border-r border-gray-200">
-                            {group.extra50Diurno}
-                          </TableCell>
-                          <TableCell className="px-4 py-3 border-r border-gray-200">
-                            {group.extra50Noturno}
-                          </TableCell>
-                          <TableCell className="px-4 py-3 border-r border-gray-200">
-                            {group.extra100Diurno}
-                          </TableCell>
-                          <TableCell className="px-4 py-3">
-                            {group.extra100Noturno}
-                          </TableCell>
-                        </TableRow>
+                          {item}
+                        </TableHead>
                       ))}
-                      <TableRow className="bg-gray-50/50">
-                        {Array.from({ length: 4 + maxPunchPairs * 2 }).map(
-                          (_, idx) => (
-                            <TableCell
-                              key={`totals-empty-${idx}`}
-                              className="px-4 py-3 border-r border-gray-200 text-gray-700 font-medium"
-                            >
-                              {idx === 0 ? "Totais" : "-"}
-                            </TableCell>
-                          )
-                        )}
-                        <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
-                          {totals.horasDiurnas}
-                        </TableCell>
-                        <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
-                          {totals.horasNoturnas}
-                        </TableCell>
-                        <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
-                          {totals.horasFictas}
-                        </TableCell>
-                        <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
-                          {totals.totalHoras}
-                        </TableCell>
-                        <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
-                          {totals.horasNormais}
-                        </TableCell>
-                        <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
-                          {totals.adicionalNoturno}
-                        </TableCell>
-                        <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
-                          {totals.extra50Diurno}
-                        </TableCell>
-                        <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
-                          {totals.extra50Noturno}
-                        </TableCell>
-                        <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
-                          {totals.extra100Diurno}
-                        </TableCell>
-                        <TableCell className="px-4 py-3 font-semibold">
-                          {totals.extra100Noturno}
-                        </TableCell>
-                      </TableRow>
-                      <TableRow ref={loadMoreRef}>
+                    </tr>
+                  </TableHeader>
+                  <TableBody>
+                    {!hasFilters ? (
+                      <TableRow>
                         <TableCell
                           colSpan={dynamicColumns.length}
-                          className="text-center py-4"
+                          className="text-center py-8 text-muted-foreground"
                         >
-                          {isFetchingNextPage ? (
-                            <span className="text-gray-500">
-                              Carregando mais pontos...
-                            </span>
-                          ) : hasNextPage ? (
-                            <span className="text-gray-400 text-sm">
-                              Role para carregar mais
-                            </span>
-                          ) : (
-                            <span className="text-gray-400 text-sm">
-                              Todos os pontos foram carregados
-                            </span>
-                          )}
+                          Selecione um funcionário para visualizar os pontos
                         </TableCell>
                       </TableRow>
-                    </>
-                  ) : (
-                    <TableRow>
-                      <TableCell
-                        colSpan={dynamicColumns.length}
-                        className="text-center py-8"
-                      >
-                        Nenhum ponto encontrado
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
+                    ) : shouldSendDates && !isDateRangeValid ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={dynamicColumns.length}
+                          className="text-center py-8 text-red-500"
+                        >
+                          Data final deve ser maior ou igual à data inicial
+                        </TableCell>
+                      </TableRow>
+                    ) : punchesLoading ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={dynamicColumns.length}
+                          className="text-center py-8 text-muted-foreground"
+                        >
+                          Carregando pontos...
+                        </TableCell>
+                      </TableRow>
+                    ) : punchesError ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={dynamicColumns.length}
+                          className="text-center py-8 text-red-500"
+                        >
+                          {punchesError
+                            ? String(punchesError)
+                            : "Erro ao carregar pontos"}
+                        </TableCell>
+                      </TableRow>
+                    ) : groupedPunches.length > 0 ? (
+                      <>
+                        {groupedPunches.map((group, index) => (
+                          <TableRow
+                            key={group.key}
+                            className={
+                              index % 2 === 0 ? "bg-white" : "bg-gray-100"
+                            }
+                          >
+                            <TableCell className="px-4 py-3 border-r border-gray-200">
+                              {group.employeeName}
+                            </TableCell>
+                            <TableCell className="px-4 py-3 border-r border-gray-200">
+                              {group.company}
+                            </TableCell>
+                            <TableCell
+                              className={`px-4 py-3 border-r border-gray-200 ${group.isHoliday || group.dayOfWeekNumber === 0
+                                ? "bg-blue-100 text-blue-800 font-medium"
+                                : ""
+                                }`}
+                            >
+                              {group.formattedDate}
+                            </TableCell>
+                            <TableCell
+                              className={`px-4 py-3 border-r border-gray-200 capitalize ${group.isHoliday || group.dayOfWeekNumber === 0
+                                ? "bg-blue-100 text-blue-800 font-medium"
+                                : ""
+                                }`}
+                            >
+                              {group.dayOfWeek}
+                            </TableCell>
+
+                            {Array.from({ length: maxPunchPairs }).map(
+                              (_, index) => {
+                                const punch = group.punches[index];
+                                const entryTime = punch?.dateIn
+                                  ? new Date(punch.dateIn).toLocaleTimeString(
+                                    "pt-BR",
+                                    {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    }
+                                  )
+                                  : "-";
+                                const exitTime = punch?.dateOut
+                                  ? new Date(punch.dateOut).toLocaleTimeString(
+                                    "pt-BR",
+                                    {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    }
+                                  )
+                                  : "-";
+
+                                return (
+                                  <Fragment key={`punch-${group.key}-${index}`}>
+                                    <TableCell className="px-4 py-3 border-r border-gray-200">
+                                      {entryTime}
+                                    </TableCell>
+                                    <TableCell className="px-4 py-3 border-r border-gray-200">
+                                      {exitTime}
+                                    </TableCell>
+                                  </Fragment>
+                                );
+                              }
+                            )}
+
+                            <TableCell className="px-4 py-3 border-r border-gray-200">
+                              {group.horasDiurnas}
+                            </TableCell>
+                            <TableCell className="px-4 py-3 border-r border-gray-200">
+                              {group.horasNoturnas}
+                            </TableCell>
+                            <TableCell className="px-4 py-3 border-r border-gray-200">
+                              {group.horasFictas}
+                            </TableCell>
+                            <TableCell className="px-4 py-3 border-r border-gray-200">
+                              {group.totalHoras}
+                            </TableCell>
+                            <TableCell className="px-4 py-3 border-r border-gray-200">
+                              {group.horasNormais}
+                            </TableCell>
+                            <TableCell className="px-4 py-3 border-r border-gray-200">
+                              {group.adicionalNoturno}
+                            </TableCell>
+                            <TableCell className="px-4 py-3 border-r border-gray-200">
+                              {group.extra50Diurno}
+                            </TableCell>
+                            <TableCell className="px-4 py-3 border-r border-gray-200">
+                              {group.extra50Noturno}
+                            </TableCell>
+                            <TableCell className="px-4 py-3 border-r border-gray-200">
+                              {group.extra100Diurno}
+                            </TableCell>
+                            <TableCell className="px-4 py-3">
+                              {group.extra100Noturno}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        <TableRow className="bg-gray-50/50">
+                          {Array.from({ length: 4 + maxPunchPairs * 2 }).map(
+                            (_, idx) => (
+                              <TableCell
+                                key={`totals-empty-${idx}`}
+                                className="px-4 py-3 border-r border-gray-200 text-gray-700 font-medium"
+                              >
+                                {idx === 0 ? "Totais" : "-"}
+                              </TableCell>
+                            )
+                          )}
+                          <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                            {totals.horasDiurnas}
+                          </TableCell>
+                          <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                            {totals.horasNoturnas}
+                          </TableCell>
+                          <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                            {totals.horasFictas}
+                          </TableCell>
+                          <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                            {totals.totalHoras}
+                          </TableCell>
+                          <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                            {totals.horasNormais}
+                          </TableCell>
+                          <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                            {totals.adicionalNoturno}
+                          </TableCell>
+                          <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                            {totals.extra50Diurno}
+                          </TableCell>
+                          <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                            {totals.extra50Noturno}
+                          </TableCell>
+                          <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                            {totals.extra100Diurno}
+                          </TableCell>
+                          <TableCell className="px-4 py-3 font-semibold">
+                            {totals.extra100Noturno}
+                          </TableCell>
+                        </TableRow>
+                        <TableRow ref={loadMoreRef}>
+                          <TableCell
+                            colSpan={dynamicColumns.length}
+                            className="text-center py-4"
+                          >
+                            {isFetchingNextPage ? (
+                              <span className="text-gray-500">
+                                Carregando mais pontos...
+                              </span>
+                            ) : hasNextPage ? (
+                              <span className="text-gray-400 text-sm">
+                                Role para carregar mais
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 text-sm">
+                                Todos os pontos foram carregados
+                              </span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      </>
+                    ) : (
+                      <TableRow>
+                        <TableCell
+                          colSpan={dynamicColumns.length}
+                          className="text-center py-8 text-muted-foreground"
+                        >
+                          Nenhum ponto encontrado
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
         </div>
-      </div>
+      </SidebarInset>
     </SidebarProvider>
   );
 }
