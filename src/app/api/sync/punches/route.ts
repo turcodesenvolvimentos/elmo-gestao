@@ -207,6 +207,35 @@ async function saveEmployee(employee: any) {
   return data.id;
 }
 
+/** Descrição do motivo de ajuste vinda da API Solides. */
+function getAdjustmentReasonDescription(punch: any): string | null {
+  const desc =
+    punch.adjustmentReason?.description ??
+    punch.adjustmentReasonRecord?.adjustmentReason?.description;
+  if (desc && String(desc).trim()) return String(desc).trim();
+  const origem = punch.adjustmentReasonRecord?.origem;
+  if (origem && String(origem).trim()) return String(origem).trim();
+  const just = punch.justification?.description?.trim();
+  return just || null;
+}
+
+/** work = Acidente/Doença do trabalho | non_work = não relacionada ao trabalho. */
+function classifyAdjustmentReasonTipo(description: string | null): "work" | "non_work" | null {
+  if (!description || !String(description).trim()) return null;
+  const n = String(description)
+    .normalize("NFD")
+    .replace(/\u0300-\u036f/g, "")
+    .toLowerCase();
+  if (n.includes("nao relacionad")) return "non_work";
+  if (
+    (n.includes("acidente") || n.includes("doenca")) &&
+    n.includes("trabalho")
+  ) {
+    return "work";
+  }
+  return null;
+}
+
 function normalizePunch(
   punch: any,
   employeeId: number,
@@ -251,6 +280,14 @@ function normalizePunch(
     throw new Error(`Ponto ${punch.id} não tem horários de entrada ou saída`);
   }
 
+  const adjust = punch.adjust === true;
+  const adjustmentReasonDescription = adjust
+    ? getAdjustmentReasonDescription(punch)
+    : null;
+  const adjustmentReasonTipo = adjustmentReasonDescription
+    ? classifyAdjustmentReasonTipo(adjustmentReasonDescription)
+    : null;
+
   return {
     solides_id: punch.id,
     date: dateStr,
@@ -263,6 +300,9 @@ function normalizePunch(
     employee_name: employeeName || punch.employee?.name || "Desconhecido",
     employer_name: employerName || punch.employer?.name || null,
     status: punch.status || "APPROVED",
+    adjust,
+    adjustment_reason_description: adjustmentReasonDescription,
+    adjustment_reason_tipo: adjustmentReasonTipo,
     synced_at: new Date().toISOString(),
   };
 }

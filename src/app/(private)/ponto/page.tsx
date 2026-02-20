@@ -52,6 +52,29 @@ import {
   ComboboxList,
 } from "@/components/ui/combobox";
 
+/** Acidente/doença do trabalho (#0070C0) ou não relacionada ao trabalho (#00B0F0) */
+export type AjusteTipo = "work" | "non_work";
+
+function removeAccentsFrom(str: string): string {
+  return str.normalize("NFD").replace(/\u0300-\u036f/g, "");
+}
+
+/** Classifica em apenas 2 motivos: trabalho ou não relacionada ao trabalho. */
+function classifyAjusteTipo(
+  description: string | undefined
+): AjusteTipo | null {
+  if (!description || !String(description).trim()) return null;
+  const n = removeAccentsFrom(String(description).toLowerCase());
+  if (n.includes("nao relacionad")) return "non_work";
+  if (
+    (n.includes("acidente") || n.includes("doenca")) &&
+    n.includes("trabalho")
+  ) {
+    return "work";
+  }
+  return null;
+}
+
 interface GroupedPunch {
   key: string;
   employeeName: string;
@@ -61,7 +84,15 @@ interface GroupedPunch {
   formattedDate: string;
   dayOfWeek: string;
   dayOfWeekNumber: number;
-  punches: Array<{ dateIn?: string; dateOut?: string }>;
+  punches: Array<{
+    dateIn?: string;
+    dateOut?: string;
+    adjust?: boolean;
+    adjustmentReasonDescription?: string;
+    adjustmentReasonId?: number;
+  }>;
+  /** Preenchido quando algum punch do dia é um dos 2 motivos (trabalho / não trabalho). */
+  ajusteTipo?: AjusteTipo;
   horasDiurnas: string;
   horasNoturnas: string;
   horasFictas: string;
@@ -75,16 +106,38 @@ interface GroupedPunch {
   heDomEFer: string;
 }
 
-interface Punch {
+/** Motivo de ajuste vindo da API Solides. */
+function getAdjustmentReasonDescription(
+  punch: PunchFromApi
+): string | undefined {
+  const desc =
+    punch.adjustmentReason?.description ??
+    punch.adjustmentReasonRecord?.adjustmentReason?.description;
+  if (desc && String(desc).trim()) return String(desc).trim();
+  const origem = punch.adjustmentReasonRecord?.origem;
+  if (origem && String(origem).trim()) return String(origem).trim();
+  return punch.justification?.description?.trim();
+}
+
+interface PunchFromApi {
   id: number;
-  date: string;
+  date?: string;
   dateIn?: string;
   dateOut?: string;
   locationIn?: { address?: string };
   locationOut?: { address?: string };
   employee?: { name: string };
   employer?: { name: string };
+  adjust?: boolean;
+  adjustmentReason?: { id?: number; description?: string };
+  adjustmentReasonRecord?: {
+    adjustmentReason?: { id?: number; description?: string };
+    origem?: string;
+  };
+  justification?: { description?: string };
 }
+
+interface Punch extends PunchFromApi {}
 
 export default function PontoPage() {
   const hd = useMemo(() => new Holidays("BR"), []);
@@ -248,9 +301,17 @@ export default function PontoPage() {
 
     allPunchesRaw.forEach((punch: Punch) => {
       const employeeName = punch.employee?.name || "sem-nome";
-      const punchDateStr = punch.date.includes("T")
-        ? punch.date.split("T")[0]
-        : punch.date.substring(0, 10);
+      const rawDate = punch.date ?? punch.dateIn ?? punch.dateOut;
+      let punchDateStr: string | null = null;
+      if (typeof rawDate === "string") {
+        punchDateStr = rawDate.includes("T")
+          ? rawDate.split("T")[0]
+          : rawDate.substring(0, 10);
+      } else if (typeof rawDate === "number") {
+        const d = new Date(rawDate > 1e12 ? rawDate : rawDate * 1000);
+        punchDateStr = d.toISOString().split("T")[0];
+      }
+      if (!punchDateStr) return;
 
       const entryDate = punch.dateIn ? new Date(punch.dateIn) : undefined;
       const entryHour = entryDate ? entryDate.getHours() : undefined;
@@ -315,6 +376,13 @@ export default function PontoPage() {
       grouped.get(key)!.punches.push({
         dateIn: punch.dateIn,
         dateOut: punch.dateOut,
+        adjust: punch.adjust === true,
+        adjustmentReasonDescription: punch.adjust
+          ? getAdjustmentReasonDescription(punch)
+          : undefined,
+        adjustmentReasonId:
+          punch.adjustmentReason?.id ??
+          punch.adjustmentReasonRecord?.adjustmentReason?.id,
       });
 
       const prev = lastGroupByEmployee.get(employeeName);
@@ -346,6 +414,18 @@ export default function PontoPage() {
         const timeB = String(b.dateIn || b.dateOut || "");
         return timeA.localeCompare(timeB);
       });
+
+      let ajusteTipo: AjusteTipo | null = null;
+      for (const p of group.punches) {
+        if (!p.adjust || !p.adjustmentReasonDescription) continue;
+        const t = classifyAjusteTipo(p.adjustmentReasonDescription);
+        if (t === "work") {
+          ajusteTipo = "work";
+          break;
+        }
+        if (t === "non_work") ajusteTipo = "non_work";
+      }
+      if (ajusteTipo) group.ajusteTipo = ajusteTipo;
 
       const calculoHoras = calcularHorasPorPeriodo(group.punches, group.date);
       totalsNumeric.horasDiurnas += calculoHoras.horasDiurnas;
@@ -760,7 +840,7 @@ export default function PontoPage() {
                           <Combobox
                             items={employeeNames}
                             value={selectedEmployeeName}
-                            onValueChange={(value: string) => {
+                            onValueChange={(value: string | null) => {
                               if (!value) {
                                 setFilter((prev) => ({
                                   ...prev,
@@ -1009,22 +1089,44 @@ export default function PontoPage() {
                                   {group.company}
                                 </TableCell>
                                 <TableCell
-                                  className={`px-4 py-3 border-r border-gray-200 ${
-                                    group.isHoliday ||
-                                    group.dayOfWeekNumber === 0
-                                      ? "bg-blue-100 text-blue-800 font-medium"
+                                  className={`px-4 py-3 border-r border-gray-200 font-medium ${
+                                    group.ajusteTipo === "work"
+                                      ? "text-white"
+                                      : group.ajusteTipo === "non_work"
+                                      ? "text-white"
+                                      : group.isHoliday ||
+                                        group.dayOfWeekNumber === 0
+                                      ? "bg-blue-100 text-blue-800"
                                       : ""
                                   }`}
+                                  style={
+                                    group.ajusteTipo === "work"
+                                      ? { backgroundColor: "#0070C0" }
+                                      : group.ajusteTipo === "non_work"
+                                      ? { backgroundColor: "#00B0F0" }
+                                      : undefined
+                                  }
                                 >
                                   {group.formattedDate}
                                 </TableCell>
                                 <TableCell
-                                  className={`px-4 py-3 border-r border-gray-200 capitalize ${
-                                    group.isHoliday ||
-                                    group.dayOfWeekNumber === 0
-                                      ? "bg-blue-100 text-blue-800 font-medium"
+                                  className={`px-4 py-3 border-r border-gray-200 capitalize font-medium ${
+                                    group.ajusteTipo === "work"
+                                      ? "text-white"
+                                      : group.ajusteTipo === "non_work"
+                                      ? "text-white"
+                                      : group.isHoliday ||
+                                        group.dayOfWeekNumber === 0
+                                      ? "bg-blue-100 text-blue-800"
                                       : ""
                                   }`}
+                                  style={
+                                    group.ajusteTipo === "work"
+                                      ? { backgroundColor: "#0070C0" }
+                                      : group.ajusteTipo === "non_work"
+                                      ? { backgroundColor: "#00B0F0" }
+                                      : undefined
+                                  }
                                 >
                                   {group.dayOfWeek}
                                 </TableCell>

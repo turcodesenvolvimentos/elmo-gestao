@@ -26,6 +26,11 @@ CREATE TABLE IF NOT EXISTS punches (
   -- Status do ponto na Sólides
   status TEXT NOT NULL CHECK (status IN ('APPROVED', 'PENDING', 'REPROVED')),
   
+  -- Motivo de ajuste (atestado): work = Acidente/Doença do trabalho, non_work = não relacionada ao trabalho
+  adjust BOOLEAN NOT NULL DEFAULT FALSE,
+  adjustment_reason_description TEXT,
+  adjustment_reason_tipo VARCHAR(20) CHECK (adjustment_reason_tipo IS NULL OR adjustment_reason_tipo IN ('work', 'non_work')),
+  
   -- Metadados de controle
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -42,6 +47,7 @@ CREATE INDEX IF NOT EXISTS idx_punches_date_range ON punches(date DESC);
 
 -- Índice composto para queries comuns (funcionário + período + status)
 CREATE INDEX IF NOT EXISTS idx_punches_employee_date_status ON punches(employee_id, date DESC, status);
+CREATE INDEX IF NOT EXISTS idx_punches_adjustment_reason_tipo ON punches(adjustment_reason_tipo) WHERE adjustment_reason_tipo IS NOT NULL;
 
 -- Função para atualizar updated_at automaticamente
 CREATE OR REPLACE FUNCTION update_punches_updated_at()
@@ -63,3 +69,6 @@ COMMENT ON COLUMN punches.solides_id IS 'ID único do ponto na Sólides (usado p
 COMMENT ON COLUMN punches.date IS 'Data do ponto (normalizada para facilitar queries)';
 COMMENT ON COLUMN punches.synced_at IS 'Data/hora da última sincronização da Sólides';
 COMMENT ON COLUMN punches.status IS 'Status do ponto: APPROVED (aprovado), PENDING (pendente), REPROVED (reprovado)';
+COMMENT ON COLUMN punches.adjust IS 'Indica se o ponto foi ajustado (ex.: com atestado) na Solides';
+COMMENT ON COLUMN punches.adjustment_reason_description IS 'Descrição do motivo de ajuste vinda da API Solides';
+COMMENT ON COLUMN punches.adjustment_reason_tipo IS 'Classificação: work = Acidente/Doença do trabalho, non_work = não relacionada ao trabalho';
