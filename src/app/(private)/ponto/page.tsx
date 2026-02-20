@@ -1004,17 +1004,6 @@ export default function PontoPage() {
                       Visualização dos pontos registrados
                     </p>
                   </div>
-                </CardContent>
-              </Card>
-
-              <Card className="flex-1 overflow-hidden">
-                <CardContent className="pt-6">
-                  <div className="border-b pb-4 mb-4">
-                    <h3 className="text-lg font-semibold">Resultado</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Visualização dos pontos registrados
-                    </p>
-                  </div>
 
                   <div className="overflow-x-auto">
                     <Table>

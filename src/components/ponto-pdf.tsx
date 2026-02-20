@@ -92,6 +92,42 @@ const styles = StyleSheet.create({
   col16: { width: "5.5%", fontSize: 6 },
   col17: { width: "5.5%", fontSize: 6 },
   col18: { width: "5.5%", fontSize: 6 },
+  signatureSection: {
+    marginTop: 24,
+    paddingTop: 16,
+  },
+  signatureDeclaration: {
+    textAlign: "center",
+    fontSize: 9,
+    marginBottom: 32,
+  },
+  signatureRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 40,
+  },
+  signatureBlock: {
+    flex: 1,
+    maxWidth: "45%",
+  },
+  signatureLine: {
+    borderBottom: "1px solid #333",
+    marginBottom: 12,
+    minHeight: 28,
+  },
+  signatureName: {
+    fontSize: 8,
+    color: "#333",
+  },
+  notesSection: {
+    marginTop: 16,
+    fontSize: 7,
+    color: "#666",
+    paddingLeft: 4,
+  },
+  noteLine: {
+    marginBottom: 2,
+  },
   footer: {
     position: "absolute",
     bottom: 30,
@@ -353,6 +389,38 @@ export const PontoPDF: React.FC<PontoPDFProps> = ({
             <Text style={styles.col16}>{totals.extra50Noturno}</Text>
             <Text style={styles.col17}>{totals.extra100Diurno}</Text>
             <Text style={styles.col18}>{totals.extra100Noturno}</Text>
+          </View>
+        </View>
+
+        <View style={styles.signatureSection}>
+          <Text style={styles.signatureDeclaration}>
+            Reconheço a exatidão e confirmo a frequência constante deste
+            cartão.
+          </Text>
+          <View style={styles.signatureRow}>
+            <View style={styles.signatureBlock}>
+              <View style={styles.signatureLine} />
+              <Text style={styles.signatureName}>
+                {employeeName || data[0]?.employeeName || ""}
+              </Text>
+            </View>
+            <View style={styles.signatureBlock}>
+              <View style={styles.signatureLine} />
+              <Text style={styles.signatureName}>
+                Elmo Gestao de Servicos Elmo Prestadora de Servicos LTDA
+              </Text>
+            </View>
+          </View>
+          <View style={styles.notesSection}>
+            <Text style={styles.noteLine}>
+              * (m) significa que o ponto foi alterado manualmente.
+            </Text>
+            <Text style={styles.noteLine}>
+              * Atrasos/Faltas reprovados(as) serão descontados(as) em folha.
+            </Text>
+            <Text style={styles.noteLine}>
+              * Ad. Noturna: Horas com adicional noturno.
+            </Text>
           </View>
         </View>
 
