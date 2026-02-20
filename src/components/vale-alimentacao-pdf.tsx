@@ -216,7 +216,7 @@ export const ValeAlimentacaoPDF: React.FC<ValeAlimentacaoPDFProps> = ({
               <Text style={styles.title}>
                 Elmo Gestão - Relatório de Vale Alimentação
               </Text>
-              <Text style={styles.info}>CNPJ: 30.386.636/0001-84</Text>
+              <Text style={[styles.info, { fontWeight: "bold" }]}>CNPJ: 30.386.636/0001-84</Text>
               {(employeeName || employeeCpf) && (
                 <View style={styles.employeeInfoRow}>
                   {employeeName && (

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { renderToBuffer, DocumentProps } from "@react-pdf/renderer";
 import { PontoPDF } from "@/components/ponto-pdf";
-import { ELMO_CNPJ } from "@/lib/pdf-utils";
 import React from "react";
 import fs from "fs";
 import path from "path";
@@ -72,7 +71,6 @@ export async function POST(request: NextRequest) {
       endDate,
       data: data as PontoData[],
       logoBase64,
-      companyCnpj: ELMO_CNPJ,
       employeeCpf,
       employeeAdmissionDate,
     });

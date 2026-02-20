@@ -134,7 +134,6 @@ interface PontoPDFProps {
   endDate: string;
   data: PontoData[];
   logoBase64?: string;
-  companyCnpj?: string;
   employeeCpf?: string;
   employeeAdmissionDate?: string | number;
 }
@@ -243,7 +242,6 @@ export const PontoPDF: React.FC<PontoPDFProps> = ({
   endDate,
   data,
   logoBase64,
-  companyCnpj,
   employeeCpf,
   employeeAdmissionDate,
 }) => {
@@ -261,8 +259,8 @@ export const PontoPDF: React.FC<PontoPDFProps> = ({
             )}
             <View style={styles.headerText}>
               <Text style={styles.title}>Elmo Gestão - Relatório de Ponto</Text>
-              <Text style={styles.info}>
-                CNPJ: {companyCnpj || "30.386.636/0001-84"}
+              <Text style={[styles.info, { fontWeight: "bold" }]}>
+                CNPJ: 30.386.636/0001-84
               </Text>
               {(employeeName || employeeCpf) && (
                 <View style={styles.employeeInfoRow}>

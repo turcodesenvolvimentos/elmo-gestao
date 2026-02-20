@@ -162,7 +162,7 @@ export const ValeAlimentacaoSummaryPDF: React.FC<
               <Text style={styles.title}>
                 Elmo Gestão - Relatório de Vale Alimentação (Resumo)
               </Text>
-              <Text style={styles.info}>CNPJ: 30.386.636/0001-84</Text>
+              <Text style={[styles.info, { fontWeight: "bold" }]}>CNPJ: 30.386.636/0001-84</Text>
               <Text style={styles.info}>
                 Período: {formatDate(startDate)} até {formatDate(endDate)}
               </Text>
