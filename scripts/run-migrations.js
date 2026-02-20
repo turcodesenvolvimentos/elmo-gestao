@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { createClient } from "@supabase/supabase-js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -46,6 +47,8 @@ function getMigrations() {
     "create_shifts_table.sql",
     "create_escalas_table.sql",
     "create_boletim_exports_table.sql",
+    "create_ponto_exports_table.sql",
+    "create_vale_alimentacao_exports_table.sql",
   ];
 
   const orderedFiles = executionOrder.filter((file) => allFiles.includes(file));
@@ -83,6 +86,108 @@ async function executeMigration(filename, client) {
     console.error(`   ${error.message}`);
     throw error;
   }
+}
+
+async function createStorageBuckets() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    console.log("\n⚠️  Não foi possível criar buckets: variáveis de ambiente não configuradas");
+    return;
+  }
+
+  console.log("\n🪣 Criando buckets no Supabase Storage...");
+  console.log("=".repeat(60));
+
+  const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+
+  const bucketsToCreate = [
+    {
+      name: "ponto-exports",
+      public: false,
+      description: "Bucket para armazenar relatórios de ponto exportados",
+    },
+    {
+      name: "vale-alimentacao-exports",
+      public: false,
+      description: "Bucket para armazenar relatórios de vale alimentação exportados",
+    },
+  ];
+
+  let bucketsCreated = 0;
+  let bucketsSkipped = 0;
+  let bucketsErrors = 0;
+
+  for (const bucket of bucketsToCreate) {
+    try {
+      // Verificar se o bucket já existe
+      const { data: existingBuckets, error: listError } =
+        await supabase.storage.listBuckets();
+
+      if (listError) {
+        console.error(`❌ Erro ao listar buckets: ${listError.message}`);
+        bucketsErrors++;
+        continue;
+      }
+
+      const bucketExists = existingBuckets?.some((b) => b.name === bucket.name);
+
+      if (bucketExists) {
+        console.log(`⚠️  Bucket '${bucket.name}' já existe, pulando...`);
+        bucketsSkipped++;
+        continue;
+      }
+
+      // Criar o bucket
+      const { error: createError } = await supabase.storage.createBucket(
+        bucket.name,
+        {
+          public: bucket.public,
+          fileSizeLimit: 52428800, // 50MB
+          allowedMimeTypes: ["application/pdf"],
+        }
+      );
+
+      if (createError) {
+        // Se o erro for que o bucket já existe, considerar sucesso
+        if (
+          createError.message?.includes("already exists") ||
+          createError.message?.includes("duplicate")
+        ) {
+          console.log(
+            `⚠️  Bucket '${bucket.name}' já existe (detectado via erro), pulando...`
+          );
+          bucketsSkipped++;
+        } else {
+          console.error(
+            `❌ Erro ao criar bucket '${bucket.name}': ${createError.message}`
+          );
+          bucketsErrors++;
+        }
+      } else {
+        console.log(`✅ Bucket '${bucket.name}' criado com sucesso!`);
+        bucketsCreated++;
+      }
+    } catch (error) {
+      console.error(
+        `❌ Erro ao processar bucket '${bucket.name}': ${error.message}`
+      );
+      bucketsErrors++;
+    }
+  }
+
+  console.log("\n" + "=".repeat(60));
+  console.log("📊 Resumo dos Buckets:");
+  console.log(`   ✅ Criados: ${bucketsCreated}`);
+  console.log(`   ⚠️  Já existiam: ${bucketsSkipped}`);
+  console.log(`   ❌ Erros: ${bucketsErrors}`);
+  console.log("=".repeat(60) + "\n");
 }
 
 async function runMigrations() {
@@ -213,10 +318,13 @@ async function runMigrations() {
     }
 
     console.log("\n" + "=".repeat(60));
-    console.log("📊 Resumo:");
+    console.log("📊 Resumo das Migrações:");
     console.log(`   ✅ Sucesso: ${successCount}`);
     console.log(`   ❌ Erros: ${errorCount}`);
     console.log("=".repeat(60) + "\n");
+
+    // Criar buckets no Supabase Storage
+    await createStorageBuckets();
 
     if (errorCount > 0) {
       console.log("⚠️  Algumas migrations falharam. Verifique os erros acima.");

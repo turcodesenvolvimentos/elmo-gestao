@@ -16,8 +16,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState, useMemo } from "react";
-import { Search } from "lucide-react";
+import { Search, FileText, History, Download, Loader2 } from "lucide-react";
 import { useEmployees } from "@/hooks/use-employees";
 import { usePunchesInfinite } from "@/hooks/use-punches";
 import { useCompanies } from "@/hooks/use-companies";
@@ -25,12 +26,21 @@ import {
   useFoodVouchers,
   useToggleFoodVoucher,
 } from "@/hooks/use-food-vouchers";
+import {
+  useExportValeAlimentacaoPDF,
+  useSaveValeAlimentacaoToHistory,
+} from "@/hooks/use-vale-alimentacao";
 import { calcularHorasPorPeriodo, formatarHoras } from "@/lib/ponto-calculator";
 import { getCompanyFromPunch } from "@/utils/company-mapping";
 import Holidays from "date-holidays";
 import { Employee } from "@/types/employees";
 import { Company } from "@/types/companies";
 import { toast } from "sonner";
+import { ValeAlimentacaoHistory } from "./components/vale-alimentacao-history";
+import type {
+  ValeAlimentacaoData,
+  EmployeeSummary as EmployeeSummaryType,
+} from "@/services/vale-alimentacao.service";
 
 interface WorkDay {
   date: string;
@@ -58,6 +68,7 @@ interface EmployeeSummary {
 
 export default function ValeAlimentacaoPage() {
   const hd = useMemo(() => new Holidays("BR"), []);
+  const [activeTab, setActiveTab] = useState("visualizar");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(
     null
@@ -116,6 +127,10 @@ export default function ValeAlimentacaoPage() {
   }, [foodVouchersData]);
 
   const toggleFoodVoucherMutation = useToggleFoodVoucher();
+
+  // Hooks para exportação
+  const exportPDFMutation = useExportValeAlimentacaoPDF();
+  const saveToHistoryMutation = useSaveValeAlimentacaoToHistory();
 
   const startDateTimestamp =
     hasFilters && isDateRangeValid && appliedFilters.startDate
@@ -562,6 +577,137 @@ export default function ValeAlimentacaoPage() {
     }).format(value);
   };
 
+  // Função para preparar dados resumo para exportação (relatório geral)
+  const prepareSummaryExportData = (): EmployeeSummaryType[] => {
+    return employeeSummaries.map((summary) => {
+      const emp = employeesData?.content?.find((e) => e.id === summary.id);
+      return {
+        employeeName: summary.name,
+        totalVr: summary.totalVr,
+        totalCostHelp: summary.totalCostHelp,
+        employeeCpf: emp?.cpf,
+        employeeAdmissionDate: emp?.admissionDate,
+      };
+    });
+  };
+
+  // Função para preparar dados detalhados de um funcionário específico
+  const prepareDetailedExportData = (
+    employeeId: number
+  ): ValeAlimentacaoData[] => {
+    const workDays = groupedPunchesByEmployee.get(employeeId);
+    if (!workDays) return [];
+
+    const employee = employeesData?.content?.find((e) => e.id === employeeId);
+    if (!employee) return [];
+
+    return workDays.map((day) => ({
+      employeeName: employee.name || "",
+      date: day.date || "",
+      company: day.company || "",
+      entry1: day.entry1 || "00:00",
+      exit1: day.exit1 || "00:00",
+      entry2: day.entry2,
+      exit2: day.exit2,
+      totalHours: day.totalHours || "00:00",
+      valeAlimentacao: day.valeAlimentacao ?? false,
+      ajudaCusto: day.ajudaCusto ?? false,
+      vrValue: day.vrValue ?? 0,
+      costHelpValue: day.costHelpValue ?? 0,
+    }));
+  };
+
+  // Função para exportar relatório geral (resumo)
+  const handleExportReport = async () => {
+    if (
+      !appliedFilters.startDate ||
+      !appliedFilters.endDate ||
+      employeeSummaries.length === 0
+    ) {
+      return;
+    }
+
+    const exportData = prepareSummaryExportData();
+
+    // Salvar no histórico e exportar PDF
+    saveToHistoryMutation.mutate(
+      {
+        startDate: appliedFilters.startDate,
+        endDate: appliedFilters.endDate,
+        data: exportData,
+        reportType: "summary",
+        filtersApplied: {},
+      },
+      {
+        onSuccess: () => {
+          // Após salvar no histórico, fazer download do PDF
+          exportPDFMutation.mutate({
+            startDate: appliedFilters.startDate,
+            endDate: appliedFilters.endDate,
+            data: exportData,
+            reportType: "summary",
+            filtersApplied: {},
+          });
+        },
+      }
+    );
+  };
+
+  // Função para exportar relatório detalhado de um funcionário
+  const handleExportDetailedReport = async () => {
+    if (
+      !selectedEmployee ||
+      !appliedFilters.startDate ||
+      !appliedFilters.endDate
+    ) {
+      return;
+    }
+
+    const fullEmployee = employeesData?.content?.find(
+      (e) => e.id === selectedEmployee.id
+    );
+    const exportData = prepareDetailedExportData(selectedEmployee.id);
+
+    if (exportData.length === 0) {
+      toast.error("Nenhum dado encontrado para este funcionário");
+      return;
+    }
+
+    // Salvar no histórico e exportar PDF
+    saveToHistoryMutation.mutate(
+      {
+        employeeId: selectedEmployee.id,
+        employeeName: selectedEmployee.name,
+        startDate: appliedFilters.startDate,
+        endDate: appliedFilters.endDate,
+        data: exportData,
+        reportType: "detailed",
+        employeeCpf: fullEmployee?.cpf,
+        employeeAdmissionDate: fullEmployee?.admissionDate,
+        filtersApplied: {
+          employeeId: selectedEmployee.id,
+        },
+      },
+      {
+        onSuccess: () => {
+          // Após salvar no histórico, fazer download do PDF
+          exportPDFMutation.mutate({
+            employeeName: selectedEmployee.name,
+            startDate: appliedFilters.startDate,
+            endDate: appliedFilters.endDate,
+            data: exportData,
+            reportType: "detailed",
+            employeeCpf: fullEmployee?.cpf,
+            employeeAdmissionDate: fullEmployee?.admissionDate,
+            filtersApplied: {
+              employeeId: selectedEmployee.id,
+            },
+          });
+        },
+      }
+    );
+  };
+
   return (
     <SidebarProvider>
       <AppSidebar collapsible="icon" />
@@ -575,6 +721,19 @@ export default function ValeAlimentacaoPage() {
         </header>
 
         <div className="flex flex-1 flex-col gap-6 p-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="visualizar" className="gap-2">
+                <FileText className="h-4 w-4" />
+                Visualizar Vale Alimentação
+              </TabsTrigger>
+              <TabsTrigger value="historico" className="gap-2">
+                <History className="h-4 w-4" />
+                Histórico
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="visualizar" className="space-y-6 mt-6">
           <Card>
             <CardContent className="p-4">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -627,6 +786,39 @@ export default function ValeAlimentacaoPage() {
               </div>
             </CardContent>
           </Card>
+
+          <div className="flex items-center justify-between">
+            <h3 className="scroll-m-20 text-xl font-semibold tracking-tight">
+              Relatório de Vale Alimentação
+            </h3>
+            {employeeSummaries.length > 0 && hasFilters && (
+              <Button
+                onClick={handleExportReport}
+                disabled={
+                  exportPDFMutation.isPending ||
+                  saveToHistoryMutation.isPending ||
+                  !appliedFilters.startDate ||
+                  !appliedFilters.endDate
+                }
+                className="gap-2"
+              >
+                {exportPDFMutation.isPending ||
+                saveToHistoryMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {saveToHistoryMutation.isPending
+                      ? "Salvando..."
+                      : "Exportando..."}
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-4 w-4" />
+                    Exportar PDF
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
 
           <Card>
             <CardContent className="">
@@ -714,6 +906,35 @@ export default function ValeAlimentacaoPage() {
                   <span>
                     Detalhes do Funcionário - {selectedEmployee?.name}
                   </span>
+                  {selectedEmployee &&
+                    appliedFilters.startDate &&
+                    appliedFilters.endDate && (
+                      <Button
+                        onClick={handleExportDetailedReport}
+                        disabled={
+                          exportPDFMutation.isPending ||
+                          saveToHistoryMutation.isPending ||
+                          workDays.length === 0
+                        }
+                        className="gap-2"
+                        size="sm"
+                      >
+                        {exportPDFMutation.isPending ||
+                        saveToHistoryMutation.isPending ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            {saveToHistoryMutation.isPending
+                              ? "Salvando..."
+                              : "Exportando..."}
+                          </>
+                        ) : (
+                          <>
+                            <Download className="h-4 w-4" />
+                            Exportar PDF
+                          </>
+                        )}
+                      </Button>
+                    )}
                 </DialogTitle>
               </DialogHeader>
 
@@ -913,6 +1134,12 @@ export default function ValeAlimentacaoPage() {
               </div>
             </DialogContent>
           </Dialog>
+            </TabsContent>
+
+            <TabsContent value="historico" className="mt-6">
+              <ValeAlimentacaoHistory />
+            </TabsContent>
+          </Tabs>
         </div>
       </SidebarInset>
     </SidebarProvider>

@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search } from "lucide-react";
+import { Search, FileText, History } from "lucide-react";
 import {
   Table,
   TableHead,
@@ -24,6 +24,7 @@ import {
 import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useEmployees } from "@/hooks/use-employees";
 import { usePunchesInfinite } from "@/hooks/use-punches";
 import { useState, useEffect, useRef, useMemo } from "react";
@@ -33,7 +34,13 @@ import {
 } from "@/utils/company-mapping";
 import { useSyncPunches, useLastSyncDate } from "@/hooks/use-sync";
 import { Button } from "@/components/ui/button";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Download, Loader2 } from "lucide-react";
+import { PontoHistory } from "./components/ponto-history";
+import {
+  useExportPontoPDF,
+  useSavePontoToHistory,
+} from "@/hooks/use-ponto";
+import type { PontoData } from "@/services/ponto.service";
 
 interface GroupedPunch {
   key: string;
@@ -71,6 +78,7 @@ interface Punch {
 
 export default function PontoPage() {
   const hd = useMemo(() => new Holidays("BR"), []);
+  const [activeTab, setActiveTab] = useState("visualizar");
   const [filter, setFilter] = useState<{
     startDate: string;
     endDate: string;
@@ -138,6 +146,10 @@ export default function PontoPage() {
 
   const syncMutation = useSyncPunches();
   const { data: lastSyncData } = useLastSyncDate();
+
+  // Hooks para exportação
+  const exportPDFMutation = useExportPontoPDF();
+  const saveToHistoryMutation = useSavePontoToHistory();
 
   const loadMoreRef = useRef<HTMLTableRowElement>(null);
 
@@ -447,6 +459,110 @@ export default function PontoPage() {
     hd,
   ]);
 
+  // Função para preparar dados para exportação
+  const prepareExportData = (): PontoData[] => {
+    return groupedPunches.map((group) => {
+      const emp = employees?.content?.find(
+        (e) => e.name === group.employeeName
+      );
+      const entry1 = group.punches[0]?.dateIn
+        ? new Date(group.punches[0].dateIn).toLocaleTimeString("pt-BR", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "-";
+      const exit1 = group.punches[0]?.dateOut
+        ? new Date(group.punches[0].dateOut).toLocaleTimeString("pt-BR", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "-";
+      const entry2 = group.punches[1]?.dateIn
+        ? new Date(group.punches[1].dateIn).toLocaleTimeString("pt-BR", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : undefined;
+      const exit2 = group.punches[1]?.dateOut
+        ? new Date(group.punches[1].dateOut).toLocaleTimeString("pt-BR", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : undefined;
+
+      return {
+        employeeName: group.employeeName || "",
+        company: group.company || "",
+        date: group.date || "",
+        dayOfWeek: group.dayOfWeek || "",
+        entry1: entry1 || "-",
+        exit1: exit1 || "-",
+        entry2: entry2,
+        exit2: exit2,
+        horasDiurnas: group.horasDiurnas || "00:00",
+        horasNoturnas: group.horasNoturnas || "00:00",
+        horasFictas: group.horasFictas || "00:00",
+        totalHoras: group.totalHoras || "00:00",
+        horasNormais: group.horasNormais || "00:00",
+        adicionalNoturno: group.adicionalNoturno || "00:00",
+        extra50Diurno: group.extra50Diurno || "00:00",
+        extra50Noturno: group.extra50Noturno || "00:00",
+        extra100Diurno: group.extra100Diurno || "00:00",
+        extra100Noturno: group.extra100Noturno || "00:00",
+        employeeCpf: emp?.cpf,
+        employeeAdmissionDate: emp?.admissionDate,
+      };
+    });
+  };
+
+  // Função para exportar relatório
+  const handleExportReport = async () => {
+    if (!filter.startDate || !filter.endDate || groupedPunches.length === 0) {
+      return;
+    }
+
+    const exportData = prepareExportData();
+    const selectedEmployee = employees?.content?.find(
+      (e) => e.id === filter.employeeId
+    );
+
+    // Salvar no histórico e exportar PDF
+    saveToHistoryMutation.mutate(
+      {
+        employeeId: filter.employeeId > 0 ? filter.employeeId : undefined,
+        employeeName: selectedEmployee?.name,
+        startDate: filter.startDate,
+        endDate: filter.endDate,
+        data: exportData,
+        employeeCpf: selectedEmployee?.cpf,
+        employeeAdmissionDate: selectedEmployee?.admissionDate,
+        filtersApplied: {
+          employeeId: filter.employeeId > 0 ? filter.employeeId : undefined,
+          company: filter.company !== "Todos" ? filter.company : undefined,
+          status: filter.status,
+        },
+      },
+      {
+        onSuccess: () => {
+          // Após salvar no histórico, fazer download do PDF
+          exportPDFMutation.mutate({
+            employeeName: selectedEmployee?.name,
+            startDate: filter.startDate,
+            endDate: filter.endDate,
+            data: exportData,
+            employeeCpf: selectedEmployee?.cpf,
+            employeeAdmissionDate: selectedEmployee?.admissionDate,
+            filtersApplied: {
+              employeeId: filter.employeeId > 0 ? filter.employeeId : undefined,
+              company: filter.company !== "Todos" ? filter.company : undefined,
+              status: filter.status,
+            },
+          });
+        },
+      }
+    );
+  };
+
   useEffect(() => {
     if (!canFetch || !hasNextPage || isFetchingNextPage) return;
 
@@ -537,31 +653,28 @@ export default function PontoPage() {
               </AlertDescription>
             </Alert>
           )}
-          <div className="flex items-center justify-between">
+          <div>
             <h2 className="scroll-m-20 text-3xl font-semibold tracking-tight">
               Pontos registrados
             </h2>
-            <div className="flex items-center gap-4">
-              {lastSyncData && (
-                <span className="text-sm text-muted-foreground">
-                  Última sincronização:{" "}
-                  {new Date(lastSyncData.lastSyncAt).toLocaleString("pt-BR")}
-                </span>
-              )}
-              <Button
-                onClick={() => syncMutation.mutate()}
-                disabled={syncMutation.isPending}
-                variant="outline"
-                className="gap-2"
-              >
-                <RefreshCw
-                  size={16}
-                  className={syncMutation.isPending ? "animate-spin" : ""}
-                />
-                {syncMutation.isPending ? "Sincronizando..." : "Sincronizar"}
-              </Button>
-            </div>
+            <p className="text-muted-foreground mt-1">
+              Visualize e gerencie os pontos registrados
+            </p>
           </div>
+
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="visualizar" className="gap-2">
+                <FileText className="h-4 w-4" />
+                Visualizar Pontos
+              </TabsTrigger>
+              <TabsTrigger value="historico" className="gap-2">
+                <History className="h-4 w-4" />
+                Histórico
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="visualizar" className="space-y-6 mt-6">
           <div className="flex flex-row gap-4 items-end flex-wrap">
             <div className="flex items-center gap-2">
               <Label className="whitespace-nowrap">Funcionário:</Label>
@@ -684,9 +797,38 @@ export default function PontoPage() {
               </div>
             </div>
           </div>
-          <h3 className="scroll-m-20 text-2xl font-semibold tracking-tight">
-            Resultado
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="scroll-m-20 text-2xl font-semibold tracking-tight">
+              Resultado
+            </h3>
+            {groupedPunches.length > 0 && hasFilters && (
+              <Button
+                onClick={handleExportReport}
+                disabled={
+                  exportPDFMutation.isPending ||
+                  saveToHistoryMutation.isPending ||
+                  !filter.startDate ||
+                  !filter.endDate
+                }
+                className="gap-2"
+              >
+                {exportPDFMutation.isPending ||
+                saveToHistoryMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {saveToHistoryMutation.isPending
+                      ? "Salvando..."
+                      : "Exportando..."}
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-4 w-4" />
+                    Exportar PDF
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
           <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               <Table>
@@ -923,6 +1065,12 @@ export default function PontoPage() {
               </Table>
             </div>
           </div>
+            </TabsContent>
+
+            <TabsContent value="historico" className="mt-6">
+              <PontoHistory />
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
     </SidebarProvider>
