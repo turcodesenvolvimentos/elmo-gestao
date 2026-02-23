@@ -4,7 +4,11 @@
 import { useState, useMemo, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { AppSidebar } from "@/components/app-sidebar";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Card,
@@ -61,6 +65,7 @@ import {
 } from "@/hooks/use-boletim";
 import type { BoletimData } from "@/services/boletim.service";
 import { BoletimHistory } from "./components/boletim-history";
+import { Separator } from "@/components/ui/separator";
 
 // Importação dinâmica do PDFViewer (só funciona no client-side)
 const PDFViewer = dynamic(
@@ -574,9 +579,16 @@ export default function BoletimPage() {
   return (
     <SidebarProvider>
       <AppSidebar collapsible="icon" />
-      <div className="min-h-screen w-full p-6">
-        <SidebarTrigger className="-ml-1" />
-        <div className="space-y-6">
+      <SidebarInset>
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+          <div className="flex items-center gap-2">
+            <SidebarTrigger />
+            <Separator orientation="vertical" className="mr-2 h-4" />
+            <h1 className="text-xl font-semibold">Boletim</h1>
+          </div>
+        </header>
+
+        <div className="flex flex-1 flex-col gap-6 p-6">
           <div>
             <h2 className="scroll-m-20 text-3xl font-semibold tracking-tight">
               Boletim de Ponto
@@ -587,10 +599,10 @@ export default function BoletimPage() {
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid-cols-2">
               <TabsTrigger value="gerar" className="gap-2">
                 <FileText className="h-4 w-4" />
-                Gerar Boletim
+                Boletim
               </TabsTrigger>
               <TabsTrigger value="historico" className="gap-2">
                 <History className="h-4 w-4" />
@@ -598,8 +610,7 @@ export default function BoletimPage() {
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="gerar" className="space-y-6 mt-6">{/* Conteúdo existente de geração de boletim */}
-
+            <TabsContent value="gerar" className="space-y-6 mt-6">
           <Card>
             <CardHeader>
               <CardTitle>Filtros do Boletim</CardTitle>
@@ -1455,7 +1466,7 @@ export default function BoletimPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
+      </SidebarInset>
     </SidebarProvider>
   );
 }

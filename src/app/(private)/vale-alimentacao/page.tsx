@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState, useMemo } from "react";
-import { Search, FileText, History, Download, Loader2 } from "lucide-react";
+import { Search, History, Download, Loader2, Eye } from "lucide-react";
 import { useEmployees } from "@/hooks/use-employees";
 import { usePunchesInfinite } from "@/hooks/use-punches";
 import { useCompanies } from "@/hooks/use-companies";
@@ -722,106 +722,130 @@ export default function ValeAlimentacaoPage() {
 
         <div className="flex flex-1 flex-col gap-6 p-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="visualizar" className="gap-2">
-                <FileText className="h-4 w-4" />
-                Visualizar Vale Alimentação
-              </TabsTrigger>
-              <TabsTrigger value="historico" className="gap-2">
-                <History className="h-4 w-4" />
-                Histórico
-              </TabsTrigger>
-            </TabsList>
+            <div className="flex items-center justify-between mb-6">
+              <TabsList>
+                <TabsTrigger
+                  value="visualizar"
+                  className="flex items-center gap-2"
+                >
+                  <Eye className="h-4 w-4" />
+                  Visualizar
+                </TabsTrigger>
+                <TabsTrigger
+                  value="historico"
+                  className="flex items-center gap-2"
+                >
+                  <History className="h-4 w-4" />
+                  Histórico
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
-            <TabsContent value="visualizar" className="space-y-6 mt-6">
+            <TabsContent value="visualizar" className="space-y-6">
           <Card>
-            <CardContent className="p-4">
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div className="flex flex-1 items-center gap-2">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Buscar por nome..."
-                      className="pl-8"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                  </div>
+            <CardContent className="">
+              <div className="flex flex-col gap-4 md:flex-row md:justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold">Filtros</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Selecione os filtros para visualizar o relatório de vale alimentação
+                  </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <Input
-                      type="date"
-                      placeholder="Data inicial"
-                      className="w-full sm:w-auto"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                    />
-                    <Input
-                      type="date"
-                      placeholder="Data final"
-                      className="w-full sm:w-auto"
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                    />
-                  </div>
-                  <Button
-                    className="whitespace-nowrap"
-                    onClick={handleApplyFilters}
-                    disabled={
-                      !startDate ||
-                      !endDate ||
-                      !isInputDateRangeValid ||
-                      punchesLoading
-                    }
-                  >
-                    {punchesLoading ? "Carregando..." : "Aplicar Filtros"}
-                  </Button>
-                </div>
-                {startDate && endDate && !isInputDateRangeValid && (
-                  <div className="text-sm text-red-500 mt-2">
-                    Data final deve ser maior ou igual à data inicial
-                  </div>
-                )}
               </div>
+
+              <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-end lg:gap-6">
+                <div className="flex-1 space-y-4 lg:space-y-0 lg:flex lg:items-center lg:gap-4">
+                  <div className="flex items-center gap-2 flex-1">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar por nome..."
+                        className="pl-8"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Input
+                        type="date"
+                        placeholder="Data inicial"
+                        className="w-full sm:w-auto"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                      />
+                      <Input
+                        type="date"
+                        placeholder="Data final"
+                        className="w-full sm:w-auto"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                      />
+                    </div>
+                    <Button
+                      className="whitespace-nowrap"
+                      onClick={handleApplyFilters}
+                      disabled={
+                        !startDate ||
+                        !endDate ||
+                        !isInputDateRangeValid ||
+                        punchesLoading
+                      }
+                    >
+                      {punchesLoading ? "Carregando..." : "Aplicar Filtros"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              {startDate && endDate && !isInputDateRangeValid && (
+                <div className="text-sm text-red-500 mt-2">
+                  Data final deve ser maior ou igual à data inicial
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          <div className="flex items-center justify-between">
-            <h3 className="scroll-m-20 text-xl font-semibold tracking-tight">
-              Relatório de Vale Alimentação
-            </h3>
-            {employeeSummaries.length > 0 && hasFilters && (
-              <Button
-                onClick={handleExportReport}
-                disabled={
-                  exportPDFMutation.isPending ||
-                  saveToHistoryMutation.isPending ||
-                  !appliedFilters.startDate ||
-                  !appliedFilters.endDate
-                }
-                className="gap-2"
-              >
-                {exportPDFMutation.isPending ||
-                saveToHistoryMutation.isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    {saveToHistoryMutation.isPending
-                      ? "Salvando..."
-                      : "Exportando..."}
-                  </>
-                ) : (
-                  <>
-                    <Download className="h-4 w-4" />
-                    Exportar PDF
-                  </>
-                )}
-              </Button>
-            )}
-          </div>
-
           <Card>
             <CardContent className="">
+              <div className="flex items-start justify-between border-b pb-4 mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold">
+                    Relatório de Vale Alimentação
+                  </h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Visualização dos valores de vale alimentação por funcionário
+                  </p>
+                </div>
+                {employeeSummaries.length > 0 && hasFilters && (
+                  <Button
+                    onClick={handleExportReport}
+                    disabled={
+                      exportPDFMutation.isPending ||
+                      saveToHistoryMutation.isPending ||
+                      !appliedFilters.startDate ||
+                      !appliedFilters.endDate
+                    }
+                    className="gap-2"
+                  >
+                    {exportPDFMutation.isPending ||
+                    saveToHistoryMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        {saveToHistoryMutation.isPending
+                          ? "Salvando..."
+                          : "Exportando..."}
+                      </>
+                    ) : (
+                      <>
+                        <Download className="h-4 w-4" />
+                        Exportar PDF
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
+
               {employeesLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <div className="h-10 w-10 rounded-full border-4 border-muted-foreground/30 border-t-green-700 animate-spin" />
