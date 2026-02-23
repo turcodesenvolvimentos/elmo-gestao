@@ -6,6 +6,14 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircleIcon } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import logo from "@/assets/logo.png";
 import Image from "next/image";
 import { useState } from "react";
@@ -125,12 +133,26 @@ export default function LoginPage() {
                 <Field>
                   <div className="flex items-center">
                     <FieldLabel htmlFor="password">Senha</FieldLabel>
-                    <button
-                      type="button"
-                      className="ml-auto text-sm underline-offset-2 hover:underline"
-                    >
-                      Esqueceu sua senha?
-                    </button>
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <button
+                          type="button"
+                          className="ml-auto text-sm underline-offset-2 hover:underline"
+                        >
+                          Esqueceu sua senha?
+                        </button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Recuperação de senha</DialogTitle>
+                          <DialogDescription>
+                            Para recuperar ou redefinir sua senha, entre em contato
+                            com o responsável pelos usuários do sistema na sua
+                            empresa.
+                          </DialogDescription>
+                        </DialogHeader>
+                      </DialogContent>
+                    </Dialog>
                   </div>
                   <Input
                     id="password"
