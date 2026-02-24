@@ -33,6 +33,8 @@ interface PontoData {
 interface SavePontoRequest {
   employeeId?: number;
   employeeName?: string;
+  employeeCpf?: string;
+  employeeAdmissionDate?: string;
   startDate: string;
   endDate: string;
   data: PontoData[];
