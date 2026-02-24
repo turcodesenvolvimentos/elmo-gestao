@@ -54,7 +54,7 @@ export interface PontoExport {
   total_extra_50: number;
   total_extra_100: number;
   total_records: number;
-  filters_applied: Record<string, any>;
+  filters_applied: Record<string, unknown>;
   exported_at: string;
   exported_by: string | null;
 }

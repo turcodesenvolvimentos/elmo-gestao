@@ -51,14 +51,19 @@ export async function GET(
     }
 
     // Mapear os resultados para o formato esperado
+    interface EmpRow {
+      id?: string;
+      name?: string;
+      solides_id?: number;
+    }
     const employees = (employeeCompanies || [])
-      .map((ec: any) => ({
+      .map((ec: { employees?: { id?: string; name?: string; solides_id?: number } }) => ({
         id: ec.employees?.id,
         name: ec.employees?.name,
         solides_id: ec.employees?.solides_id,
       }))
-      .filter((emp: any) => emp.id) // Filtrar nulos
-      .sort((a: any, b: any) => {
+      .filter((emp: EmpRow): emp is EmpRow & { id: string } => !!emp.id)
+      .sort((a: EmpRow, b: EmpRow) => {
         const nameA = (a.name || "").toLowerCase();
         const nameB = (b.name || "").toLowerCase();
         return nameA.localeCompare(nameB, "pt-BR");

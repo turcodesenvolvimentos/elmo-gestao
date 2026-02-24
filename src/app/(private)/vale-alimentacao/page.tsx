@@ -150,9 +150,6 @@ export default function ValeAlimentacaoPage() {
   const {
     data: punchesData,
     isLoading: punchesLoading,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
   } = usePunchesInfinite(
     1000,
     startDateTimestamp,
@@ -187,7 +184,7 @@ export default function ValeAlimentacaoPage() {
     }
 
     // Filtrar por período de datas (a API já filtra, mas garantimos aqui também)
-    const filteredPunches = allPunchesRaw.filter((punch: any) => {
+    const filteredPunches = allPunchesRaw.filter((punch: { date?: string; dateIn?: string; dateOut?: string }) => {
       const punchDateStr = punch.date
         ? punch.date.includes("T")
           ? punch.date.split("T")[0]
@@ -212,7 +209,7 @@ export default function ValeAlimentacaoPage() {
     });
 
     // Agrupar por funcionário e data
-    const grouped = new Map<number, Map<string, any>>();
+    const grouped = new Map<number, Map<string, unknown>>();
     const lastGroupByEmployee = new Map<
       string,
       { key: string; dateStr: string; hadNightShift: boolean }
@@ -233,7 +230,7 @@ export default function ValeAlimentacaoPage() {
       });
     }
 
-    filteredPunches.forEach((punch: any) => {
+    filteredPunches.forEach((punch: { date?: string; dateIn?: string; dateOut?: string; employee?: { name?: string } }) => {
       const employeeName = punch.employee?.name || "sem-nome";
       // Tentar encontrar por nome exato primeiro
       let employeeId = employeesByNameMap.get(employeeName);
@@ -436,6 +433,7 @@ export default function ValeAlimentacaoPage() {
     companiesMap,
     employeesData,
     foodVouchersMap,
+    hd,
   ]);
 
   // Calcular resumo por funcionário
@@ -491,11 +489,6 @@ export default function ValeAlimentacaoPage() {
       setSelectedEmployee(fullEmployee);
       setIsModalOpen(true);
     }
-  };
-
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setSelectedEmployee(null);
   };
 
   const handleApplyFilters = () => {
@@ -852,7 +845,7 @@ export default function ValeAlimentacaoPage() {
                 </div>
               ) : !hasFilters ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  Selecione um período de datas e clique em "Aplicar Filtros"
+                  Selecione um período de datas e clique em &quot;Aplicar Filtros&quot;
                   para visualizar os dados
                 </div>
               ) : punchesLoading ? (

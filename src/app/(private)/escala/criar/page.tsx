@@ -61,14 +61,14 @@ export default function CriarEscalaPage() {
   const [deletingShift, setDeletingShift] = useState<Shift | null>(null);
 
   // Hooks
-  const { data: companiesData, isLoading: companiesLoading } = useCompanies();
+  const { data: companiesData } = useCompanies();
   // Buscar todos os shifts para mostrar na lista
   const { data: allShiftsData } = useQuery({
     queryKey: ["shifts", "all"],
     queryFn: () => fetchAllShifts(),
     staleTime: 5 * 60 * 1000,
   });
-  const { data: shiftsData } = useShifts(selectedCompany || "");
+  useShifts(selectedCompany || "");
   const createShiftMutation = useCreateShift();
   const updateShiftMutation = useUpdateShift();
   const deleteShiftMutation = useDeleteShift();
@@ -89,8 +89,11 @@ export default function CriarEscalaPage() {
     exit2: "",
   });
 
-  const companies = companiesData?.companies || [];
-  // Usar allShiftsData para a lista, shiftsData para quando uma empresa estiver selecionada no diálogo
+  const companies = useMemo(
+    () => companiesData?.companies || [],
+    [companiesData?.companies]
+  );
+  // Usar allShiftsData para a lista
   const shifts = allShiftsData?.shifts || [];
 
   // Filtrar empresas por termo de busca

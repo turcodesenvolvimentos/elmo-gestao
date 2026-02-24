@@ -290,7 +290,7 @@ export const PontoPDF: React.FC<PontoPDFProps> = ({
           <View style={styles.headerTop}>
             {logoBase64 && (
               <View style={styles.logoContainer}>
-                <Image style={styles.logo} src={logoBase64} />
+                <Image style={styles.logo} src={logoBase64} alt="" />
               </View>
             )}
             <View style={styles.headerText}>

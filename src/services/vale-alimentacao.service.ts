@@ -53,7 +53,7 @@ export interface ValeAlimentacaoExport {
   total_cost_help: number;
   total_employees: number;
   total_records: number;
-  filters_applied: Record<string, any>;
+  filters_applied: Record<string, unknown>;
   exported_at: string;
   exported_by: string | null;
 }

@@ -1,6 +1,6 @@
 try {
   import("dotenv").config({ path: ".env" });
-} catch (e) {}
+} catch {}
 
 import { createClient } from "@supabase/supabase-js";
 

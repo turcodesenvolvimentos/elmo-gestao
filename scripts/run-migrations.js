@@ -10,7 +10,7 @@ async function loadEnv() {
   try {
     const dotenv = await import("dotenv");
     dotenv.config({ path: ".env" });
-  } catch (e) {}
+  } catch {}
 }
 
 const migrationsDir = path.join(
@@ -206,7 +206,7 @@ async function runMigrations() {
   let pg;
   try {
     pg = await import("pg");
-  } catch (e) {
+  } catch {
     console.error("\n❌ Biblioteca 'pg' não encontrada!");
     console.error("   Instale com: yarn add pg");
     console.error("   Ou use: yarn migrations --print para ver o SQL\n");

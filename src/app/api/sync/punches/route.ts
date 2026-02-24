@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/db/client";
 import { solidesEmployerClient, solidesApiClient } from "@/lib/axios/solides.client";
@@ -372,7 +373,7 @@ async function syncEmployeePunches(
     let employeeUuid;
     try {
       employeeUuid = await saveEmployee(employee);
-    } catch (error: any) {
+    } catch {
       const { data: existingEmployee } = await supabaseAdmin
         .from("employees")
         .select("id")
@@ -418,7 +419,7 @@ async function syncEmployeePunches(
           employerName
         );
         normalizedPunches.push(normalized);
-      } catch (error: any) {
+      } catch {
         stats.errors++;
       }
     }
@@ -440,7 +441,7 @@ async function syncEmployeePunches(
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(_request: NextRequest) {
   try {
     const startTime = Date.now();
 
@@ -516,7 +517,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const lastSyncDate = await getLastSyncDate();
     return NextResponse.json(

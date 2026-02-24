@@ -21,15 +21,6 @@ interface Punch {
   date_out: string;
 }
 
-interface EmployeeWithPunches {
-  employee_id: string;
-  employee_name: string;
-  position_name: string;
-  department: string;
-  hour_value: number;
-  punches: Punch[];
-}
-
 // GET - Buscar dados do boletim por empresa e período
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -122,8 +113,8 @@ export async function GET(request: NextRequest) {
 
     // Extrair IDs dos funcionários (solides_id para buscar punches)
     const employeeSolidesIds = employeeCompanies
-      .map((ec: any) => ec.employees?.solides_id)
-      .filter((id: any) => id !== null && id !== undefined);
+      .map((ec: { employees?: { solides_id?: number } }) => ec.employees?.solides_id)
+      .filter((id: number | null | undefined): id is number => id !== null && id !== undefined);
 
     if (employeeSolidesIds.length === 0) {
       return NextResponse.json({ data: [] }, { status: 200 });
@@ -148,7 +139,7 @@ export async function GET(request: NextRequest) {
     const punchesByEmployee = new Map<number, Punch[]>();
 
     if (punches) {
-      punches.forEach((punch: any) => {
+      punches.forEach((punch: { employee_id: number; date: string; date_in: string; date_out: string }) => {
         if (!punchesByEmployee.has(punch.employee_id)) {
           punchesByEmployee.set(punch.employee_id, []);
         }
@@ -161,11 +152,11 @@ export async function GET(request: NextRequest) {
     }
 
     // Processar dados para o boletim
-    const boletimData: any[] = [];
+    const boletimData: Array<{ employee_id: string; employee_name: string; position_name: string; department: string; hour_value: number; punches: Punch[] }> = [];
 
     for (const ec of employeeCompanies) {
-      const employee = ec.employees as any;
-      const position = ec.positions as any;
+      const employee = ec.employees as { solides_id?: number; name?: string } | null;
+      const position = ec.positions as { name?: string; hour_value?: number } | null;
       const employeeSolidesId = employee?.solides_id;
 
       if (!employeeSolidesId) continue;

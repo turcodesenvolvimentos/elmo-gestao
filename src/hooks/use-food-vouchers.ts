@@ -4,7 +4,6 @@ import {
   getFoodVouchers,
   FoodVoucherData,
 } from "@/services/food-vouchers.service";
-import { FoodVoucher } from "@/services/food-vouchers.service";
 
 export function useFoodVouchers(params?: {
   employee_id?: number;

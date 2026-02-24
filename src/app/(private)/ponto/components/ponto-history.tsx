@@ -74,7 +74,7 @@ export function PontoHistory() {
       await deleteMutation.mutateAsync(deletingId);
       setDeleteDialogOpen(false);
       setDeletingId(null);
-    } catch (error) {
+    } catch {
       // Erro já tratado no hook
     }
   };

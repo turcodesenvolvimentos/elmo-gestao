@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
       : `geral/${fileName}`;
 
     // Upload para Supabase Storage
-    const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
+    const { error: uploadError } = await supabaseAdmin.storage
       .from("vale-alimentacao-exports")
       .upload(storagePath, pdfBuffer, {
         contentType: "application/pdf",

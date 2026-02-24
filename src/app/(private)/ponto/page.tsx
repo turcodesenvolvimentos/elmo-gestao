@@ -137,7 +137,7 @@ interface PunchFromApi {
   justification?: { description?: string };
 }
 
-interface Punch extends PunchFromApi {}
+type Punch = PunchFromApi;
 
 export default function PontoPage() {
   const hd = useMemo(() => new Holidays("BR"), []);
@@ -155,14 +155,6 @@ export default function PontoPage() {
     company: "Todos",
     status: "APPROVED",
   });
-  const removeAccents = (str: string) => {
-    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  };
-
-  const normalizeSearch = (str: string) => {
-    return removeAccents(str.toLowerCase().trim());
-  };
-
   const { data: employees, isLoading: employeesLoading } = useEmployees({
     page: 1,
     size: 100,
@@ -174,32 +166,14 @@ export default function PontoPage() {
     return employees.content
       .map((emp) => emp.name)
       .sort((a, b) => a.localeCompare(b));
-  }, [employees?.content]);
-
-  // Função para filtrar funcionários baseado na busca (ignorando acentos)
-  const filterEmployees = useMemo(() => {
-    return (searchTerm: string) => {
-      if (!employees?.content) return [];
-
-      if (!searchTerm.trim()) {
-        return employeeNames;
-      }
-
-      const normalizedSearch = normalizeSearch(searchTerm);
-
-      return employeeNames.filter((name) => {
-        const normalizedName = normalizeSearch(name);
-        return normalizedName.includes(normalizedSearch);
-      });
-    };
-  }, [employeeNames, employees?.content]);
+  }, [employees]);
 
   // Obter nome do funcionário selecionado
   const selectedEmployeeName = useMemo(() => {
     if (!filter.employeeId || !employees?.content) return "";
     const employee = employees.content.find((e) => e.id === filter.employeeId);
     return employee?.name || "";
-  }, [filter.employeeId, employees?.content]);
+  }, [filter.employeeId, employees]);
 
   const hasFilters = filter.employeeId > 0;
   const shouldSendDates = !!(filter.startDate && filter.endDate);

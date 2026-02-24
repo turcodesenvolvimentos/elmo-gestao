@@ -219,7 +219,7 @@ export async function DELETE(
     }
 
     // Verificar se usuário existe
-    const { data: existingUser, error: checkError } = await supabaseAdmin
+    const { error: checkError } = await supabaseAdmin
       .from("users")
       .select("id")
       .eq("id", id)

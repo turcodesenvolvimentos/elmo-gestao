@@ -45,10 +45,10 @@ export async function createUser(data: CreateUserInput): Promise<User> {
   });
 
   if (!response.ok) {
-    let errorData: any = {};
+    let errorData: { error?: string; details?: Array<{ path?: string[]; message?: string }> } = {};
     try {
       errorData = await response.json();
-    } catch (e) {
+    } catch {
       // Se não conseguir parsear JSON, usar mensagem padrão
       throw new Error(`Erro ao criar usuário: ${response.status} ${response.statusText}`);
     }
@@ -56,7 +56,7 @@ export async function createUser(data: CreateUserInput): Promise<User> {
     // Se houver detalhes de validação, incluir na mensagem
     if (errorData.details && Array.isArray(errorData.details)) {
       const validationErrors = errorData.details
-        .map((err: any) => {
+        .map((err: { path?: string[]; message?: string }) => {
           const path = err.path?.join(".") || "dados";
           return `${path}: ${err.message}`;
         })

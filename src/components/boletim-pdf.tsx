@@ -250,7 +250,7 @@ export const BoletimPDF: React.FC<BoletimPDFProps> = ({
             {/* Logo no canto superior esquerdo */}
             {logoBase64 && (
               <View style={styles.logoContainer}>
-                <Image style={styles.logo} src={logoBase64} />
+                <Image style={styles.logo} src={logoBase64} alt="" />
               </View>
             )}
 

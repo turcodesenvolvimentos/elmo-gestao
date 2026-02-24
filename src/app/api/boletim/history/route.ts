@@ -33,7 +33,7 @@ interface SaveBoletimRequest {
   startDate: string;
   endDate: string;
   data: BoletimData[];
-  manualEdits?: Record<string, any>;
+  manualEdits?: Record<string, unknown>;
   filtersApplied?: {
     employee?: string;
     position?: string;
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
     const storagePath = `${companyId}/${fileName}`;
 
     // Upload para Supabase Storage
-    const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
+    const { error: uploadError } = await supabaseAdmin.storage
       .from("boletim-exports")
       .upload(storagePath, pdfBuffer, {
         contentType: "application/pdf",

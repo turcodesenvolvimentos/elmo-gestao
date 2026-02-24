@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
 
     // Buscar empresas associadas para cada funcionário
     const employeesWithCompanies = await Promise.all(
-      (response.data.content || []).map(async (employee: any) => {
+      (response.data.content || []).map(async (employee: { id: number; name?: string; [key: string]: unknown }) => {
         // Buscar o UUID do funcionário no banco local usando o solides_id
         const { data: localEmployee } = await supabaseAdmin
           .from("employees")
@@ -75,15 +75,16 @@ export async function GET(request: NextRequest) {
           .eq("employee_id", localEmployee.id);
 
         // Extrair as empresas do resultado e ordenar por nome
+        type CompanyRow = { id?: string; name?: string; [key: string]: unknown };
         const companies =
           employeeCompanies
-            ?.map((ec: any) => ({
+            ?.map((ec: { companies?: CompanyRow; position_id?: string; positions?: unknown }) => ({
               ...ec.companies,
               position_id: ec.position_id,
               position: ec.positions || null,
             }))
-            .filter((company: any) => company !== null && company.id)
-            .sort((a: any, b: any) => {
+            .filter((company: CompanyRow | null): company is CompanyRow => company !== null && !!company.id)
+            .sort((a: CompanyRow, b: CompanyRow) => {
               const nameA = (a.name || "").toLowerCase();
               const nameB = (b.name || "").toLowerCase();
               return nameA.localeCompare(nameB, "pt-BR");
@@ -97,7 +98,7 @@ export async function GET(request: NextRequest) {
     );
 
     // Ordenar funcionários por nome (alfabeticamente)
-    employeesWithCompanies.sort((a: any, b: any) => {
+    employeesWithCompanies.sort((a: { name?: string }, b: { name?: string }) => {
       const nameA = (a.name || "").toLowerCase();
       const nameB = (b.name || "").toLowerCase();
       return nameA.localeCompare(nameB, "pt-BR");

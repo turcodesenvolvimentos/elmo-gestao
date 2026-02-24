@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 /**
  * Script de sincronização massiva de pontos da Sólides para o Supabase
  *
@@ -15,7 +16,7 @@
 // Tentar carregar variáveis de ambiente do .env
 try {
   require("dotenv").config({ path: ".env" });
-} catch (e) {
+} catch {
   // dotenv não disponível, usar variáveis do ambiente
 }
 const axios = require("axios");
@@ -255,7 +256,7 @@ function normalizeDate(dateValue) {
     return dateStr.includes("T")
       ? dateStr.split("T")[0]
       : dateStr.substring(0, 10);
-  } catch (error) {
+  } catch {
     return null;
   }
 }
@@ -329,7 +330,7 @@ function normalizeDateTime(dateTimeValue) {
   // Tentar converter para string
   try {
     return String(dateTimeValue);
-  } catch (error) {
+  } catch {
     return null;
   }
 }

@@ -53,12 +53,13 @@ export const useSavePontoToHistory = () => {
       queryClient.invalidateQueries({ queryKey: ["ponto-history"] });
       toast.success("Relatório salvo no histórico com sucesso!");
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error("Erro ao salvar relatório no histórico:", error);
+      const err = error as { response?: { data?: { error?: string; details?: string } }; message?: string };
       const errorMessage =
-        error?.response?.data?.error ||
-        error?.response?.data?.details ||
-        error?.message ||
+        err?.response?.data?.error ||
+        err?.response?.data?.details ||
+        err?.message ||
         "Erro ao salvar relatório no histórico";
       toast.error(errorMessage);
     },

@@ -54,8 +54,6 @@ import {
   ChevronRight,
   Filter,
 } from "lucide-react";
-import { toast } from "sonner";
-
 export function BoletimHistory() {
   const [selectedCompanyFilter, setSelectedCompanyFilter] = useState<
     string | undefined
@@ -95,7 +93,7 @@ export function BoletimHistory() {
       await deleteMutation.mutateAsync(deletingId);
       setDeleteDialogOpen(false);
       setDeletingId(null);
-    } catch (error) {
+    } catch {
       // Erro já tratado no hook
     }
   };

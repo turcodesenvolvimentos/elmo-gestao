@@ -66,7 +66,7 @@ export interface BoletimExport {
   total_value: number;
   total_employees: number;
   total_records: number;
-  manual_edits: Record<string, any>;
+  manual_edits: Record<string, unknown>;
   filters_applied: {
     employee?: string;
     position?: string;
@@ -83,7 +83,7 @@ export interface SaveBoletimToHistoryParams {
   startDate: string;
   endDate: string;
   data: BoletimData[];
-  manualEdits?: Record<string, any>;
+  manualEdits?: Record<string, unknown>;
   filtersApplied?: {
     employee?: string;
     position?: string;
