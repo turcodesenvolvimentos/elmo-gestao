@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { renderToBuffer, DocumentProps } from "@react-pdf/renderer";
 import { ValeAlimentacaoPDF } from "@/components/vale-alimentacao-pdf";
 import { ValeAlimentacaoSummaryPDF } from "@/components/vale-alimentacao-summary-pdf";
-import { ELMO_CNPJ } from "@/lib/pdf-utils";
 import React from "react";
 import fs from "fs";
 import path from "path";
@@ -83,7 +82,6 @@ export async function POST(request: NextRequest) {
         endDate,
         data: data as EmployeeSummary[],
         logoBase64,
-        companyCnpj: ELMO_CNPJ,
       });
       fileName = `relatorio-vale-alimentacao-resumo-${startDate}-${endDate}.pdf`;
     } else {
@@ -94,7 +92,6 @@ export async function POST(request: NextRequest) {
         endDate,
         data: data as ValeAlimentacaoData[],
         logoBase64,
-        companyCnpj: ELMO_CNPJ,
         employeeCpf,
         employeeAdmissionDate,
       });

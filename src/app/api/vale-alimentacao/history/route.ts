@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { renderToBuffer, DocumentProps } from "@react-pdf/renderer";
 import { ValeAlimentacaoPDF } from "@/components/vale-alimentacao-pdf";
 import { ValeAlimentacaoSummaryPDF } from "@/components/vale-alimentacao-summary-pdf";
-import { ELMO_CNPJ } from "@/lib/pdf-utils";
 import React from "react";
 import fs from "fs";
 import path from "path";
@@ -36,6 +35,8 @@ interface SaveValeAlimentacaoRequest {
   endDate: string;
   data: ValeAlimentacaoData[] | EmployeeSummary[];
   reportType?: "summary" | "detailed";
+  employeeCpf?: string;
+  employeeAdmissionDate?: string | number;
   filtersApplied?: {
     employeeId?: number;
   };
@@ -96,7 +97,6 @@ export async function POST(request: NextRequest) {
         endDate,
         data: data as EmployeeSummary[],
         logoBase64,
-        companyCnpj: ELMO_CNPJ,
       });
     } else {
       // Relatório detalhado (todos os dias)
@@ -106,7 +106,6 @@ export async function POST(request: NextRequest) {
         endDate,
         data: data as ValeAlimentacaoData[],
         logoBase64,
-        companyCnpj: ELMO_CNPJ,
         employeeCpf,
         employeeAdmissionDate,
       });

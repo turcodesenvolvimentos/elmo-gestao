@@ -153,8 +153,9 @@ export const ValeAlimentacaoSummaryPDF: React.FC<
       <Page size="A4" orientation="portrait" style={styles.page}>
         <View style={styles.header}>
           <View style={styles.headerTop}>
-            {logoBase64 && (
+              {logoBase64 && (
               <View style={styles.logoContainer}>
+                {/* eslint-disable-next-line jsx-a11y/alt-text */}
                 <Image style={styles.logo} src={logoBase64} />
               </View>
             )}
@@ -162,7 +163,9 @@ export const ValeAlimentacaoSummaryPDF: React.FC<
               <Text style={styles.title}>
                 Elmo Gestão - Relatório de Vale Alimentação (Resumo)
               </Text>
-              <Text style={[styles.info, { fontWeight: "bold" }]}>CNPJ: 30.386.636/0001-84</Text>
+              <Text style={[styles.info, { fontWeight: "bold" }]}>
+                CNPJ: 30.386.636/0001-84
+              </Text>
               <Text style={styles.info}>
                 Período: {formatDate(startDate)} até {formatDate(endDate)}
               </Text>

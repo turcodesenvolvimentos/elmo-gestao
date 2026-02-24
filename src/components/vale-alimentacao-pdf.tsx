@@ -121,6 +121,7 @@ interface ValeAlimentacaoPDFProps {
   logoBase64?: string;
   employeeCpf?: string;
   employeeAdmissionDate?: string | number;
+  companyCnpj?: string;
 }
 
 const formatDate = (dateString: string) => {
@@ -199,6 +200,7 @@ export const ValeAlimentacaoPDF: React.FC<ValeAlimentacaoPDFProps> = ({
   logoBase64,
   employeeCpf,
   employeeAdmissionDate,
+  companyCnpj,
 }) => {
   const totals = calculateTotals(data);
 
@@ -216,7 +218,9 @@ export const ValeAlimentacaoPDF: React.FC<ValeAlimentacaoPDFProps> = ({
               <Text style={styles.title}>
                 Elmo Gestão - Relatório de Vale Alimentação
               </Text>
-              <Text style={[styles.info, { fontWeight: "bold" }]}>CNPJ: 30.386.636/0001-84</Text>
+              <Text style={[styles.info, { fontWeight: "bold" }]}>
+                CNPJ: {companyCnpj || "30.386.636/0001-84"}
+              </Text>
               {(employeeName || employeeCpf) && (
                 <View style={styles.employeeInfoRow}>
                   {employeeName && (
