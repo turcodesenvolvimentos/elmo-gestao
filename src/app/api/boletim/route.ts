@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/db/client";
 import { calcularHorasPorPeriodo, formatarHoras } from "@/lib/ponto-calculator";
 import { Permission } from "@/types/permissions";
 import { checkPermission } from "@/lib/auth/permissions";
+import type { BoletimData } from "@/services/boletim.service";
 
 const DAYS_OF_WEEK = [
   "Domingo",
@@ -113,7 +114,7 @@ export async function GET(request: NextRequest) {
 
     // Extrair IDs dos funcionários (solides_id para buscar punches)
     const employeeSolidesIds = employeeCompanies
-      .map((ec: { employees?: { solides_id?: number } }) => ec.employees?.solides_id)
+      .map((ec) => (ec as { employees?: { solides_id?: number } }).employees?.solides_id)
       .filter((id: number | null | undefined): id is number => id !== null && id !== undefined);
 
     if (employeeSolidesIds.length === 0) {
@@ -152,10 +153,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Processar dados para o boletim
-    const boletimData: Array<{ employee_id: string; employee_name: string; position_name: string; department: string; hour_value: number; punches: Punch[] }> = [];
+    const boletimData: BoletimData[] = [];
 
     for (const ec of employeeCompanies) {
-      const employee = ec.employees as { solides_id?: number; name?: string } | null;
+      const employee = ec.employees as {
+        id?: string;
+        solides_id?: number;
+        name?: string;
+      } | null;
       const position = ec.positions as { name?: string; hour_value?: number } | null;
       const employeeSolidesId = employee?.solides_id;
 
@@ -245,10 +250,12 @@ export async function GET(request: NextRequest) {
         // Obter dia da semana
         const dateObj = new Date(date + "T12:00:00Z");
         const dayOfWeek = DAYS_OF_WEEK[dateObj.getDay()];
+        const employeeId = String(employee?.id ?? "");
+        const employeeName = employee?.name ?? "";
 
         boletimData.push({
-          employee_id: employee.id,
-          employee_name: employee.name,
+          employee_id: employeeId,
+          employee_name: employeeName,
           position: position?.name || "Sem cargo",
           department: ec.department || "Sem setor",
           date,

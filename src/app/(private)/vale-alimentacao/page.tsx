@@ -184,7 +184,15 @@ export default function ValeAlimentacaoPage() {
     }
 
     // Filtrar por período de datas (a API já filtra, mas garantimos aqui também)
-    const filteredPunches = allPunchesRaw.filter((punch: { date?: string; dateIn?: string; dateOut?: string }) => {
+    const filteredPunches = allPunchesRaw.filter(
+      (punch: {
+        date?: string;
+        dateIn?: string;
+        dateOut?: string;
+        employee?: { name?: string };
+        locationIn?: { address?: string };
+        locationOut?: { address?: string };
+      }) => {
       const punchDateStr = punch.date
         ? punch.date.includes("T")
           ? punch.date.split("T")[0]
@@ -209,7 +217,18 @@ export default function ValeAlimentacaoPage() {
     });
 
     // Agrupar por funcionário e data
-    const grouped = new Map<number, Map<string, unknown>>();
+    const grouped = new Map<
+      number,
+      Map<
+        string,
+        {
+          date: string;
+          formattedDate: string;
+          company: string;
+          punches: { dateIn?: string; dateOut?: string }[];
+        }
+      >
+    >();
     const lastGroupByEmployee = new Map<
       string,
       { key: string; dateStr: string; hadNightShift: boolean }
@@ -230,7 +249,15 @@ export default function ValeAlimentacaoPage() {
       });
     }
 
-    filteredPunches.forEach((punch: { date?: string; dateIn?: string; dateOut?: string; employee?: { name?: string } }) => {
+    filteredPunches.forEach(
+      (punch: {
+        date?: string;
+        dateIn?: string;
+        dateOut?: string;
+        employee?: { name?: string };
+        locationIn?: { address?: string };
+        locationOut?: { address?: string };
+      }) => {
       const employeeName = punch.employee?.name || "sem-nome";
       // Tentar encontrar por nome exato primeiro
       let employeeId = employeesByNameMap.get(employeeName);

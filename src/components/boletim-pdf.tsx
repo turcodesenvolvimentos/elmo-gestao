@@ -1,3 +1,4 @@
+/* eslint-disable jsx-a11y/alt-text */
 import React from "react";
 import {
   Document,
@@ -250,7 +251,7 @@ export const BoletimPDF: React.FC<BoletimPDFProps> = ({
             {/* Logo no canto superior esquerdo */}
             {logoBase64 && (
               <View style={styles.logoContainer}>
-                <Image style={styles.logo} src={logoBase64} alt="" />
+                <Image style={styles.logo} src={logoBase64} />
               </View>
             )}
 

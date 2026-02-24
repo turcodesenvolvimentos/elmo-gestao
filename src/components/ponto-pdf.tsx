@@ -1,3 +1,4 @@
+/* eslint-disable jsx-a11y/alt-text */
 import React from "react";
 import {
   Document,
@@ -290,7 +291,7 @@ export const PontoPDF: React.FC<PontoPDFProps> = ({
           <View style={styles.headerTop}>
             {logoBase64 && (
               <View style={styles.logoContainer}>
-                <Image style={styles.logo} src={logoBase64} alt="" />
+                <Image style={styles.logo} src={logoBase64} />
               </View>
             )}
             <View style={styles.headerText}>

@@ -57,11 +57,14 @@ export async function GET(
       solides_id?: number;
     }
     const employees = (employeeCompanies || [])
-      .map((ec: { employees?: { id?: string; name?: string; solides_id?: number } }) => ({
-        id: ec.employees?.id,
-        name: ec.employees?.name,
-        solides_id: ec.employees?.solides_id,
-      }))
+      .map((ec) => {
+        const employee = (ec as { employees?: { id?: string; name?: string; solides_id?: number } }).employees;
+        return {
+          id: employee?.id,
+          name: employee?.name,
+          solides_id: employee?.solides_id,
+        };
+      })
       .filter((emp: EmpRow): emp is EmpRow & { id: string } => !!emp.id)
       .sort((a: EmpRow, b: EmpRow) => {
         const nameA = (a.name || "").toLowerCase();

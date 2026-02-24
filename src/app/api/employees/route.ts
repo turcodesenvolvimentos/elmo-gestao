@@ -78,11 +78,18 @@ export async function GET(request: NextRequest) {
         type CompanyRow = { id?: string; name?: string; [key: string]: unknown };
         const companies =
           employeeCompanies
-            ?.map((ec: { companies?: CompanyRow; position_id?: string; positions?: unknown }) => ({
-              ...ec.companies,
-              position_id: ec.position_id,
-              position: ec.positions || null,
-            }))
+            ?.map((ec) => {
+              const row = ec as unknown as {
+                companies?: CompanyRow;
+                position_id?: string;
+                positions?: unknown;
+              };
+              return {
+                ...row.companies,
+                position_id: row.position_id,
+                position: row.positions || null,
+              };
+            })
             .filter((company: CompanyRow | null): company is CompanyRow => company !== null && !!company.id)
             .sort((a: CompanyRow, b: CompanyRow) => {
               const nameA = (a.name || "").toLowerCase();
