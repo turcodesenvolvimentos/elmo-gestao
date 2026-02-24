@@ -15,7 +15,12 @@ import {
   Briefcase,
 } from "lucide-react";
 import { AppSidebar } from "@/components/app-sidebar";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
+import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
@@ -1399,25 +1404,25 @@ export default function EmpresasPage() {
   return (
     <SidebarProvider>
       <AppSidebar collapsible="icon" />
-      <div className="min-h-screen w-full p-3 sm:p-6">
-        <SidebarTrigger className="-ml-1" />
-        <div className="space-y-4 sm:space-y-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="scroll-m-20 text-2xl sm:text-3xl font-semibold tracking-tight">
-                Empresas e Funcionários
-              </h2>
-              <p className="text-muted-foreground mt-1 text-sm sm:text-base">
-                Visualize e gerencie empresas e funcionários
-              </p>
-            </div>
+      <SidebarInset>
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+          <div className="flex items-center gap-2">
+            <SidebarTrigger />
+            <Separator orientation="vertical" className="mr-2 h-4" />
+            <h1 className="text-xl font-semibold">Empresas e Funcionários</h1>
           </div>
+        </header>
 
-          <Tabs
-            value={activeTab}
-            onValueChange={setActiveTab}
-            className="w-full"
-          >
+        <div className="flex flex-1 flex-col gap-6 p-3 sm:p-6">
+          <div className="space-y-4 sm:space-y-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            </div>
+
+            <Tabs
+              value={activeTab}
+              onValueChange={setActiveTab}
+              className="w-full"
+            >
             {error && (
               <Alert variant="destructive">
                 <AlertDescription>
@@ -1479,7 +1484,18 @@ export default function EmpresasPage() {
                   </div>
                 ) : null}
 
-                <div className="flex justify-end mb-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+                  <TabsList className="grid-cols-2 w-full sm:w-auto">
+                    <TabsTrigger value="empresas" className="gap-2">
+                      <Building className="h-4 w-4" />
+                      Empresas
+                    </TabsTrigger>
+                    <TabsTrigger value="funcionarios" className="gap-2">
+                      <Users className="h-4 w-4" />
+                      Funcionários
+                    </TabsTrigger>
+                  </TabsList>
+
                   <Dialog
                     open={isDialogOpen}
                     onOpenChange={handleDialogOpenChange}
@@ -1658,17 +1674,6 @@ export default function EmpresasPage() {
                     </DialogContent>
                   </Dialog>
                 </div>
-
-                <TabsList className="grid w-full grid-cols-2 mb-4">
-                  <TabsTrigger value="empresas" className="gap-2">
-                    <Building className="h-4 w-4" />
-                    Empresas
-                  </TabsTrigger>
-                  <TabsTrigger value="funcionarios" className="gap-2">
-                    <Users className="h-4 w-4" />
-                    Funcionários
-                  </TabsTrigger>
-                </TabsList>
 
                 {companiesData?.companies &&
                 companiesData.companies.length > 0 ? (
@@ -2216,6 +2221,7 @@ export default function EmpresasPage() {
           </Dialog>
         </div>
       </div>
+      </SidebarInset>
     </SidebarProvider>
   );
 }

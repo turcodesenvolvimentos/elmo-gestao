@@ -2,7 +2,11 @@
 
 import { useState, useMemo } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 import {
   Card,
   CardContent,
@@ -53,6 +57,7 @@ import { useShifts } from "@/hooks/use-shifts";
 import { useBatchCreateEscalas } from "@/hooks/use-escalas";
 import { useQuery } from "@tanstack/react-query";
 import { fetchAllShifts } from "@/services/shifts.service";
+import { Separator } from "@/components/ui/separator";
 
 export default function EscalaPage() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -172,28 +177,36 @@ export default function EscalaPage() {
   return (
     <SidebarProvider>
       <AppSidebar collapsible="icon" />
-      <div className="min-h-screen w-full p-6">
-        <SidebarTrigger className="-ml-1" />
-        <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h2 className="scroll-m-20 text-3xl font-semibold tracking-tight">
-                Gerenciar Escalas
-              </h2>
-              <p className="text-muted-foreground mt-1">
-                Aplique escalas aos funcionários das empresas
-              </p>
+      <SidebarInset>
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+          <div className="flex items-center gap-2">
+            <SidebarTrigger />
+            <Separator orientation="vertical" className="mr-2 h-4" />
+            <h1 className="text-xl font-semibold">Escalas</h1>
+          </div>
+        </header>
+
+        <div className="flex flex-1 flex-col gap-6 p-6">
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h2 className="scroll-m-20 text-3xl font-semibold tracking-tight">
+                  Gerenciar Escalas
+                </h2>
+                <p className="text-muted-foreground mt-1">
+                  Aplique escalas aos funcionários das empresas
+                </p>
+              </div>
+
+              <Button asChild variant="outline">
+                <Link href="/escala/criar">
+                  <Settings className="h-4 w-4 mr-2" />
+                  Gerenciar Escalas
+                </Link>
+              </Button>
             </div>
 
-            <Button asChild variant="outline">
-              <Link href="/escala/criar">
-                <Settings className="h-4 w-4 mr-2" />
-                Gerenciar Escalas
-              </Link>
-            </Button>
-          </div>
-
-          <Card>
+            <Card>
             <CardHeader>
               <CardTitle>Empresas</CardTitle>
               <CardDescription>
@@ -481,6 +494,7 @@ export default function EscalaPage() {
           </DialogContent>
         </Dialog>
       </div>
+      </SidebarInset>
     </SidebarProvider>
   );
 }

@@ -3,7 +3,11 @@
 import { useState } from "react";
 import { Plus, Edit, Trash2, MoreVertical } from "lucide-react";
 import { AppSidebar } from "@/components/app-sidebar";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 import {
   Table,
   TableHead,
@@ -48,6 +52,7 @@ import { Permission } from "@/types/permissions";
 import { toast } from "sonner";
 import { PermissionsSelector } from "./components/permissions-selector";
 import { PermissionBadges } from "@/components/ui/permission-badge";
+import { Separator } from "@/components/ui/separator";
 
 export default function UsuariosPage() {
   const { data: usersData, isLoading, error } = useUsers();
@@ -248,23 +253,31 @@ export default function UsuariosPage() {
 
   return (
     <SidebarProvider>
-      <AppSidebar />
-      <main className="flex-1 flex flex-col gap-4 p-4 md:p-6 lg:p-8">
-        <div className="flex items-center justify-between">
-          <div>
+      <AppSidebar collapsible="icon" />
+      <SidebarInset>
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+          <div className="flex items-center gap-2">
             <SidebarTrigger />
-            <h1 className="text-2xl font-bold mt-2">Gerenciar Usuários</h1>
-            <p className="text-muted-foreground">
-              Crie e gerencie usuários do sistema com permissões específicas
-            </p>
+            <Separator orientation="vertical" className="mr-2 h-4" />
+            <h1 className="text-xl font-semibold">Usuários</h1>
           </div>
-          <Button onClick={() => setIsDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Novo Usuário
-          </Button>
-        </div>
+        </header>
 
-        {error && (
+        <main className="flex-1 flex flex-col gap-4 p-4 md:p-6 lg:p-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold">Gerenciar Usuários</h2>
+              <p className="text-muted-foreground">
+                Crie e gerencie usuários do sistema com permissões específicas
+              </p>
+            </div>
+            <Button onClick={() => setIsDialogOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Novo Usuário
+            </Button>
+          </div>
+
+          {error && (
           <Alert variant="destructive">
             <AlertDescription>
               {error instanceof Error
@@ -597,6 +610,7 @@ export default function UsuariosPage() {
           </DialogContent>
         </Dialog>
       </main>
+      </SidebarInset>
     </SidebarProvider>
   );
 }

@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, FileText, History } from "lucide-react";
+import { History, Eye } from "lucide-react";
 import {
   Table,
   TableHead,
@@ -780,9 +780,17 @@ export default function PontoPage() {
             className="w-full"
           >
             <div className="flex items-center justify-between mb-6">
-              <h2 className="scroll-m-20 text-3xl font-semibold tracking-tight">
-                Pontos registrados
-              </h2>
+              <TabsList>
+                <TabsTrigger value="visualizar" className="flex items-center gap-2">
+                  <Eye className="h-4 w-4" />
+                  Visualizar
+                </TabsTrigger>
+                <TabsTrigger value="historico" className="flex items-center gap-2">
+                  <History className="h-4 w-4" />
+                  Histórico
+                </TabsTrigger>
+              </TabsList>
+
               <div className="flex items-center gap-2">
                 {lastSyncData && (
                   <span className="text-sm text-muted-foreground">
@@ -813,15 +821,10 @@ export default function PontoPage() {
               </div>
             </div>
 
-            <TabsList>
-              <TabsTrigger value="visualizar">Visualizar</TabsTrigger>
-              <TabsTrigger value="historico">Histórico</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="visualizar" className="mt-6 space-y-6">
+            <TabsContent value="visualizar" className="space-y-6">
               <Card>
-                <CardContent className="pt-6">
-                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <CardContent className="">
+                  <div className="flex flex-col gap-4 md:flex-row  md:justify-between">
                     <div>
                       <h3 className="text-lg font-semibold">Filtros</h3>
                       <p className="text-sm text-muted-foreground mt-1">
@@ -997,7 +1000,7 @@ export default function PontoPage() {
               </Card>
 
               <Card className="flex-1 overflow-hidden">
-                <CardContent className="pt-6">
+                <CardContent className="">
                   <div className="border-b pb-4 mb-4">
                     <h3 className="text-lg font-semibold">Resultado</h3>
                     <p className="text-sm text-muted-foreground mt-1">
