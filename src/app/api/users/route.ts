@@ -77,12 +77,12 @@ export async function POST(request: NextRequest) {
     // Validar dados
     const validationResult = createUserSchema.safeParse(body);
     if (!validationResult.success) {
-      console.error("Erro de validação:", validationResult.error.errors);
+      console.error("Erro de validação:", validationResult.error.issues);
       console.error("Dados recebidos:", JSON.stringify(body, null, 2));
       return NextResponse.json(
         {
           error: "Dados inválidos",
-          details: validationResult.error.errors,
+          details: validationResult.error.issues,
         },
         { status: 400 }
       );
