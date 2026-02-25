@@ -769,9 +769,7 @@ export default function PontoPage() {
                 {lastSyncData && (
                   <span className="text-sm text-muted-foreground">
                     Última sincronização:{" "}
-                    {new Date(lastSyncData.lastSyncDate).toLocaleString(
-                      "pt-BR"
-                    )}
+                    {new Date(lastSyncData.lastSyncAt).toLocaleString("pt-BR")}
                   </span>
                 )}
                 <Button
@@ -784,6 +782,16 @@ export default function PontoPage() {
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Sincronizando...
+                      {syncMutation.progress && syncMutation.progress.total > 0 && (
+                        <span className="ml-2 font-medium">
+                          {syncMutation.progress.percent}%
+                          <span className="text-muted-foreground font-normal">
+                            {" "}
+                            ({syncMutation.progress.processed}/
+                            {syncMutation.progress.total})
+                          </span>
+                        </span>
+                      )}
                     </>
                   ) : (
                     <>

@@ -326,12 +326,12 @@ async function getLastSyncDate(): Promise<Date> {
     .from("sync_status")
     .select("last_sync_at")
     .eq("sync_type", "punches")
-    .single();
+    .maybeSingle();
 
-  if (error || !data) {
-    // Se não existe registro, retornar data de 30 dias atrás
+  if (error || !data?.last_sync_at) {
     const defaultDate = new Date();
     defaultDate.setDate(defaultDate.getDate() - 30);
+    defaultDate.setHours(0, 0, 0, 0);
     return defaultDate;
   }
 
@@ -441,80 +441,100 @@ async function syncEmployeePunches(
   }
 }
 
+function sendSSE(controller: ReadableStreamDefaultController<Uint8Array>, data: object) {
+  const encoder = new TextEncoder();
+  controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+}
+
 export async function POST(_request: NextRequest) {
-  try {
-    const startTime = Date.now();
+  const startTime = Date.now();
 
-    // Buscar última data de sincronização
-    const lastSyncDate = await getLastSyncDate();
-    const startDate = formatDate(lastSyncDate);
-    const endDate = formatDate(new Date());
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        // Sincronização incremental: apenas de lastSync até hoje (nunca "tudo")
+        const lastSyncDate = await getLastSyncDate();
+        const startDate = formatDate(lastSyncDate);
+        const endDate = formatDate(new Date());
 
-    // Buscar funcionários
-    const employees = await fetchAllEmployees();
+        const employees = await fetchAllEmployees();
 
-    if (employees.length === 0) {
-      return NextResponse.json(
-        {
+        if (employees.length === 0) {
+          sendSSE(controller, {
+            type: "done",
+            success: true,
+            stats: {
+              processed: 0,
+              saved: 0,
+              errors: 0,
+              duration: 0,
+              startDate,
+              endDate,
+            },
+          });
+          controller.close();
+          return;
+        }
+
+        const stats = {
+          processed: 0,
+          saved: 0,
+          errors: 0,
+          failedEmployees: [] as Array<{ id: number; name: string; error: string }>,
+        };
+        const total = employees.length;
+
+        for (let i = 0; i < employees.length; i++) {
+          await syncEmployeePunches(employees[i], startDate, endDate, stats);
+          await sleep(CONFIG.REQUEST_DELAY);
+          const percent = Math.round(((i + 1) / total) * 100);
+          sendSSE(controller, {
+            type: "progress",
+            processed: i + 1,
+            total,
+            percent,
+          });
+        }
+
+        if (stats.errors === 0 || stats.saved > 0) {
+          await updateLastSyncDate();
+        }
+
+        const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+
+        sendSSE(controller, {
+          type: "done",
           success: true,
-          message: "Nenhum funcionário encontrado",
           stats: {
-            processed: 0,
-            saved: 0,
-            errors: 0,
-            duration: 0,
+            processed: stats.processed,
+            saved: stats.saved,
+            errors: stats.errors,
+            failedEmployees: stats.failedEmployees,
+            duration: parseFloat(duration),
+            startDate,
+            endDate,
           },
-        },
-        { status: 200 }
-      );
-    }
+        });
+        controller.close();
+      } catch (error: any) {
+        console.error("Erro na sincronização:", error);
+        sendSSE(controller, {
+          type: "error",
+          success: false,
+          error: error.message || "Erro desconhecido na sincronização",
+        });
+        controller.close();
+      }
+    },
+  });
 
-    const stats = {
-      processed: 0,
-      saved: 0,
-      errors: 0,
-      failedEmployees: [] as Array<{ id: number; name: string; error: string }>,
-    };
-
-    // Processar cada funcionário
-    for (const employee of employees) {
-      await syncEmployeePunches(employee, startDate, endDate, stats);
-      await sleep(CONFIG.REQUEST_DELAY);
-    }
-
-    // Atualizar data da última sincronização apenas se não houve erros críticos
-    if (stats.errors === 0 || stats.saved > 0) {
-      await updateLastSyncDate();
-    }
-
-    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-
-    return NextResponse.json(
-      {
-        success: true,
-        message: "Sincronização concluída",
-        stats: {
-          processed: stats.processed,
-          saved: stats.saved,
-          errors: stats.errors,
-          failedEmployees: stats.failedEmployees,
-          duration: parseFloat(duration),
-          startDate,
-          endDate,
-        },
-      },
-      { status: 200 }
-    );
-  } catch (error: any) {
-    console.error("Erro na sincronização:", error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message || "Erro desconhecido na sincronização",
-      },
-      { status: 500 }
-    );
-  }
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  });
 }
 
 export async function GET(_request: NextRequest) {
