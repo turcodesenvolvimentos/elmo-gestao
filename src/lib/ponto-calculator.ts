@@ -286,11 +286,9 @@ export function calcularHorasPorPeriodo(
   }
 
   let adicionalNoturno =
-    ehDomingo || ehFeriado
-      ? horasNormaisHoras
-      : horasNoturnasReaisHoras +
-      horasFictas -
-      (extra50NoturnoReaisHoras + horasFictas);
+    horasNoturnasReaisHoras +
+    horasFictas -
+    (extra50NoturnoReaisHoras + horasFictas);
 
   if (ehDomingo || ehFeriado) {
     if (extra100NoturnoHoras + extra100DiurnoHoras >= 8) {
