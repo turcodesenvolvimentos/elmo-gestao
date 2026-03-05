@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { History, Eye } from "lucide-react";
+import { History, Eye, Check, ChevronsUpDown } from "lucide-react";
 import {
   Table,
   TableHead,
@@ -44,13 +44,19 @@ import { PontoHistory } from "./components/ponto-history";
 import { useExportPontoPDF, useSavePontoToHistory } from "@/hooks/use-ponto";
 import type { PontoData } from "@/services/ponto.service";
 import {
-  Combobox,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-} from "@/components/ui/combobox";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 
 /** Acidente/doença do trabalho (#0070C0) ou não relacionada ao trabalho (#00B0F0) */
 export type AjusteTipo = "work" | "non_work";
@@ -91,7 +97,6 @@ interface GroupedPunch {
     adjustmentReasonDescription?: string;
     adjustmentReasonId?: number;
   }>;
-  /** Preenchido quando algum punch do dia é um dos 2 motivos (trabalho / não trabalho). */
   ajusteTipo?: AjusteTipo;
   horasDiurnas: string;
   horasNoturnas: string;
@@ -142,6 +147,7 @@ type Punch = PunchFromApi;
 export default function PontoPage() {
   const hd = useMemo(() => new Holidays("BR"), []);
   const [activeTab, setActiveTab] = useState("visualizar");
+  const [openEmployee, setOpenEmployee] = useState(false);
   const [filter, setFilter] = useState<{
     startDate: string;
     endDate: string;
@@ -155,12 +161,12 @@ export default function PontoPage() {
     company: "Todos",
     status: "APPROVED",
   });
+
   const { data: employees, isLoading: employeesLoading } = useEmployees({
     page: 1,
     size: 100,
   });
 
-  // Lista de nomes de funcionários para o Combobox
   const employeeNames = useMemo(() => {
     if (!employees?.content) return [];
     return employees.content
@@ -168,7 +174,6 @@ export default function PontoPage() {
       .sort((a, b) => a.localeCompare(b));
   }, [employees]);
 
-  // Obter nome do funcionário selecionado
   const selectedEmployeeName = useMemo(() => {
     if (!filter.employeeId || !employees?.content) return "";
     const employee = employees.content.find((e) => e.id === filter.employeeId);
@@ -219,7 +224,6 @@ export default function PontoPage() {
   const syncMutation = useSyncPunches();
   const { data: lastSyncData } = useLastSyncDate();
 
-  // Hooks para exportação
   const exportPDFMutation = useExportPontoPDF();
   const saveToHistoryMutation = useSavePontoToHistory();
 
@@ -426,7 +430,6 @@ export default function PontoPage() {
       group.heDomEFer = formatarHoras(calculoHoras.heDomEFer);
     });
 
-    // Preencher dias faltantes entre a primeira e última data de cada funcionário
     const groupedByEmployee = new Map<string, GroupedPunch[]>();
     grouped.forEach((group) => {
       if (!groupedByEmployee.has(group.employeeName)) {
@@ -435,24 +438,19 @@ export default function PontoPage() {
       groupedByEmployee.get(group.employeeName)!.push(group);
     });
 
-    // Determinar o range de datas para preenchimento
     const startDateForFill =
       shouldSendDates && filter.startDate ? filter.startDate : null;
     const endDateForFill =
       shouldSendDates && filter.endDate ? filter.endDate : null;
 
     groupedByEmployee.forEach((groups, employeeName) => {
-      // Ordenar grupos por data
       groups.sort((a, b) => a.date.localeCompare(b.date));
 
-      // Determinar primeira e última data
       const firstDate = startDateForFill || groups[0].date;
       const lastDate = endDateForFill || groups[groups.length - 1].date;
 
-      // Criar um Set com as datas existentes para busca rápida
       const existingDates = new Set(groups.map((g) => g.date));
 
-      // Preencher dias faltantes
       const [startYear, startMonth, startDay] = firstDate
         .split("-")
         .map(Number);
@@ -478,7 +476,6 @@ export default function PontoPage() {
           });
           const dayOfWeekNumber = date.getDay();
 
-          // Encontrar a empresa do funcionário (pegar da primeira ocorrência)
           const company = groups[0]?.company || "-";
 
           const emptyGroup: GroupedPunch = {
@@ -510,17 +507,14 @@ export default function PontoPage() {
         currentDate.setUTCDate(currentDate.getUTCDate() + 1);
       }
 
-      // Reordenar após adicionar dias faltantes
       groups.sort((a, b) => a.date.localeCompare(b.date));
     });
 
-    // Reconstruir o array final com todos os grupos (incluindo os vazios)
     const finalGroupedPunches: GroupedPunch[] = [];
     groupedByEmployee.forEach((groups) => {
       finalGroupedPunches.push(...groups);
     });
 
-    // Ordenar por funcionário e depois por data
     finalGroupedPunches.sort((a, b) => {
       const employeeCompare = a.employeeName.localeCompare(b.employeeName);
       if (employeeCompare !== 0) return employeeCompare;
@@ -558,7 +552,6 @@ export default function PontoPage() {
     hd,
   ]);
 
-  // Função para preparar dados para exportação
   const prepareExportData = (): PontoData[] => {
     return groupedPunches.map((group) => {
       const emp = employees?.content?.find(
@@ -614,7 +607,6 @@ export default function PontoPage() {
     });
   };
 
-  // Função para exportar relatório
   const handleExportReport = async () => {
     if (!filter.startDate || !filter.endDate || groupedPunches.length === 0) {
       return;
@@ -625,7 +617,6 @@ export default function PontoPage() {
       (e) => e.id === filter.employeeId
     );
 
-    // Salvar no histórico e exportar PDF
     saveToHistoryMutation.mutate(
       {
         employeeId: filter.employeeId > 0 ? filter.employeeId : undefined,
@@ -643,7 +634,6 @@ export default function PontoPage() {
       },
       {
         onSuccess: () => {
-          // Após salvar no histórico, fazer download do PDF
           exportPDFMutation.mutate({
             employeeName: selectedEmployee?.name,
             startDate: filter.startDate,
@@ -806,7 +796,7 @@ export default function PontoPage() {
             <TabsContent value="visualizar" className="space-y-6">
               <Card>
                 <CardContent className="">
-                  <div className="flex flex-col gap-4 md:flex-row  md:justify-between">
+                  <div className="flex flex-col gap-4 md:flex-row md:justify-between">
                     <div>
                       <h3 className="text-lg font-semibold">Filtros</h3>
                       <p className="text-sm text-muted-foreground mt-1">
@@ -817,62 +807,102 @@ export default function PontoPage() {
 
                   <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-end lg:gap-6">
                     <div className="flex-1 space-y-4 lg:space-y-0 lg:flex lg:items-center lg:gap-4">
+
+                      {/* ── Colaborador ── */}
                       <div className="flex items-center gap-2">
                         <Label className="whitespace-nowrap text-sm font-medium">
-                          Funcionário:
+                          Colaborador:
                         </Label>
                         <div className="flex items-center gap-1">
-                          <Combobox
-                            items={employeeNames}
-                            value={selectedEmployeeName}
-                            onValueChange={(value: string | null) => {
-                              if (!value) {
-                                setFilter((prev) => ({
-                                  ...prev,
-                                  employeeId: 0,
-                                }));
-                              } else {
-                                const employee = employees?.content.find(
-                                  (e) => e.name === value
-                                );
-                                if (employee) {
-                                  setFilter((prev) => ({
-                                    ...prev,
-                                    employeeId: employee.id,
-                                  }));
-                                }
-                              }
-                            }}
-                          >
-                            <ComboboxInput
-                              placeholder="Selecione ou digite um funcionário..."
-                              className="w-[300px]"
-                            />
-                            <ComboboxContent>
-                              <ComboboxEmpty>
-                                Nenhum funcionário encontrado.
-                              </ComboboxEmpty>
-                              <ComboboxList>
-                                {employeeNames.map((item: string) => (
-                                  <ComboboxItem key={item} value={item}>
-                                    {item}
-                                  </ComboboxItem>
-                                ))}
-                              </ComboboxList>
-                            </ComboboxContent>
-                          </Combobox>
+                          <Popover open={openEmployee} onOpenChange={setOpenEmployee}>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                role="combobox"
+                                aria-expanded={openEmployee}
+                                className="w-[300px] justify-between font-normal"
+                              >
+                                <span className="truncate">
+                                  {selectedEmployeeName || "Selecione um colaborador..."}
+                                </span>
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[300px] p-0">
+                              <Command>
+                                <CommandInput placeholder="Pesquisar colaborador..." />
+                                <CommandList>
+                                  <CommandEmpty>
+                                    Nenhum colaborador encontrado.
+                                  </CommandEmpty>
+                                  <CommandGroup>
+                                    <CommandItem
+                                      value="todos"
+                                      onSelect={() => {
+                                        setFilter((prev) => ({
+                                          ...prev,
+                                          employeeId: 0,
+                                        }));
+                                        setOpenEmployee(false);
+                                      }}
+                                    >
+                                      <Check
+                                        className={cn(
+                                          "mr-2 h-4 w-4",
+                                          filter.employeeId === 0
+                                            ? "opacity-100"
+                                            : "opacity-0"
+                                        )}
+                                      />
+                                      Todos
+                                    </CommandItem>
+                                    {employeeNames.map((name) => {
+                                      const employee = employees?.content.find(
+                                        (e) => e.name === name
+                                      );
+                                      return (
+                                        <CommandItem
+                                          key={name}
+                                          value={name}
+                                          onSelect={() => {
+                                            if (employee) {
+                                              setFilter((prev) => ({
+                                                ...prev,
+                                                employeeId: employee.id,
+                                              }));
+                                            }
+                                            setOpenEmployee(false);
+                                          }}
+                                        >
+                                          <Check
+                                            className={cn(
+                                              "mr-2 h-4 w-4",
+                                              filter.employeeId === employee?.id
+                                                ? "opacity-100"
+                                                : "opacity-0"
+                                            )}
+                                          />
+                                          {name}
+                                        </CommandItem>
+                                      );
+                                    })}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
 
                           {filter.employeeId > 0 && (
                             <Button
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8"
-                              onClick={() => {
+                              onClick={() =>
                                 setFilter((prev) => ({
                                   ...prev,
                                   employeeId: 0,
-                                }));
-                              }}
+                                }))
+                              }
                             >
                               <X className="h-4 w-4" />
                             </Button>
@@ -880,6 +910,7 @@ export default function PontoPage() {
                         </div>
                       </div>
 
+                      {/* ── Empresa ── */}
                       <div className="flex items-center gap-2">
                         <Label className="whitespace-nowrap text-sm font-medium">
                           Empresa:
@@ -903,6 +934,7 @@ export default function PontoPage() {
                         </Select>
                       </div>
 
+                      {/* ── Data inicial ── */}
                       <div className="flex items-center gap-2">
                         <Label className="whitespace-nowrap text-sm font-medium">
                           Data inicial:
@@ -921,6 +953,7 @@ export default function PontoPage() {
                         />
                       </div>
 
+                      {/* ── Data final ── */}
                       <div className="flex items-center gap-2">
                         <Label className="whitespace-nowrap text-sm font-medium">
                           Data final:
@@ -950,6 +983,7 @@ export default function PontoPage() {
                         </div>
                       </div>
 
+                      {/* ── Exportar PDF ── */}
                       {hasFilters &&
                         shouldSendDates &&
                         isDateRangeValid &&
@@ -1015,7 +1049,7 @@ export default function PontoPage() {
                               colSpan={dynamicColumns.length}
                               className="text-center py-8 text-muted-foreground"
                             >
-                              Selecione um funcionário para visualizar os pontos
+                              Selecione um colaborador para visualizar os pontos
                             </TableCell>
                           </TableRow>
                         ) : shouldSendDates && !isDateRangeValid ? (
