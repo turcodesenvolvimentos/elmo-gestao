@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { History, Eye, Check, ChevronsUpDown } from "lucide-react";
+import { History, Eye, Check, ChevronsUpDown, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   Table,
   TableHead,
@@ -179,6 +179,25 @@ export default function PontoPage() {
     const employee = employees.content.find((e) => e.id === filter.employeeId);
     return employee?.name || "";
   }, [filter.employeeId, employees]);
+
+  const navigateEmployee = (direction: "prev" | "next") => {
+    if (employeeNames.length === 0) return;
+    const currentIndex = employeeNames.indexOf(selectedEmployeeName);
+    let nextIndex: number;
+    if (currentIndex === -1) {
+      nextIndex = direction === "next" ? 0 : employeeNames.length - 1;
+    } else {
+      nextIndex =
+        direction === "next"
+          ? (currentIndex + 1) % employeeNames.length
+          : (currentIndex - 1 + employeeNames.length) % employeeNames.length;
+    }
+    const nextName = employeeNames[nextIndex];
+    const employee = employees?.content.find((e) => e.name === nextName);
+    if (employee) {
+      setFilter((prev) => ({ ...prev, employeeId: employee.id }));
+    }
+  };
 
   const hasFilters = filter.employeeId > 0;
   const shouldSendDates = !!(filter.startDate && filter.endDate);
@@ -891,6 +910,28 @@ export default function PontoPage() {
                               </Command>
                             </PopoverContent>
                           </Popover>
+
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-9 w-9"
+                            onClick={() => navigateEmployee("prev")}
+                            disabled={employeeNames.length === 0}
+                            title="Colaborador anterior"
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                          </Button>
+
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-9 w-9"
+                            onClick={() => navigateEmployee("next")}
+                            disabled={employeeNames.length === 0}
+                            title="Próximo colaborador"
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
 
                           {filter.employeeId > 0 && (
                             <Button
