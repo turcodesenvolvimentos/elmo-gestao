@@ -77,9 +77,10 @@ export async function GET(request: NextRequest) {
       throw escalasError;
     }
 
+    const list = escalas || [];
     return NextResponse.json({
-      escalas: escalas || [],
-      total: escalas?.length || 0,
+      escalas: list,
+      total: list.length,
     });
   } catch (error: unknown) {
     console.error("Erro ao buscar escalas:", error);

@@ -20,6 +20,7 @@ export interface Escala {
     exit1: string;
     entry2?: string | null;
     exit2?: string | null;
+    company_id?: string;
   };
 }
 
