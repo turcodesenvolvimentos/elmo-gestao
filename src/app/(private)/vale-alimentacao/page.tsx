@@ -36,6 +36,7 @@ import Holidays from "date-holidays";
 import { Employee } from "@/types/employees";
 import { Company } from "@/types/companies";
 import { toast } from "sonner";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ValeAlimentacaoHistory } from "./components/vale-alimentacao-history";
 import type {
   ValeAlimentacaoData,
@@ -81,9 +82,11 @@ export default function ValeAlimentacaoPage() {
     endDate: string;
   }>({ startDate: "", endDate: "" });
 
+  const [showInactiveEmployees, setShowInactiveEmployees] = useState(false);
   const { data: employeesData, isLoading: employeesLoading } = useEmployees({
     page: 1,
     size: 100,
+    includeFired: showInactiveEmployees,
   });
 
   const { data: companiesData } = useCompanies();
@@ -828,7 +831,7 @@ export default function ValeAlimentacaoPage() {
 
           <Card>
             <CardContent className="">
-              <div className="flex items-start justify-between border-b pb-4 mb-4">
+              <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-4 mb-4">
                 <div>
                   <h3 className="text-lg font-semibold">
                     Relatório de Vale Alimentação
@@ -837,7 +840,17 @@ export default function ValeAlimentacaoPage() {
                     Visualização dos valores de vale alimentação por funcionário
                   </p>
                 </div>
-                {employeeSummaries.length > 0 && hasFilters && (
+                <div className="flex items-center gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer text-sm text-muted-foreground">
+                    <Checkbox
+                      checked={showInactiveEmployees}
+                      onCheckedChange={(checked) =>
+                        setShowInactiveEmployees(checked === true)
+                      }
+                    />
+                    Exibir inativos
+                  </label>
+                  {employeeSummaries.length > 0 && hasFilters && (
                   <Button
                     onClick={handleExportReport}
                     disabled={
@@ -863,7 +876,8 @@ export default function ValeAlimentacaoPage() {
                       </>
                     )}
                   </Button>
-                )}
+                  )}
+                </div>
               </div>
 
               {employeesLoading ? (

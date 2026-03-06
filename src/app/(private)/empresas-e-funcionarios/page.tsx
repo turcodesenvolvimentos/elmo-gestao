@@ -610,6 +610,7 @@ function CompanyPositionSelect({
 }
 
 function CompaniesEmployeesTab() {
+  const [showInactiveEmployees, setShowInactiveEmployees] = useState(false);
   const {
     data: employeesData,
     isLoading: employeesLoading,
@@ -617,6 +618,7 @@ function CompaniesEmployeesTab() {
   } = useEmployees({
     page: 1,
     size: 100,
+    includeFired: showInactiveEmployees,
   });
 
   const { data: companiesData } = useCompanies();
@@ -790,7 +792,18 @@ function CompaniesEmployeesTab() {
       {employeesLoading ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg sm:text-xl">Funcionários</CardTitle>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <CardTitle className="text-lg sm:text-xl">Funcionários</CardTitle>
+              <label className="flex items-center gap-2 cursor-pointer text-sm text-muted-foreground">
+                <Checkbox
+                  checked={showInactiveEmployees}
+                  onCheckedChange={(checked) =>
+                    setShowInactiveEmployees(checked === true)
+                  }
+                />
+                Exibir inativos
+              </label>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -809,9 +822,20 @@ function CompaniesEmployeesTab() {
       ) : employeesData?.content && employeesData.content.length > 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg sm:text-xl">
-              Lista de Funcionários
-            </CardTitle>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <CardTitle className="text-lg sm:text-xl">
+                Lista de Funcionários
+              </CardTitle>
+              <label className="flex items-center gap-2 cursor-pointer text-sm text-muted-foreground">
+                <Checkbox
+                  checked={showInactiveEmployees}
+                  onCheckedChange={(checked) =>
+                    setShowInactiveEmployees(checked === true)
+                  }
+                />
+                Exibir inativos
+              </label>
+            </div>
           </CardHeader>
           <CardContent className="p-0 sm:p-6">
             {/* Visualização Desktop: Tabela */}
@@ -1062,6 +1086,20 @@ function CompaniesEmployeesTab() {
         </Card>
       ) : (
         <Card>
+          <CardHeader>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <CardTitle className="text-lg sm:text-xl">Funcionários</CardTitle>
+              <label className="flex items-center gap-2 cursor-pointer text-sm text-muted-foreground">
+                <Checkbox
+                  checked={showInactiveEmployees}
+                  onCheckedChange={(checked) =>
+                    setShowInactiveEmployees(checked === true)
+                  }
+                />
+                Exibir inativos
+              </label>
+            </div>
+          </CardHeader>
           <CardContent className="flex flex-col items-center justify-center py-8 sm:py-12">
             <Users className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground mb-4" />
             <h3 className="text-base sm:text-lg font-semibold mb-2">

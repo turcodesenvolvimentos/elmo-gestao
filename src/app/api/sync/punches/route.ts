@@ -38,34 +38,44 @@ async function retry<T>(fn: () => Promise<T>, maxRetries = CONFIG.MAX_RETRIES): 
   throw new Error("Retry failed");
 }
 
+/** Busca funcionários ativos e inativos/demitidos (mesma lógica do script sync-punches). */
 async function fetchAllEmployees() {
-  const employees = [];
-  let page = 1;
-  let hasMore = true;
+  const employees: any[] = [];
+  const seenIds = new Set<number>();
 
-  while (hasMore) {
-    const response = await retry(() =>
-      solidesEmployerClient.get("/employee/find-all", {
-        params: {
-          page,
-          size: CONFIG.EMPLOYEES_PAGE_SIZE,
-          showFired: 0,
-        },
-      })
-    );
+  const fetchPages = async (showFired: number) => {
+    let page = 1;
+    let hasMore = true;
+    while (hasMore) {
+      const response = await retry(() =>
+        solidesEmployerClient.get("/employee/find-all", {
+          params: {
+            page,
+            size: CONFIG.EMPLOYEES_PAGE_SIZE,
+            showFired,
+          },
+        })
+      );
 
-    const data = response.data;
-    if (data.content && data.content.length > 0) {
-      employees.push(...data.content);
-      page++;
-      hasMore = !data.last && page <= (data.totalPages || Infinity);
-    } else {
-      hasMore = false;
+      const data = response.data;
+      if (data.content && data.content.length > 0) {
+        for (const emp of data.content) {
+          if (!seenIds.has(emp.id)) {
+            seenIds.add(emp.id);
+            employees.push(emp);
+          }
+        }
+        page++;
+        hasMore = !data.last && page <= (data.totalPages || Infinity);
+      } else {
+        hasMore = false;
+      }
+      await sleep(CONFIG.REQUEST_DELAY);
     }
+  };
 
-    await sleep(CONFIG.REQUEST_DELAY);
-  }
-
+  await fetchPages(0); // ativos
+  await fetchPages(1); // inativos/demitidos
   return employees;
 }
 

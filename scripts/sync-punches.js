@@ -2,15 +2,17 @@
 /**
  * Script de sincronização massiva de pontos da Sólides para o Supabase
  *
- * Sincroniza todos os pontos de todos os funcionários de uma data inicial até hoje.
+ * Sincroniza todos os pontos de todos os funcionários (ativos e inativos) de uma data inicial até hoje.
+ * Por padrão inclui funcionários demitidos/inativos; use --only-active para sincronizar só ativos.
  *
  * Uso:
- *   node scripts/sync-punches.js [--start-date=YYYY-MM-DD] [--end-date=YYYY-MM-DD] [--employee-id=ID]
+ *   node scripts/sync-punches.js [--start-date=YYYY-MM-DD] [--end-date=YYYY-MM-DD] [--employee-id=ID] [--only-active]
  *
  * Exemplos:
  *   node scripts/sync-punches.js --start-date=2025-01-01
  *   node scripts/sync-punches.js --start-date=2025-01-01 --end-date=2025-11-24
  *   node scripts/sync-punches.js --start-date=2025-01-01 --employee-id=123
+ *   node scripts/sync-punches.js --start-date=2025-01-01 --only-active
  */
 
 // Tentar carregar variáveis de ambiente do .env
@@ -120,32 +122,46 @@ async function retry(fn, maxRetries = CONFIG.MAX_RETRIES) {
   }
 }
 
-// Buscar todos os funcionários
-async function fetchAllEmployees() {
-  log("Buscando lista de funcionários...");
+// Buscar todos os funcionários (ativos e inativos/demitidos)
+async function fetchAllEmployees(options = { includeFired: true }) {
+  const { includeFired } = options;
+  log(
+    includeFired
+      ? "Buscando lista de funcionários (ativos e inativos)..."
+      : "Buscando lista de funcionários (apenas ativos)..."
+  );
   const employees = [];
-  let page = 1;
-  let hasMore = true;
+  const seenIds = new Set();
 
-  while (hasMore) {
-    try {
+  const fetchPage = async (showFired, label) => {
+    let page = 1;
+    let hasMore = true;
+    let total = 0;
+
+    while (hasMore) {
       const response = await retry(() =>
         solidesEmployerClient.get("/employee/find-all", {
           params: {
             page,
             size: CONFIG.EMPLOYEES_PAGE_SIZE,
-            showFired: 0, // Apenas funcionários ativos
+            showFired: showFired,
           },
         })
       );
 
       const data = response.data;
       if (data.content && data.content.length > 0) {
-        employees.push(...data.content);
+        for (const emp of data.content) {
+          if (!seenIds.has(emp.id)) {
+            seenIds.add(emp.id);
+            employees.push(emp);
+          }
+        }
+        total += data.content.length;
         log(
-          `Página ${page}/${data.totalPages || "?"}: ${
+          `  ${label} - Página ${page}/${data.totalPages || "?"}: ${
             data.content.length
-          } funcionários encontrados (Total: ${employees.length})`
+          } (Total único: ${employees.length})`
         );
         page++;
         hasMore = !data.last && page <= (data.totalPages || Infinity);
@@ -154,13 +170,21 @@ async function fetchAllEmployees() {
       }
 
       await sleep(CONFIG.REQUEST_DELAY);
-    } catch (error) {
-      log(
-        `Erro ao buscar funcionários (página ${page}): ${error.message}`,
-        "error"
-      );
-      throw error;
     }
+    return total;
+  };
+
+  try {
+    await fetchPage(0, "Ativos");
+    if (includeFired) {
+      await fetchPage(1, "Inativos/Demitidos");
+    }
+  } catch (error) {
+    log(
+      `Erro ao buscar funcionários: ${error.message}`,
+      "error"
+    );
+    throw error;
   }
 
   log(`Total de funcionários encontrados: ${employees.length}`, "success");
@@ -582,6 +606,7 @@ async function main() {
     startDate: "2025-01-01",
     endDate: formatDate(new Date()),
     employeeId: null,
+    onlyActive: false,
   };
 
   args.forEach((arg) => {
@@ -591,6 +616,8 @@ async function main() {
       options.endDate = arg.split("=")[1];
     } else if (arg.startsWith("--employee-id=")) {
       options.employeeId = parseInt(arg.split("=")[1]);
+    } else if (arg === "--only-active") {
+      options.onlyActive = true;
     }
   });
 
@@ -598,6 +625,9 @@ async function main() {
   log("🚀 Iniciando sincronização de pontos", "info");
   log("=".repeat(60));
   log(`Período: ${options.startDate} até ${options.endDate}`);
+  log(
+    `Funcionários: ${options.onlyActive ? "apenas ativos" : "ativos e inativos"}`
+  );
   if (options.employeeId) {
     log(`Funcionário específico: ID ${options.employeeId}`);
   }
@@ -631,7 +661,9 @@ async function main() {
     if (options.employeeId) {
       // Se especificou um ID, buscar todos e filtrar
       log(`Buscando funcionário específico (ID: ${options.employeeId})...`);
-      const allEmployees = await fetchAllEmployees();
+      const allEmployees = await fetchAllEmployees({
+        includeFired: !options.onlyActive,
+      });
       const employee = allEmployees.find(
         (emp) => emp.id === options.employeeId
       );
@@ -642,7 +674,9 @@ async function main() {
       employees = [employee];
       log(`Funcionário encontrado: ${employee.name}`, "success");
     } else {
-      employees = await fetchAllEmployees();
+      employees = await fetchAllEmployees({
+        includeFired: !options.onlyActive,
+      });
     }
 
     if (employees.length === 0) {

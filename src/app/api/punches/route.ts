@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
       | "REPROVED"
       | undefined;
 
-    const queryParams: Record<string, string | number> = {
+    const queryParams: Record<string, string | number | boolean> = {
       page: page.toString(),
       size: size.toString(),
     };
@@ -55,6 +55,8 @@ export async function GET(request: NextRequest) {
     if (status) {
       queryParams.status = status;
     }
+    // Incluir pontos de funcionários demitidos (doc: showFired - Show fired employees)
+    queryParams.showFired = true;
 
     const response = await solidesApiClient.get("punch", {
       params: queryParams,

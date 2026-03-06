@@ -66,6 +66,8 @@ interface FindAllEmployeesParams {
   page?: number;
   size?: number;
   showFired?: number;
+  /** Incluir funcionários inativos/demitidos na lista (mesmo que sync). */
+  includeFired?: boolean;
   lastUpdate?: number;
   managerExternalId?: string;
   branchExternalId?: string;

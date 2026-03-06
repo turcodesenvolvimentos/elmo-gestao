@@ -56,6 +56,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 
 /** Acidente/doença do trabalho (#0070C0) ou não relacionada ao trabalho (#00B0F0) */
@@ -162,9 +163,11 @@ export default function PontoPage() {
     status: "APPROVED",
   });
 
+  const [showInactiveEmployees, setShowInactiveEmployees] = useState(false);
   const { data: employees, isLoading: employeesLoading } = useEmployees({
     page: 1,
     size: 100,
+    includeFired: showInactiveEmployees,
   });
 
   const employeeNames = useMemo(() => {
@@ -828,7 +831,7 @@ export default function PontoPage() {
                     <div className="flex-1 space-y-4 lg:space-y-0 lg:flex lg:items-center lg:gap-4">
 
                       {/* ── Colaborador ── */}
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <Label className="whitespace-nowrap text-sm font-medium">
                           Colaborador:
                         </Label>
@@ -933,6 +936,15 @@ export default function PontoPage() {
                             <ChevronRight className="h-4 w-4" />
                           </Button>
 
+                          <label className="flex items-center gap-2 cursor-pointer text-sm text-muted-foreground whitespace-nowrap">
+                            <Checkbox
+                              checked={showInactiveEmployees}
+                              onCheckedChange={(checked) =>
+                                setShowInactiveEmployees(checked === true)
+                              }
+                            />
+                            Exibir inativos
+                          </label>
                           {filter.employeeId > 0 && (
                             <Button
                               variant="ghost"

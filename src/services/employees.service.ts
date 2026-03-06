@@ -12,6 +12,8 @@ export async function fetchEmployees(
   if (params.size) searchParams.append("size", params.size.toString());
   if (params.showFired !== undefined)
     searchParams.append("showFired", params.showFired.toString());
+  if (params.includeFired === true)
+    searchParams.append("includeFired", "1");
   if (params.lastUpdate)
     searchParams.append("lastUpdate", params.lastUpdate.toString());
   if (params.managerExternalId)
