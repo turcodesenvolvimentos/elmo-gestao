@@ -750,7 +750,7 @@ export default function PontoPage() {
           </div>
         </header>
 
-        <div className="flex flex-1 flex-col gap-6 p-6">
+        <div className="flex flex-1 flex-col gap-6 p-6 w-full min-h-0">
           {hasAnyError && (
             <Alert variant="destructive">
               <AlertDescription>
@@ -1068,8 +1068,8 @@ export default function PontoPage() {
                 </CardContent>
               </Card>
 
-              <Card className="flex-1 overflow-hidden">
-                <CardContent className="">
+              <Card className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <CardContent className="flex flex-col flex-1 min-h-0 pb-6">
                   <div className="border-b pb-4 mb-4">
                     <h3 className="text-lg font-semibold">Resultado</h3>
                     <p className="text-sm text-muted-foreground mt-1">
@@ -1077,8 +1077,15 @@ export default function PontoPage() {
                     </p>
                   </div>
 
-                  <div className="overflow-x-auto">
-                    <Table>
+                  {!hasFilters ? (
+                    <div className="flex flex-1 items-center justify-center min-h-[280px] rounded-lg border border-dashed border-muted-foreground/25 bg-muted/20">
+                      <p className="text-muted-foreground text-center text-sm px-4">
+                        Selecione um colaborador para visualizar os pontos
+                      </p>
+                    </div>
+                  ) : (
+                  <div className="overflow-x-auto min-h-[200px]">
+                    <Table className="w-full min-w-[800px]">
                       <TableHeader>
                         <tr className="bg-gray-50/50">
                           {dynamicColumns.map((item, index) => (
@@ -1096,16 +1103,7 @@ export default function PontoPage() {
                         </tr>
                       </TableHeader>
                       <TableBody>
-                        {!hasFilters ? (
-                          <TableRow>
-                            <TableCell
-                              colSpan={dynamicColumns.length}
-                              className="text-center py-8 text-muted-foreground"
-                            >
-                              Selecione um colaborador para visualizar os pontos
-                            </TableCell>
-                          </TableRow>
-                        ) : shouldSendDates && !isDateRangeValid ? (
+                        {shouldSendDates && !isDateRangeValid ? (
                           <TableRow>
                             <TableCell
                               colSpan={dynamicColumns.length}
@@ -1335,6 +1333,7 @@ export default function PontoPage() {
                       </TableBody>
                     </Table>
                   </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
