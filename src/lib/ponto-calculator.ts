@@ -43,9 +43,35 @@ function isNoturno(hora: number): boolean {
   return hora >= INICIO_NOTURNO || hora < FIM_NOTURNO;
 }
 
+function dateToYyyyMmDdLocal(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function isLibOrCustomHoliday(
+  d: Date,
+  customHolidayDates?: ReadonlySet<string>
+): boolean {
+  const fromLib = !!hd.isHoliday(d);
+  if (!customHolidayDates || customHolidayDates.size === 0) return fromLib;
+  return fromLib || customHolidayDates.has(dateToYyyyMmDdLocal(d));
+}
+
+/** Feriado nacional (lib BR) ou cadastrado em custom_holidays — mesma convenção de data YYYY-MM-DD do ponto */
+export function isHolidayForDisplay(
+  dateStrYyyyMmDd: string,
+  customHolidayDates?: ReadonlySet<string>
+): boolean {
+  const d = new Date(dateStrYyyyMmDd + "T12:00:00Z");
+  return isLibOrCustomHoliday(d, customHolidayDates);
+}
+
 export function calcularHorasPorPeriodo(
   punches: Array<{ dateIn?: string; dateOut?: string }>,
-  dataReferencia?: string | Date
+  dataReferencia?: string | Date,
+  customHolidayDates?: ReadonlySet<string>
 ) {
   const periodos: Array<{ inicio: Date; fim: Date }> = [];
   punches.forEach((punch) => {
@@ -90,7 +116,7 @@ export function calcularHorasPorPeriodo(
   }
 
   const diaSemana = dataPonto.getDay();
-  const ehFeriado = !!hd.isHoliday(dataPonto);
+  const ehFeriado = isLibOrCustomHoliday(dataPonto, customHolidayDates);
   const ehDomingo = diaSemana === 0;
   const ehSabado = diaSemana === 6;
 
@@ -301,11 +327,14 @@ export function calcularHorasPorPeriodo(
   const saidaFinal = periodos[periodos.length - 1].fim;
 
   const diaSemanaEntrada = entradaInicial.getDay();
-  const ehFeriadoEntrada = !!hd.isHoliday(entradaInicial);
+  const ehFeriadoEntrada = isLibOrCustomHoliday(
+    entradaInicial,
+    customHolidayDates
+  );
   const entradaEhDomingoOuFeriado = diaSemanaEntrada === 0 || ehFeriadoEntrada;
 
   const diaSemanaSaida = saidaFinal.getDay();
-  const ehFeriadoSaida = !!hd.isHoliday(saidaFinal);
+  const ehFeriadoSaida = isLibOrCustomHoliday(saidaFinal, customHolidayDates);
   const saidaEhDiaUtil =
     diaSemanaSaida >= 1 && diaSemanaSaida <= 5 && !ehFeriadoSaida;
 

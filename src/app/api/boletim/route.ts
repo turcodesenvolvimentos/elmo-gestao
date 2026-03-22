@@ -136,6 +136,16 @@ export async function GET(request: NextRequest) {
       throw punchesError;
     }
 
+    const { data: customHolidayRows } = await supabaseAdmin
+      .from("custom_holidays")
+      .select("holiday_date");
+
+    const customHolidaySet = new Set<string>(
+      (customHolidayRows || []).map(
+        (r: { holiday_date: string }) => r.holiday_date
+      )
+    );
+
     // Agrupar punches por funcionário
     const punchesByEmployee = new Map<number, Punch[]>();
 
@@ -223,7 +233,8 @@ export async function GET(request: NextRequest) {
 
         const horasCalculadas = calcularHorasPorPeriodo(
           punchesForCalculation,
-          date
+          date,
+          customHolidaySet
         );
 
         // Calcular valor monetário

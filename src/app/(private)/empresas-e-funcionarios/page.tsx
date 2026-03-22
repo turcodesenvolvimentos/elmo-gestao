@@ -88,6 +88,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { CustomHolidaysTab } from "./custom-holidays-tab";
 
 function PositionsManager({ companyId }: { companyId: string }) {
   const { data: positionsData, isLoading } = usePositions(companyId);
@@ -1447,7 +1448,9 @@ export default function EmpresasPage() {
           <div className="flex items-center gap-2">
             <SidebarTrigger />
             <Separator orientation="vertical" className="mr-2 h-4" />
-            <h1 className="text-xl font-semibold">Empresas e Funcionários</h1>
+            <h1 className="text-xl font-semibold">
+              Empresas, Funcionários e Feriados
+            </h1>
           </div>
         </header>
 
@@ -1523,7 +1526,7 @@ export default function EmpresasPage() {
                 ) : null}
 
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
-                  <TabsList className="grid-cols-2 w-full sm:w-auto">
+                  <TabsList className="grid w-full grid-cols-1 gap-2 sm:grid-cols-3 sm:w-auto">
                     <TabsTrigger value="empresas" className="gap-2">
                       <Building className="h-4 w-4" />
                       Empresas
@@ -1532,8 +1535,13 @@ export default function EmpresasPage() {
                       <Users className="h-4 w-4" />
                       Funcionários
                     </TabsTrigger>
+                    <TabsTrigger value="feriados" className="gap-2">
+                      <Calendar className="h-4 w-4" />
+                      Feriados
+                    </TabsTrigger>
                   </TabsList>
 
+                  {activeTab !== "feriados" && (
                   <Dialog
                     open={isDialogOpen}
                     onOpenChange={handleDialogOpenChange}
@@ -1711,6 +1719,7 @@ export default function EmpresasPage() {
                       </form>
                     </DialogContent>
                   </Dialog>
+                  )}
                 </div>
 
                 {companiesData?.companies &&
@@ -2066,6 +2075,10 @@ export default function EmpresasPage() {
               className="space-y-4 sm:space-y-6"
             >
               <CompaniesEmployeesTab />
+            </TabsContent>
+
+            <TabsContent value="feriados" className="space-y-4 sm:space-y-6">
+              <CustomHolidaysTab />
             </TabsContent>
           </Tabs>
 

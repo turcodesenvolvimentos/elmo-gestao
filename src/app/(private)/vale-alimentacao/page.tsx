@@ -30,9 +30,13 @@ import {
   useExportValeAlimentacaoPDF,
   useSaveValeAlimentacaoToHistory,
 } from "@/hooks/use-vale-alimentacao";
-import { calcularHorasPorPeriodo, formatarHoras } from "@/lib/ponto-calculator";
+import {
+  calcularHorasPorPeriodo,
+  formatarHoras,
+  isHolidayForDisplay,
+} from "@/lib/ponto-calculator";
 import { getCompanyFromPunch } from "@/utils/company-mapping";
-import Holidays from "date-holidays";
+import { useCustomHolidays } from "@/hooks/use-custom-holidays";
 import { Employee } from "@/types/employees";
 import { Company } from "@/types/companies";
 import { toast } from "sonner";
@@ -68,7 +72,13 @@ interface EmployeeSummary {
 }
 
 export default function ValeAlimentacaoPage() {
-  const hd = useMemo(() => new Holidays("BR"), []);
+  const { data: customHolidaysData } = useCustomHolidays();
+  const customHolidaySet = useMemo(() => {
+    const s = new Set<string>();
+    customHolidaysData?.holidays.forEach((h) => s.add(h.holiday_date));
+    return s;
+  }, [customHolidaysData?.holidays]);
+
   const [activeTab, setActiveTab] = useState("visualizar");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(
@@ -358,7 +368,11 @@ export default function ValeAlimentacaoPage() {
       const workDays: WorkDay[] = [];
 
       employeeGroups.forEach((group, dateStr) => {
-        const calculoHoras = calcularHorasPorPeriodo(group.punches, dateStr);
+        const calculoHoras = calcularHorasPorPeriodo(
+          group.punches,
+          dateStr,
+          customHolidaySet
+        );
         const totalHoursNumeric = calculoHoras.totalHoras;
         const totalHours = formatarHoras(totalHoursNumeric);
 
@@ -374,7 +388,7 @@ export default function ValeAlimentacaoPage() {
         // Determinar tipo de dia para regra de ativação automática
         const workDate = new Date(dateStr + "T12:00:00Z");
         const dayOfWeek = workDate.getDay(); // 0 = domingo, 6 = sábado
-        const isHoliday = !!hd.isHoliday(workDate);
+        const isHoliday = isHolidayForDisplay(dateStr, customHolidaySet);
         const isWeekend = dayOfWeek === 0 || dayOfWeek === 6; // Domingo ou sábado
         const isWeekendOrHoliday = isWeekend || isHoliday;
 
@@ -463,7 +477,7 @@ export default function ValeAlimentacaoPage() {
     companiesMap,
     employeesData,
     foodVouchersMap,
-    hd,
+    customHolidaySet,
   ]);
 
   // Calcular resumo por funcionário

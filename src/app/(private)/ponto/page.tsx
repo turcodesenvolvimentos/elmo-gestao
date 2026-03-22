@@ -1,8 +1,11 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { calcularHorasPorPeriodo, formatarHoras } from "@/lib/ponto-calculator";
-import Holidays from "date-holidays";
+import {
+  calcularHorasPorPeriodo,
+  formatarHoras,
+  isHolidayForDisplay,
+} from "@/lib/ponto-calculator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -33,6 +36,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { useEmployees } from "@/hooks/use-employees";
+import { useCustomHolidays } from "@/hooks/use-custom-holidays";
 import { usePunchesInfinite } from "@/hooks/use-punches";
 import {
   getCompanyFromPunch,
@@ -146,7 +150,13 @@ interface PunchFromApi {
 type Punch = PunchFromApi;
 
 export default function PontoPage() {
-  const hd = useMemo(() => new Holidays("BR"), []);
+  const { data: customHolidaysData } = useCustomHolidays();
+  const customHolidaySet = useMemo(() => {
+    const s = new Set<string>();
+    customHolidaysData?.holidays.forEach((h) => s.add(h.holiday_date));
+    return s;
+  }, [customHolidaysData?.holidays]);
+
   const [activeTab, setActiveTab] = useState("visualizar");
   const [openEmployee, setOpenEmployee] = useState(false);
   const [filter, setFilter] = useState<{
@@ -353,7 +363,7 @@ export default function PontoPage() {
           key,
           employeeName: punch.employee?.name || "-",
           company: getCompanyFromPunch(punch),
-          isHoliday: !!hd.isHoliday(new Date(baseDateStr + "T12:00:00Z")),
+          isHoliday: isHolidayForDisplay(baseDateStr, customHolidaySet),
           date: baseDateStr,
           formattedDate,
           dayOfWeek,
@@ -427,7 +437,11 @@ export default function PontoPage() {
       }
       if (ajusteTipo) group.ajusteTipo = ajusteTipo;
 
-      const calculoHoras = calcularHorasPorPeriodo(group.punches, group.date);
+      const calculoHoras = calcularHorasPorPeriodo(
+        group.punches,
+        group.date,
+        customHolidaySet
+      );
       totalsNumeric.horasDiurnas += calculoHoras.horasDiurnas;
       totalsNumeric.horasNoturnas += calculoHoras.horasNoturnas;
       totalsNumeric.horasFictas += calculoHoras.horasFictas;
@@ -504,7 +518,7 @@ export default function PontoPage() {
             key: `${employeeName}-${dateStr}`,
             employeeName,
             company,
-            isHoliday: !!hd.isHoliday(new Date(dateStr + "T12:00:00Z")),
+            isHoliday: isHolidayForDisplay(dateStr, customHolidaySet),
             date: dateStr,
             formattedDate,
             dayOfWeek,
@@ -571,7 +585,7 @@ export default function PontoPage() {
     filter.startDate,
     filter.endDate,
     shouldSendDates,
-    hd,
+    customHolidaySet,
   ]);
 
   const prepareExportData = (): PontoData[] => {

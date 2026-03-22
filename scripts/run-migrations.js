@@ -49,6 +49,7 @@ function getMigrations() {
     "create_boletim_exports_table.sql",
     "create_ponto_exports_table.sql",
     "create_vale_alimentacao_exports_table.sql",
+    "create_custom_holidays_table.sql",
   ];
 
   const orderedFiles = executionOrder.filter((file) => allFiles.includes(file));

@@ -43,7 +43,7 @@ const navItems = [
     permissions: [Permission.USERS],
   },
   {
-    title: "Empresas e Funcionários",
+    title: "Empresas, Funcionários e Feriados",
     url: "/empresas-e-funcionarios",
     icon: Building,
     permissions: [Permission.COMPANIES, Permission.EMPLOYEES],

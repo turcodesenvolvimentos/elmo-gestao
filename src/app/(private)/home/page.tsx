@@ -1,6 +1,15 @@
 "use client";
 
-import { Utensils, Clock, Users, File, LogOut, Building, CalendarDays } from "lucide-react";
+import {
+  Utensils,
+  Clock,
+  Users,
+  File,
+  LogOut,
+  Building,
+  Calendar,
+  CalendarDays,
+} from "lucide-react";
 import banner from "@/assets/banner.png";
 import Image from "next/image";
 import Link from "next/link";
@@ -27,7 +36,7 @@ const menuCards: MenuCard[] = [
   {
     href: "/empresas-e-funcionarios",
     icon: Building,
-    label: "Empresas e Funcionários",
+    label: "Empresas, Funcionários e Feriados",
     permissions: [Permission.COMPANIES, Permission.EMPLOYEES],
   },
   {
@@ -112,12 +121,13 @@ export default function Page() {
                 <Link
                   key={card.href}
                   href={card.href}
-                  className="bg-white flex justify-center items-center flex-col py-8 px-6 rounded-2xl border border-green-800/20 hover:border-green-900/50 transition-all duration-300 cursor-pointer hover:scale-105 hover:bg-transparent shadow-lg hover:shadow-xl backdrop-blur-sm"
+                  className="bg-white flex justify-center items-center flex-col py-8 px-6 rounded-2xl border border-green-800/20 hover:border-green-900/50 transition-all duration-300 cursor-pointer hover:scale-105 hover:bg-transparent shadow-lg hover:shadow-xl backdrop-blur-sm text-center"
                 >
                   {card.href === "/empresas-e-funcionarios" ? (
-                    <div className="flex items-center gap-3 mb-2">
-                      <Building size={40} className="transition-colors duration-300" />
-                      <Users size={40} className="transition-colors duration-300" />
+                    <div className="flex flex-wrap items-center justify-center gap-3 mb-2">
+                      <Building size={40} className="transition-colors duration-300 shrink-0" />
+                      <Users size={40} className="transition-colors duration-300 shrink-0" />
+                      <Calendar size={40} className="transition-colors duration-300 shrink-0" />
                     </div>
                   ) : (
                     <IconComponent
@@ -125,7 +135,7 @@ export default function Page() {
                       className="mb-2 transition-colors duration-300"
                     />
                   )}
-                  <span className="text-gray-700 font-medium group-hover:text-gray-900 transition-colors duration-300 text-sm sm:text-base">
+                  <span className="w-full text-center text-gray-700 font-medium group-hover:text-gray-900 transition-colors duration-300 text-sm sm:text-base">
                     {card.label}
                   </span>
                 </Link>
