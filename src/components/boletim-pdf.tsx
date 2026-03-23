@@ -77,10 +77,11 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   // Colunas
-  col1: { width: "11%", fontSize: 8 }, // Nome
-  col2: { width: "8%", fontSize: 7 }, // Função
-  col3: { width: "7%", fontSize: 7 }, // Setor
-  col4: { width: "5.5%", fontSize: 7 }, // Dia
+  col1: { width: "9%", fontSize: 8 }, // Nome
+  col2: { width: "7%", fontSize: 7 }, // Função
+  col3: { width: "6%", fontSize: 7 }, // Setor
+  colLocal: { width: "7%", fontSize: 6 }, // Empresa no dia
+  col4: { width: "5%", fontSize: 7 }, // Dia
   col5: { width: "6%", fontSize: 7 }, // Dia Semana
   col6: { width: "4%", fontSize: 7 }, // Entrada 1
   col7: { width: "4%", fontSize: 7 }, // Saída 1
@@ -141,6 +142,7 @@ const styles = StyleSheet.create({
 
 interface BoletimData {
   employee_name: string;
+  work_company?: string;
   position: string;
   department: string;
   date: string;
@@ -305,6 +307,7 @@ export const BoletimPDF: React.FC<BoletimPDFProps> = ({
             <Text style={styles.col1}>Colaborador</Text>
             <Text style={styles.col2}>Função</Text>
             <Text style={styles.col3}>Setor</Text>
+            <Text style={styles.colLocal}>Empresa (dia)</Text>
             <Text style={styles.col4}>Dia</Text>
             <Text style={styles.col5}>Dia Sem.</Text>
             <Text style={styles.col6}>Ent. 1</Text>
@@ -327,6 +330,9 @@ export const BoletimPDF: React.FC<BoletimPDFProps> = ({
               <Text style={styles.col1}>{row.employee_name}</Text>
               <Text style={styles.col2}>{row.position}</Text>
               <Text style={styles.col3}>{row.department}</Text>
+              <Text style={styles.colLocal}>
+                {row.work_company ?? "—"}
+              </Text>
               <Text style={styles.col4}>{formatDate(row.date)}</Text>
               <Text style={styles.col5}>{row.day_of_week}</Text>
               <Text style={styles.col6}>{row.entry1 || "-"}</Text>
@@ -348,7 +354,7 @@ export const BoletimPDF: React.FC<BoletimPDFProps> = ({
 
           {/* Total Row */}
           <View style={styles.tableTotalRow}>
-            <Text style={{ width: "58%" }}>TOTAIS</Text>
+            <Text style={{ width: "54%" }}>TOTAIS</Text>
             <Text style={styles.col10}>{totals.totalHours}</Text>
             <Text style={styles.col11}>{totals.normalHours}</Text>
             <Text style={styles.col12}>{totals.nightAdditional}</Text>

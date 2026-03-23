@@ -1,4 +1,4 @@
-const ADDRESS_TO_COMPANY: Record<string, string> = {
+export const ADDRESS_TO_COMPANY: Record<string, string> = {
   "Rodovia Duque de Caxias, 963, Reta - São Francisco do Sul, Santa Catarina":
     "Ourofértil 1",
   "Rodovia Duque de Caxias, 1400, Reta - São Francisco do Sul, Santa Catarina":
@@ -12,22 +12,30 @@ const ADDRESS_TO_COMPANY: Record<string, string> = {
     "Ourofértil 2",
 };
 
+/** Nome amigável quando não há escala nem endereço mapeado nos pontos. */
+export const NO_MAPPED_COMPANY_LABEL = "Sem empresa";
+
+export function getCompanyNameFromRawAddresses(
+  locationInAddress?: string | null,
+  locationOutAddress?: string | null
+): string {
+  if (locationInAddress && ADDRESS_TO_COMPANY[locationInAddress]) {
+    return ADDRESS_TO_COMPANY[locationInAddress];
+  }
+  if (locationOutAddress && ADDRESS_TO_COMPANY[locationOutAddress]) {
+    return ADDRESS_TO_COMPANY[locationOutAddress];
+  }
+  return NO_MAPPED_COMPANY_LABEL;
+}
+
 export function getCompanyFromPunch(punch: {
   locationIn?: { address?: string };
   locationOut?: { address?: string };
 }): string {
-  const addressIn = punch.locationIn?.address;
-  const addressOut = punch.locationOut?.address;
-
-  if (addressIn && ADDRESS_TO_COMPANY[addressIn]) {
-    return ADDRESS_TO_COMPANY[addressIn];
-  }
-
-  if (addressOut && ADDRESS_TO_COMPANY[addressOut]) {
-    return ADDRESS_TO_COMPANY[addressOut];
-  }
-
-  return "-";
+  return getCompanyNameFromRawAddresses(
+    punch.locationIn?.address,
+    punch.locationOut?.address
+  );
 }
 
 export function getMappedCompanies(): string[] {

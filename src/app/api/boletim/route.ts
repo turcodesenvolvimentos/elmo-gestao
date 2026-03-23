@@ -5,6 +5,10 @@ import { calcularHorasPorPeriodo, formatarHoras } from "@/lib/ponto-calculator";
 import { Permission } from "@/types/permissions";
 import { checkPermission } from "@/lib/auth/permissions";
 import type { BoletimData } from "@/services/boletim.service";
+import {
+  fetchEscalaCompanyEntries,
+  resolveWorkCompanyName,
+} from "@/lib/punch-company-resolution";
 
 const DAYS_OF_WEEK = [
   "Domingo",
@@ -20,6 +24,8 @@ interface Punch {
   date: string;
   date_in: string;
   date_out: string;
+  location_in_address?: string | null;
+  location_out_address?: string | null;
 }
 
 // GET - Buscar dados do boletim por empresa e período
@@ -121,10 +127,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ data: [] }, { status: 200 });
     }
 
+    const employeeInternalIds = employeeCompanies
+      .map((ec) => (ec as { employee_id?: string }).employee_id)
+      .filter((id: string | undefined): id is string => !!id);
+
+    const escalaEntries = await fetchEscalaCompanyEntries(supabaseAdmin, {
+      startDate,
+      endDate,
+      employeeIds: employeeInternalIds,
+    });
+
     // Buscar pontos aprovados no período
     const { data: punches, error: punchesError } = await supabaseAdmin
       .from("punches")
-      .select("employee_id, employee_name, date, date_in, date_out")
+      .select(
+        "employee_id, employee_name, date, date_in, date_out, location_in_address, location_out_address"
+      )
       .in("employee_id", employeeSolidesIds)
       .gte("date", startDate)
       .lte("date", endDate)
@@ -150,16 +168,27 @@ export async function GET(request: NextRequest) {
     const punchesByEmployee = new Map<number, Punch[]>();
 
     if (punches) {
-      punches.forEach((punch: { employee_id: number; date: string; date_in: string; date_out: string }) => {
-        if (!punchesByEmployee.has(punch.employee_id)) {
-          punchesByEmployee.set(punch.employee_id, []);
+      punches.forEach(
+        (punch: {
+          employee_id: number;
+          date: string;
+          date_in: string;
+          date_out: string;
+          location_in_address?: string | null;
+          location_out_address?: string | null;
+        }) => {
+          if (!punchesByEmployee.has(punch.employee_id)) {
+            punchesByEmployee.set(punch.employee_id, []);
+          }
+          punchesByEmployee.get(punch.employee_id)!.push({
+            date: punch.date,
+            date_in: punch.date_in,
+            date_out: punch.date_out,
+            location_in_address: punch.location_in_address,
+            location_out_address: punch.location_out_address,
+          });
         }
-        punchesByEmployee.get(punch.employee_id)!.push({
-          date: punch.date,
-          date_in: punch.date_in,
-          date_out: punch.date_out,
-        });
-      });
+      );
     }
 
     // Processar dados para o boletim
@@ -195,6 +224,15 @@ export async function GET(request: NextRequest) {
           (a, b) =>
             new Date(a.date_in).getTime() - new Date(b.date_in).getTime()
         );
+
+        const firstPunch = sortedPunches[0];
+        const workCompany = resolveWorkCompanyName({
+          employeeSolidesId: employeeSolidesId,
+          workDate: date,
+          locationInAddress: firstPunch?.location_in_address,
+          locationOutAddress: firstPunch?.location_out_address,
+          escalaEntries,
+        });
 
         // Pegar os dois primeiros períodos (entry1/exit1, entry2/exit2)
         const entry1 = sortedPunches[0]
@@ -267,6 +305,7 @@ export async function GET(request: NextRequest) {
         boletimData.push({
           employee_id: employeeId,
           employee_name: employeeName,
+          work_company: workCompany,
           position: position?.name || "Sem cargo",
           department: ec.department || "Sem setor",
           date,

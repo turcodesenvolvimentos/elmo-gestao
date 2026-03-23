@@ -35,7 +35,8 @@ import {
   formatarHoras,
   isHolidayForDisplay,
 } from "@/lib/ponto-calculator";
-import { getCompanyFromPunch } from "@/utils/company-mapping";
+import { resolveWorkCompanyName } from "@/lib/punch-company-resolution";
+import { usePontoEscalaCompanies } from "@/hooks/use-ponto-escala-companies";
 import { useCustomHolidays } from "@/hooks/use-custom-holidays";
 import { Employee } from "@/types/employees";
 import { Company } from "@/types/companies";
@@ -171,6 +172,12 @@ export default function ValeAlimentacaoPage() {
     "APPROVED",
     hasFilters && isDateRangeValid
   );
+
+  const { data: escalaEntries = [] } = usePontoEscalaCompanies({
+    startDate: appliedFilters.startDate,
+    endDate: appliedFilters.endDate,
+    enabled: hasFilters && isDateRangeValid,
+  });
 
   // Criar mapa de empresas por nome para buscar valores de VR e Ajuda de Custo
   const companiesMap = useMemo(() => {
@@ -337,7 +344,13 @@ export default function ValeAlimentacaoPage() {
       if (!employeeGroups.has(baseDateStr)) {
         const [year, month, day] = baseDateStr.split("-");
         const formattedDate = `${day}/${month}/${year}`;
-        const company = getCompanyFromPunch(punch);
+        const company = resolveWorkCompanyName({
+          employeeSolidesId: employeeId,
+          workDate: baseDateStr,
+          locationInAddress: punch.locationIn?.address,
+          locationOutAddress: punch.locationOut?.address,
+          escalaEntries,
+        });
 
         employeeGroups.set(baseDateStr, {
           date: baseDateStr,
@@ -478,6 +491,7 @@ export default function ValeAlimentacaoPage() {
     employeesData,
     foodVouchersMap,
     customHolidaySet,
+    escalaEntries,
   ]);
 
   // Calcular resumo por funcionário

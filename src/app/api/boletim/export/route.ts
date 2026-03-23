@@ -7,6 +7,7 @@ import path from "path";
 
 interface BoletimData {
   employee_name: string;
+  work_company?: string;
   position: string;
   department: string;
   date: string;

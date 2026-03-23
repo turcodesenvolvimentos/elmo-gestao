@@ -954,6 +954,9 @@ export default function BoletimPage() {
                                 Setor
                               </th>
                               <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
+                                Empresa (dia)
+                              </th>
+                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
                                 Dia
                               </th>
                               <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
@@ -1001,7 +1004,7 @@ export default function BoletimPage() {
                             {filteredBulletinData.length === 0 ? (
                               <tr>
                                 <td
-                                  colSpan={16}
+                                  colSpan={17}
                                   className="p-8 text-center text-muted-foreground"
                                 >
                                   Nenhum registro encontrado com os filtros
@@ -1037,6 +1040,9 @@ export default function BoletimPage() {
                                       </td>
                                       <td className="p-3 align-middle whitespace-nowrap">
                                         {item.department}
+                                      </td>
+                                      <td className="p-3 align-middle whitespace-nowrap">
+                                        {item.work_company ?? "—"}
                                       </td>
                                       <td className="p-3 align-middle whitespace-nowrap">
                                         {formatDate(item.date)}
@@ -1107,7 +1113,7 @@ export default function BoletimPage() {
                                 {/* Linha de totais */}
                                 <tr className="border-t bg-muted/50 font-semibold">
                                   <td
-                                    colSpan={8}
+                                    colSpan={9}
                                     className="p-3 align-middle text-right"
                                   >
                                     Totais:

@@ -39,9 +39,11 @@ import { useEmployees } from "@/hooks/use-employees";
 import { useCustomHolidays } from "@/hooks/use-custom-holidays";
 import { usePunchesInfinite } from "@/hooks/use-punches";
 import {
-  getCompanyFromPunch,
   getMappedCompanies,
+  NO_MAPPED_COMPANY_LABEL,
 } from "@/utils/company-mapping";
+import { resolveWorkCompanyName } from "@/lib/punch-company-resolution";
+import { usePontoEscalaCompanies } from "@/hooks/use-ponto-escala-companies";
 import { useSyncPunches, useLastSyncDate } from "@/hooks/use-sync";
 import { RefreshCw, Download, Loader2, X } from "lucide-react";
 import { PontoHistory } from "./components/ponto-history";
@@ -253,6 +255,13 @@ export default function PontoPage() {
     canFetch
   );
 
+  const { data: escalaEntries = [] } = usePontoEscalaCompanies({
+    startDate: filter.startDate,
+    endDate: filter.endDate,
+    employeeSolidesId: filter.employeeId > 0 ? filter.employeeId : undefined,
+    enabled: canFetch && shouldSendDates && isDateRangeValid,
+  });
+
   const syncMutation = useSyncPunches();
   const { data: lastSyncData } = useLastSyncDate();
 
@@ -287,7 +296,23 @@ export default function PontoPage() {
 
     if (filter.company !== "Todos") {
       allPunchesRaw = allPunchesRaw.filter((punch) => {
-        const company = getCompanyFromPunch(punch);
+        const punchDateStr = punch.date
+          ? punch.date.includes("T")
+            ? punch.date.split("T")[0]
+            : punch.date.substring(0, 10)
+          : punch.dateIn
+            ? punch.dateIn.split("T")[0]
+            : punch.dateOut
+              ? punch.dateOut.split("T")[0]
+              : null;
+        if (!punchDateStr) return false;
+        const company = resolveWorkCompanyName({
+          employeeSolidesId: filter.employeeId,
+          workDate: punchDateStr,
+          locationInAddress: punch.locationIn?.address,
+          locationOutAddress: punch.locationOut?.address,
+          escalaEntries,
+        });
         return company === filter.company;
       });
     }
@@ -362,7 +387,13 @@ export default function PontoPage() {
         grouped.set(key, {
           key,
           employeeName: punch.employee?.name || "-",
-          company: getCompanyFromPunch(punch),
+          company: resolveWorkCompanyName({
+            employeeSolidesId: filter.employeeId,
+            workDate: baseDateStr,
+            locationInAddress: punch.locationIn?.address,
+            locationOutAddress: punch.locationOut?.address,
+            escalaEntries,
+          }),
           isHoliday: isHolidayForDisplay(baseDateStr, customHolidaySet),
           date: baseDateStr,
           formattedDate,
@@ -512,7 +543,13 @@ export default function PontoPage() {
           });
           const dayOfWeekNumber = date.getDay();
 
-          const company = groups[0]?.company || "-";
+          const company = resolveWorkCompanyName({
+            employeeSolidesId: filter.employeeId,
+            workDate: dateStr,
+            locationInAddress: null,
+            locationOutAddress: null,
+            escalaEntries,
+          });
 
           const emptyGroup: GroupedPunch = {
             key: `${employeeName}-${dateStr}`,
@@ -584,8 +621,10 @@ export default function PontoPage() {
     filter.company,
     filter.startDate,
     filter.endDate,
+    filter.employeeId,
     shouldSendDates,
     customHolidaySet,
+    escalaEntries,
   ]);
 
   const prepareExportData = (): PontoData[] => {
@@ -717,7 +756,9 @@ export default function PontoPage() {
   const mappedCompanies = getMappedCompanies();
   const companiesList = [
     "Todos",
-    ...mappedCompanies.sort((a, b) => a.localeCompare(b)),
+    ...[...mappedCompanies, NO_MAPPED_COMPANY_LABEL]
+      .filter((v, i, arr) => arr.indexOf(v) === i)
+      .sort((a, b) => a.localeCompare(b)),
   ];
 
   const dynamicColumns = useMemo(() => {
