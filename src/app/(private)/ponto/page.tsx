@@ -42,6 +42,7 @@ import {
   getMappedCompanies,
   NO_MAPPED_COMPANY_LABEL,
 } from "@/utils/company-mapping";
+import { formatEmployeeName } from "@/utils/employee-name-format";
 import { resolveWorkCompanyName } from "@/lib/punch-company-resolution";
 import { usePontoEscalaCompanies } from "@/hooks/use-ponto-escala-companies";
 import { useSyncPunches, useLastSyncDate } from "@/hooks/use-sync";
@@ -182,35 +183,39 @@ export default function PontoPage() {
     includeFired: showInactiveEmployees,
   });
 
-  const employeeNames = useMemo(() => {
+  const employeeOptions = useMemo(() => {
     if (!employees?.content) return [];
     return employees.content
-      .map((emp) => emp.name)
-      .sort((a, b) => a.localeCompare(b));
+      .map((emp) => ({
+        id: emp.id,
+        name: formatEmployeeName(emp.name),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [employees]);
 
   const selectedEmployeeName = useMemo(() => {
     if (!filter.employeeId || !employees?.content) return "";
     const employee = employees.content.find((e) => e.id === filter.employeeId);
-    return employee?.name || "";
+    return employee ? formatEmployeeName(employee.name) : "";
   }, [filter.employeeId, employees]);
 
   const navigateEmployee = (direction: "prev" | "next") => {
-    if (employeeNames.length === 0) return;
-    const currentIndex = employeeNames.indexOf(selectedEmployeeName);
+    if (employeeOptions.length === 0) return;
+    const currentIndex = employeeOptions.findIndex(
+      (employee) => employee.id === filter.employeeId
+    );
     let nextIndex: number;
     if (currentIndex === -1) {
-      nextIndex = direction === "next" ? 0 : employeeNames.length - 1;
+      nextIndex = direction === "next" ? 0 : employeeOptions.length - 1;
     } else {
       nextIndex =
         direction === "next"
-          ? (currentIndex + 1) % employeeNames.length
-          : (currentIndex - 1 + employeeNames.length) % employeeNames.length;
+          ? (currentIndex + 1) % employeeOptions.length
+          : (currentIndex - 1 + employeeOptions.length) % employeeOptions.length;
     }
-    const nextName = employeeNames[nextIndex];
-    const employee = employees?.content.find((e) => e.name === nextName);
-    if (employee) {
-      setFilter((prev) => ({ ...prev, employeeId: employee.id }));
+    const nextEmployee = employeeOptions[nextIndex];
+    if (nextEmployee) {
+      setFilter((prev) => ({ ...prev, employeeId: nextEmployee.id }));
     }
   };
 
@@ -335,7 +340,7 @@ export default function PontoPage() {
     >();
 
     allPunchesRaw.forEach((punch: Punch) => {
-      const employeeName = punch.employee?.name || "sem-nome";
+      const employeeName = formatEmployeeName(punch.employee?.name) || "Sem Nome";
       const rawDate = punch.date ?? punch.dateIn ?? punch.dateOut;
       let punchDateStr: string | null = null;
       if (typeof rawDate === "string") {
@@ -386,7 +391,7 @@ export default function PontoPage() {
 
         grouped.set(key, {
           key,
-          employeeName: punch.employee?.name || "-",
+          employeeName: formatEmployeeName(punch.employee?.name) || "-",
           company: resolveWorkCompanyName({
             employeeSolidesId: filter.employeeId,
             workDate: baseDateStr,
@@ -630,7 +635,7 @@ export default function PontoPage() {
   const prepareExportData = (): PontoData[] => {
     return groupedPunches.map((group) => {
       const emp = employees?.content?.find(
-        (e) => e.name === group.employeeName
+        (e) => formatEmployeeName(e.name) === group.employeeName
       );
       const entry1 = group.punches[0]?.dateIn
         ? new Date(group.punches[0].dateIn).toLocaleTimeString("pt-BR", {
@@ -695,7 +700,7 @@ export default function PontoPage() {
     saveToHistoryMutation.mutate(
       {
         employeeId: filter.employeeId > 0 ? filter.employeeId : undefined,
-        employeeName: selectedEmployee?.name,
+        employeeName: formatEmployeeName(selectedEmployee?.name),
         startDate: filter.startDate,
         endDate: filter.endDate,
         data: exportData,
@@ -710,7 +715,7 @@ export default function PontoPage() {
       {
         onSuccess: () => {
           exportPDFMutation.mutate({
-            employeeName: selectedEmployee?.name,
+            employeeName: formatEmployeeName(selectedEmployee?.name),
             startDate: filter.startDate,
             endDate: filter.endDate,
             data: exportData,
@@ -933,21 +938,16 @@ export default function PontoPage() {
                                       />
                                       Todos
                                     </CommandItem>
-                                    {employeeNames.map((name) => {
-                                      const employee = employees?.content.find(
-                                        (e) => e.name === name
-                                      );
+                                    {employeeOptions.map((employee) => {
                                       return (
                                         <CommandItem
-                                          key={name}
-                                          value={name}
+                                          key={employee.id}
+                                          value={employee.name}
                                           onSelect={() => {
-                                            if (employee) {
-                                              setFilter((prev) => ({
-                                                ...prev,
-                                                employeeId: employee.id,
-                                              }));
-                                            }
+                                            setFilter((prev) => ({
+                                              ...prev,
+                                              employeeId: employee.id,
+                                            }));
                                             setOpenEmployee(false);
                                           }}
                                         >
@@ -959,7 +959,7 @@ export default function PontoPage() {
                                                 : "opacity-0"
                                             )}
                                           />
-                                          {name}
+                                          {employee.name}
                                         </CommandItem>
                                       );
                                     })}
@@ -974,7 +974,7 @@ export default function PontoPage() {
                             size="icon"
                             className="h-9 w-9"
                             onClick={() => navigateEmployee("prev")}
-                            disabled={employeeNames.length === 0}
+                            disabled={employeeOptions.length === 0}
                             title="Colaborador anterior"
                           >
                             <ChevronLeft className="h-4 w-4" />
@@ -985,7 +985,7 @@ export default function PontoPage() {
                             size="icon"
                             className="h-9 w-9"
                             onClick={() => navigateEmployee("next")}
-                            disabled={employeeNames.length === 0}
+                            disabled={employeeOptions.length === 0}
                             title="Próximo colaborador"
                           >
                             <ChevronRight className="h-4 w-4" />

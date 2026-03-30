@@ -66,6 +66,7 @@ import {
 import type { BoletimData } from "@/services/boletim.service";
 import { BoletimHistory } from "./components/boletim-history";
 import { Separator } from "@/components/ui/separator";
+import { formatEmployeeName } from "@/utils/employee-name-format";
 
 // Importação dinâmica do PDFViewer (só funciona no client-side)
 const PDFViewer = dynamic(
@@ -1033,7 +1034,7 @@ export default function BoletimPage() {
                                             : "bg-background"
                                         }`}
                                       >
-                                        {item.employee_name}
+                                        {formatEmployeeName(item.employee_name)}
                                       </td>
                                       <td className="p-3 align-middle whitespace-nowrap">
                                         {item.position}
@@ -1259,7 +1260,7 @@ export default function BoletimPage() {
               <DialogDescription>
                 Edite os valores para{" "}
                 {editingRow !== null &&
-                  filteredBulletinData[editingRow]?.employee_name}
+                  formatEmployeeName(filteredBulletinData[editingRow]?.employee_name)}
               </DialogDescription>
             </DialogHeader>
 

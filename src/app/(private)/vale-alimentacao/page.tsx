@@ -37,6 +37,7 @@ import {
 } from "@/lib/ponto-calculator";
 import { resolveWorkCompanyName } from "@/lib/punch-company-resolution";
 import { usePontoEscalaCompanies } from "@/hooks/use-ponto-escala-companies";
+import { formatEmployeeName } from "@/utils/employee-name-format";
 import { useCustomHolidays } from "@/hooks/use-custom-holidays";
 import { Employee } from "@/types/employees";
 import { Company } from "@/types/companies";
@@ -289,7 +290,7 @@ export default function ValeAlimentacaoPage() {
         locationIn?: { address?: string };
         locationOut?: { address?: string };
       }) => {
-      const employeeName = punch.employee?.name || "sem-nome";
+      const employeeName = formatEmployeeName(punch.employee?.name) || "Sem Nome";
       // Tentar encontrar por nome exato primeiro
       let employeeId = employeesByNameMap.get(employeeName);
 
@@ -531,7 +532,7 @@ export default function ValeAlimentacaoPage() {
 
       summaries.push({
         id: employee.id,
-        name: employee.name,
+        name: formatEmployeeName(employee.name),
         totalVr,
         totalCostHelp,
       });
@@ -644,7 +645,7 @@ export default function ValeAlimentacaoPage() {
     return employeeSummaries.map((summary) => {
       const emp = employeesData?.content?.find((e) => e.id === summary.id);
       return {
-        employeeName: summary.name,
+        employeeName: formatEmployeeName(summary.name),
         totalVr: summary.totalVr,
         totalCostHelp: summary.totalCostHelp,
         employeeCpf: emp?.cpf,
@@ -664,7 +665,7 @@ export default function ValeAlimentacaoPage() {
     if (!employee) return [];
 
     return workDays.map((day) => ({
-      employeeName: employee.name || "",
+      employeeName: formatEmployeeName(employee.name),
       date: day.date || "",
       company: day.company || "",
       entry1: day.entry1 || "00:00",
@@ -739,7 +740,7 @@ export default function ValeAlimentacaoPage() {
     saveToHistoryMutation.mutate(
       {
         employeeId: selectedEmployee.id,
-        employeeName: selectedEmployee.name,
+        employeeName: formatEmployeeName(selectedEmployee.name),
         startDate: appliedFilters.startDate,
         endDate: appliedFilters.endDate,
         data: exportData,
@@ -754,7 +755,7 @@ export default function ValeAlimentacaoPage() {
         onSuccess: () => {
           // Após salvar no histórico, fazer download do PDF
           exportPDFMutation.mutate({
-            employeeName: selectedEmployee.name,
+            employeeName: formatEmployeeName(selectedEmployee.name),
             startDate: appliedFilters.startDate,
             endDate: appliedFilters.endDate,
             data: exportData,
@@ -970,7 +971,7 @@ export default function ValeAlimentacaoPage() {
                           className="border-b hover:bg-muted/50"
                         >
                           <td className="p-4 align-middle font-medium">
-                            {employee.name}
+                            {formatEmployeeName(employee.name)}
                           </td>
                           <td className="p-4 align-middle">
                             {formatCurrency(employee.totalVr)}

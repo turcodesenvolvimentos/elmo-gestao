@@ -43,6 +43,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+import { formatEmployeeName } from "@/utils/employee-name-format";
 
 export function ValeAlimentacaoHistory() {
   const [currentPage, setCurrentPage] = useState(1);
@@ -167,7 +168,9 @@ export function ValeAlimentacaoHistory() {
                           <TableCell className="font-medium">
                             <div className="flex items-center gap-2">
                               <User className="h-4 w-4 text-muted-foreground" />
-                              {item.employee_name || "Geral"}
+                              {item.employee_name
+                                ? formatEmployeeName(item.employee_name)
+                                : "Geral"}
                             </div>
                           </TableCell>
                           <TableCell>

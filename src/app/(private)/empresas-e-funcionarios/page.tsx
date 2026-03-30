@@ -89,6 +89,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CustomHolidaysTab } from "./custom-holidays-tab";
+import { formatEmployeeName } from "@/utils/employee-name-format";
 
 function PositionsManager({ companyId }: { companyId: string }) {
   const { data: positionsData, isLoading } = usePositions(companyId);
@@ -860,7 +861,7 @@ function CompaniesEmployeesTab() {
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           <User className="h-4 w-4 text-muted-foreground" />
-                          {employee.name}
+                          {formatEmployeeName(employee.name)}
                         </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
@@ -938,7 +939,7 @@ function CompaniesEmployeesTab() {
                       <div className="flex items-center gap-2">
                         <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                         <h3 className="font-semibold text-base truncate">
-                          {employee.name}
+                          {formatEmployeeName(employee.name)}
                         </h3>
                       </div>
                       <div className="space-y-2 text-sm">
@@ -1025,7 +1026,7 @@ function CompaniesEmployeesTab() {
                           <div className="flex items-center gap-2">
                             <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                             <span className="truncate max-w-[180px]">
-                              {employee.name}
+                              {formatEmployeeName(employee.name)}
                             </span>
                           </div>
                         </TableCell>

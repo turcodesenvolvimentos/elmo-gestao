@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Image,
 } from "@react-pdf/renderer";
+import { formatEmployeeName } from "@/utils/employee-name-format";
 
 const styles = StyleSheet.create({
   page: {
@@ -327,7 +328,9 @@ export const BoletimPDF: React.FC<BoletimPDFProps> = ({
           {/* Rows */}
           {data.map((row, index) => (
             <View key={index} style={styles.tableRow}>
-              <Text style={styles.col1}>{row.employee_name}</Text>
+              <Text style={styles.col1}>
+                {formatEmployeeName(row.employee_name)}
+              </Text>
               <Text style={styles.col2}>{row.position}</Text>
               <Text style={styles.col3}>{row.department}</Text>
               <Text style={styles.colLocal}>

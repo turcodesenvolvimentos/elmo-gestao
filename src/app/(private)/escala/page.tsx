@@ -71,6 +71,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { formatEmployeeName } from "@/utils/employee-name-format";
 
 export default function EscalaPage() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -699,7 +700,7 @@ export default function EscalaPage() {
                                 />
                                 <Label className="flex-1 cursor-pointer">
                                   <div className="font-medium">
-                                    {employee.name}
+                                    {formatEmployeeName(employee.name)}
                                   </div>
                                 </Label>
                               </div>

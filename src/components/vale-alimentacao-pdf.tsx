@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Image,
 } from "@react-pdf/renderer";
+import { formatEmployeeName } from "@/utils/employee-name-format";
 
 const styles = StyleSheet.create({
   page: {
@@ -225,7 +226,9 @@ export const ValeAlimentacaoPDF: React.FC<ValeAlimentacaoPDFProps> = ({
               {(employeeName || employeeCpf) && (
                 <View style={styles.employeeInfoRow}>
                   {employeeName && (
-                    <Text style={styles.info}>Funcionário: {employeeName}</Text>
+                    <Text style={styles.info}>
+                      Funcionário: {formatEmployeeName(employeeName)}
+                    </Text>
                   )}
                   {employeeCpf && (
                     <Text style={[styles.info, { marginLeft: 10 }]}>
@@ -265,7 +268,9 @@ export const ValeAlimentacaoPDF: React.FC<ValeAlimentacaoPDFProps> = ({
 
           {data.map((row, index) => (
             <View key={index} style={styles.tableRow}>
-              <Text style={styles.col1}>{row.employeeName}</Text>
+              <Text style={styles.col1}>
+                {formatEmployeeName(row.employeeName)}
+              </Text>
               <Text style={styles.col2}>{formatDate(row.date)}</Text>
               <Text style={styles.col3}>{row.company}</Text>
               <Text style={styles.col4}>{row.entry1 || "-"}</Text>
