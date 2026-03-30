@@ -207,20 +207,64 @@ export async function GET(request: NextRequest) {
 
       const employeePunches = punchesByEmployee.get(employeeSolidesId) || [];
 
-      // Agrupar punches por data
-      const punchesByDate = new Map<string, Punch[]>();
+      // Agrupar punches por "dia de trabalho" (preserva ciclo noturno)
+      const punchesByWorkDate = new Map<string, Punch[]>();
+      const sortedEmployeePunches = [...employeePunches].sort(
+        (a, b) =>
+          new Date(a.date_in).getTime() - new Date(b.date_in).getTime()
+      );
 
-      employeePunches.forEach((punch) => {
-        if (!punchesByDate.has(punch.date)) {
-          punchesByDate.set(punch.date, []);
+      let lastGroupByEmployee:
+        | { dateStr: string; hadNightShift: boolean }
+        | undefined;
+
+      sortedEmployeePunches.forEach((punch) => {
+        const punchDateStr = punch.date;
+        const entryDate = punch.date_in ? new Date(punch.date_in) : undefined;
+        const entryHour = entryDate ? entryDate.getHours() : undefined;
+        const isEarlyMorning = entryHour !== undefined ? entryHour < 12 : false;
+        const isNightShiftEntry =
+          entryHour !== undefined ? entryHour >= 18 : false;
+
+        const shouldAttachToPreviousDay =
+          !!lastGroupByEmployee &&
+          isEarlyMorning &&
+          (() => {
+            const [y, m, d] = lastGroupByEmployee!.dateStr.split("-").map(Number);
+            const lastDate = new Date(Date.UTC(y, m - 1, d));
+            const [cy, cm, cd] = punchDateStr.split("-").map(Number);
+            const currentDate = new Date(Date.UTC(cy, cm - 1, cd));
+            const diffDays =
+              (currentDate.getTime() - lastDate.getTime()) /
+              (1000 * 60 * 60 * 24);
+            return Math.round(diffDays) === 1 && lastGroupByEmployee!.hadNightShift;
+          })();
+
+        const workDate = shouldAttachToPreviousDay
+          ? lastGroupByEmployee!.dateStr
+          : punchDateStr;
+
+        if (!punchesByWorkDate.has(workDate)) {
+          punchesByWorkDate.set(workDate, []);
         }
-        punchesByDate.get(punch.date)!.push(punch);
+        punchesByWorkDate.get(workDate)!.push(punch);
+
+        lastGroupByEmployee = {
+          dateStr: workDate,
+          hadNightShift:
+            (lastGroupByEmployee?.hadNightShift &&
+              lastGroupByEmployee.dateStr === workDate) ||
+            isNightShiftEntry,
+        };
       });
 
       // Processar cada dia
-      punchesByDate.forEach((dayPunches, date) => {
+      for (const date of [...punchesByWorkDate.keys()].sort((a, b) =>
+        a.localeCompare(b)
+      )) {
+        const dayPunches = punchesByWorkDate.get(date) || [];
         // Ordenar punches do dia por horário de entrada
-        const sortedPunches = dayPunches.sort(
+        const sortedPunches = [...dayPunches].sort(
           (a, b) =>
             new Date(a.date_in).getTime() - new Date(b.date_in).getTime()
         );
@@ -323,7 +367,7 @@ export async function GET(request: NextRequest) {
           extra_100_night: formatarHoras(horasCalculadas.extra100Noturno),
           value: valorTotal,
         });
-      });
+      }
     }
 
     // Ordenar por data e depois por horário de entrada (mais cedo para mais tarde)

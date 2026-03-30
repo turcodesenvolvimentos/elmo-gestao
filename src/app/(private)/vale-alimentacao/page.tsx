@@ -269,7 +269,18 @@ export default function ValeAlimentacaoPage() {
       });
     }
 
-    filteredPunches.forEach(
+    const sortedPunches = [...filteredPunches].sort((a, b) => {
+      const employeeA = (a.employee?.name || "").toLowerCase();
+      const employeeB = (b.employee?.name || "").toLowerCase();
+      const employeeCompare = employeeA.localeCompare(employeeB, "pt-BR");
+      if (employeeCompare !== 0) return employeeCompare;
+
+      const dateA = String(a.dateIn || a.dateOut || a.date || "");
+      const dateB = String(b.dateIn || b.dateOut || b.date || "");
+      return dateA.localeCompare(dateB);
+    });
+
+    sortedPunches.forEach(
       (punch: {
         date?: string;
         dateIn?: string;
