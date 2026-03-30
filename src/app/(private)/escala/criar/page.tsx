@@ -57,6 +57,11 @@ export default function CriarEscalaPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
+  const timeToMinutes = (time: string): number => {
+    const [hours, minutes] = time.split(":").map(Number);
+    return hours * 60 + minutes;
+  };
   const [editingShift, setEditingShift] = useState<Shift | null>(null);
   const [deletingShift, setDeletingShift] = useState<Shift | null>(null);
 
@@ -167,12 +172,11 @@ export default function CriarEscalaPage() {
       isValid = false;
     }
 
-    // Validar se saída 1 é após entrada 1
     if (formData.entry1 && formData.exit1) {
-      const entry1 = new Date(`2000-01-01T${formData.entry1}`);
-      const exit1 = new Date(`2000-01-01T${formData.exit1}`);
-      if (exit1 <= entry1) {
-        errors.exit1 = "Saída 1 deve ser após entrada 1";
+      const entry1Minutes = timeToMinutes(formData.entry1);
+      const exit1Minutes = timeToMinutes(formData.exit1);
+      if (exit1Minutes === entry1Minutes) {
+        errors.exit1 = "Saída 1 não pode ser igual à entrada 1";
         isValid = false;
       }
     }
@@ -188,19 +192,27 @@ export default function CriarEscalaPage() {
       isValid = false;
     }
 
-    // Validar se saída 2 é após entrada 2
     if (formData.entry2 && formData.exit2) {
-      const entry2 = new Date(`2000-01-01T${formData.entry2}`);
-      const exit2 = new Date(`2000-01-01T${formData.exit2}`);
-      if (exit2 <= entry2) {
-        errors.exit2 = "Saída 2 deve ser após entrada 2";
+      const entry2Minutes = timeToMinutes(formData.entry2);
+      const exit2Minutes = timeToMinutes(formData.exit2);
+      if (exit2Minutes === entry2Minutes) {
+        errors.exit2 = "Saída 2 não pode ser igual à entrada 2";
         isValid = false;
       }
 
-      // Validar se entrada 2 é após saída 1
-      const exit1 = new Date(`2000-01-01T${formData.exit1}`);
-      if (entry2 <= exit1) {
-        errors.entry2 = "Entrada 2 deve ser após saída 1";
+      const entry1Minutes = timeToMinutes(formData.entry1);
+      const exit1Minutes = timeToMinutes(formData.exit1);
+      const endOfFirstPeriod =
+        exit1Minutes <= entry1Minutes ? exit1Minutes + 1440 : exit1Minutes;
+
+      let startOfSecondPeriod = entry2Minutes;
+      while (startOfSecondPeriod <= endOfFirstPeriod) {
+        startOfSecondPeriod += 1440;
+      }
+
+      if (startOfSecondPeriod - endOfFirstPeriod > 1440) {
+        errors.entry2 =
+          "Entrada 2 deve ocorrer após saída 1 (considerando virada de dia)";
         isValid = false;
       }
     }
