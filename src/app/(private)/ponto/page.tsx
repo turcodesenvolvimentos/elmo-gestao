@@ -16,7 +16,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { History, Eye, Check, ChevronsUpDown, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  History,
+  Eye,
+  Check,
+  ChevronsUpDown,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import {
   Table,
   TableHead,
@@ -87,6 +94,36 @@ function classifyAjusteTipo(
     return "work";
   }
   return null;
+}
+
+function toDateKey(value: string | number | undefined): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value === "string") {
+    if (!value) return null;
+    return value.includes("T") ? value.split("T")[0] : value.substring(0, 10);
+  }
+  if (typeof value === "number") {
+    const d = new Date(value > 1e12 ? value : value * 1000);
+    if (isNaN(d.getTime())) return null;
+    return d.toISOString().split("T")[0];
+  }
+  return null;
+}
+
+function getHourFromDateValue(
+  value: string | number | undefined
+): number | null {
+  if (value === undefined || value === null) return null;
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return null;
+  return date.getHours();
+}
+
+function toYyyyMmDdFromUtcDate(date: Date): string {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 interface GroupedPunch {
@@ -211,7 +248,8 @@ export default function PontoPage() {
       nextIndex =
         direction === "next"
           ? (currentIndex + 1) % employeeOptions.length
-          : (currentIndex - 1 + employeeOptions.length) % employeeOptions.length;
+          : (currentIndex - 1 + employeeOptions.length) %
+            employeeOptions.length;
     }
     const nextEmployee = employeeOptions[nextIndex];
     if (nextEmployee) {
@@ -278,38 +316,37 @@ export default function PontoPage() {
   const { groupedPunches, maxPunchPairs, totals } = useMemo(() => {
     let allPunchesRaw =
       punchesData?.pages.flatMap((page) => page.content || []) || [];
+    const contextStartDateStr =
+      shouldSendDates && filter.startDate
+        ? (() => {
+            const d = new Date(filter.startDate + "T00:00:00Z");
+            d.setUTCDate(d.getUTCDate() - 1);
+            return toYyyyMmDdFromUtcDate(d);
+          })()
+        : null;
 
     if (shouldSendDates && filter.startDate && filter.endDate) {
       allPunchesRaw = allPunchesRaw.filter((punch: Punch) => {
-        const punchDateStr = punch.date
-          ? punch.date.includes("T")
-            ? punch.date.split("T")[0]
-            : punch.date.substring(0, 10)
-          : punch.dateIn
-          ? punch.dateIn.split("T")[0]
-          : punch.dateOut
-          ? punch.dateOut.split("T")[0]
-          : null;
+        const punchDateStr =
+          toDateKey(punch.dateIn) ??
+          toDateKey(punch.dateOut) ??
+          toDateKey(punch.date);
 
         if (!punchDateStr) return false;
 
         return (
-          punchDateStr >= filter.startDate && punchDateStr <= filter.endDate
+          punchDateStr >= (contextStartDateStr || filter.startDate) &&
+          punchDateStr <= filter.endDate
         );
       });
     }
 
     if (filter.company !== "Todos") {
       allPunchesRaw = allPunchesRaw.filter((punch) => {
-        const punchDateStr = punch.date
-          ? punch.date.includes("T")
-            ? punch.date.split("T")[0]
-            : punch.date.substring(0, 10)
-          : punch.dateIn
-            ? punch.dateIn.split("T")[0]
-            : punch.dateOut
-              ? punch.dateOut.split("T")[0]
-              : null;
+        const punchDateStr =
+          toDateKey(punch.dateIn) ??
+          toDateKey(punch.dateOut) ??
+          toDateKey(punch.date);
         if (!punchDateStr) return false;
         const company = resolveWorkCompanyName({
           employeeSolidesId: filter.employeeId,
@@ -340,17 +377,12 @@ export default function PontoPage() {
     >();
 
     allPunchesRaw.forEach((punch: Punch) => {
-      const employeeName = formatEmployeeName(punch.employee?.name) || "Sem Nome";
-      const rawDate = punch.date ?? punch.dateIn ?? punch.dateOut;
-      let punchDateStr: string | null = null;
-      if (typeof rawDate === "string") {
-        punchDateStr = rawDate.includes("T")
-          ? rawDate.split("T")[0]
-          : rawDate.substring(0, 10);
-      } else if (typeof rawDate === "number") {
-        const d = new Date(rawDate > 1e12 ? rawDate : rawDate * 1000);
-        punchDateStr = d.toISOString().split("T")[0];
-      }
+      const employeeName =
+        formatEmployeeName(punch.employee?.name) || "Sem Nome";
+      const punchDateStr =
+        toDateKey(punch.dateIn) ??
+        toDateKey(punch.dateOut) ??
+        toDateKey(punch.date);
       if (!punchDateStr) return;
 
       const entryDate = punch.dateIn ? new Date(punch.dateIn) : undefined;
@@ -440,6 +472,44 @@ export default function PontoPage() {
       });
     });
 
+    const groupedByEmployeeForReallocation = new Map<string, GroupedPunch[]>();
+    grouped.forEach((group) => {
+      if (!groupedByEmployeeForReallocation.has(group.employeeName)) {
+        groupedByEmployeeForReallocation.set(group.employeeName, []);
+      }
+      groupedByEmployeeForReallocation.get(group.employeeName)!.push(group);
+    });
+
+    groupedByEmployeeForReallocation.forEach((groups) => {
+      groups.sort((a, b) => a.date.localeCompare(b.date));
+
+      for (let i = 1; i < groups.length; i += 1) {
+        const previousGroup = groups[i - 1];
+        const currentGroup = groups[i];
+
+        const previousHasNightShift = previousGroup.punches.some((p) => {
+          const entryHour = getHourFromDateValue(p.dateIn);
+          return entryHour !== null && entryHour >= 18;
+        });
+
+        if (!previousHasNightShift) continue;
+
+        const punchesToMove = currentGroup.punches.filter((p) => {
+          const punchDate = toDateKey(p.dateIn) ?? toDateKey(p.dateOut);
+          if (punchDate !== currentGroup.date) return false;
+          const entryHour = getHourFromDateValue(p.dateIn);
+          return entryHour !== null && entryHour < 12;
+        });
+
+        if (punchesToMove.length === 0) continue;
+
+        previousGroup.punches.push(...punchesToMove);
+        currentGroup.punches = currentGroup.punches.filter(
+          (p) => !punchesToMove.includes(p)
+        );
+      }
+    });
+
     const totalsNumeric = {
       horasDiurnas: 0,
       horasNoturnas: 0,
@@ -478,17 +548,24 @@ export default function PontoPage() {
         group.date,
         customHolidaySet
       );
-      totalsNumeric.horasDiurnas += calculoHoras.horasDiurnas;
-      totalsNumeric.horasNoturnas += calculoHoras.horasNoturnas;
-      totalsNumeric.horasFictas += calculoHoras.horasFictas;
-      totalsNumeric.totalHoras += calculoHoras.totalHoras;
-      totalsNumeric.horasNormais += calculoHoras.horasNormais;
-      totalsNumeric.adicionalNoturno += calculoHoras.adicionalNoturno;
-      totalsNumeric.extra50Diurno += calculoHoras.extra50Diurno;
-      totalsNumeric.extra50Noturno += calculoHoras.extra50Noturno;
-      totalsNumeric.extra100Diurno += calculoHoras.extra100Diurno;
-      totalsNumeric.extra100Noturno += calculoHoras.extra100Noturno;
-      totalsNumeric.heDomEFer += calculoHoras.heDomEFer;
+      const includeInSelectedRange =
+        !shouldSendDates ||
+        !filter.startDate ||
+        !filter.endDate ||
+        (group.date >= filter.startDate && group.date <= filter.endDate);
+      if (includeInSelectedRange) {
+        totalsNumeric.horasDiurnas += calculoHoras.horasDiurnas;
+        totalsNumeric.horasNoturnas += calculoHoras.horasNoturnas;
+        totalsNumeric.horasFictas += calculoHoras.horasFictas;
+        totalsNumeric.totalHoras += calculoHoras.totalHoras;
+        totalsNumeric.horasNormais += calculoHoras.horasNormais;
+        totalsNumeric.adicionalNoturno += calculoHoras.adicionalNoturno;
+        totalsNumeric.extra50Diurno += calculoHoras.extra50Diurno;
+        totalsNumeric.extra50Noturno += calculoHoras.extra50Noturno;
+        totalsNumeric.extra100Diurno += calculoHoras.extra100Diurno;
+        totalsNumeric.extra100Noturno += calculoHoras.extra100Noturno;
+        totalsNumeric.heDomEFer += calculoHoras.heDomEFer;
+      }
       group.horasDiurnas = formatarHoras(calculoHoras.horasDiurnas);
       group.horasNoturnas = formatarHoras(calculoHoras.horasNoturnas);
       group.horasFictas = formatarHoras(calculoHoras.horasFictas);
@@ -593,19 +670,27 @@ export default function PontoPage() {
       finalGroupedPunches.push(...groups);
     });
 
-    finalGroupedPunches.sort((a, b) => {
+    const groupedPunchesInSelectedRange = finalGroupedPunches.filter(
+      (group) => {
+        if (!shouldSendDates || !filter.startDate || !filter.endDate)
+          return true;
+        return group.date >= filter.startDate && group.date <= filter.endDate;
+      }
+    );
+
+    groupedPunchesInSelectedRange.sort((a, b) => {
       const employeeCompare = a.employeeName.localeCompare(b.employeeName);
       if (employeeCompare !== 0) return employeeCompare;
       return a.date.localeCompare(b.date);
     });
 
     let maxPairs = 1;
-    finalGroupedPunches.forEach((group) => {
+    groupedPunchesInSelectedRange.forEach((group) => {
       maxPairs = Math.max(maxPairs, group.punches.length);
     });
 
     return {
-      groupedPunches: finalGroupedPunches,
+      groupedPunches: groupedPunchesInSelectedRange,
       maxPunchPairs: maxPairs,
       totals: {
         horasDiurnas: formatarHoras(totalsNumeric.horasDiurnas),
@@ -827,11 +912,17 @@ export default function PontoPage() {
           >
             <div className="flex items-center justify-between mb-6">
               <TabsList>
-                <TabsTrigger value="visualizar" className="flex items-center gap-2">
+                <TabsTrigger
+                  value="visualizar"
+                  className="flex items-center gap-2"
+                >
                   <Eye className="h-4 w-4" />
                   Visualizar
                 </TabsTrigger>
-                <TabsTrigger value="historico" className="flex items-center gap-2">
+                <TabsTrigger
+                  value="historico"
+                  className="flex items-center gap-2"
+                >
                   <History className="h-4 w-4" />
                   Histórico
                 </TabsTrigger>
@@ -854,16 +945,17 @@ export default function PontoPage() {
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Sincronizando...
-                      {syncMutation.progress && syncMutation.progress.total > 0 && (
-                        <span className="ml-2 font-medium">
-                          {syncMutation.progress.percent}%
-                          <span className="text-muted-foreground font-normal">
-                            {" "}
-                            ({syncMutation.progress.processed}/
-                            {syncMutation.progress.total})
+                      {syncMutation.progress &&
+                        syncMutation.progress.total > 0 && (
+                          <span className="ml-2 font-medium">
+                            {syncMutation.progress.percent}%
+                            <span className="text-muted-foreground font-normal">
+                              {" "}
+                              ({syncMutation.progress.processed}/
+                              {syncMutation.progress.total})
+                            </span>
                           </span>
-                        </span>
-                      )}
+                        )}
                     </>
                   ) : (
                     <>
@@ -889,14 +981,16 @@ export default function PontoPage() {
 
                   <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-end lg:gap-6">
                     <div className="flex-1 space-y-4 lg:space-y-0 lg:flex lg:items-center lg:gap-4">
-
                       {/* ── Colaborador ── */}
                       <div className="flex flex-wrap items-center gap-2">
                         <Label className="whitespace-nowrap text-sm font-medium">
                           Colaborador:
                         </Label>
                         <div className="flex items-center gap-1">
-                          <Popover open={openEmployee} onOpenChange={setOpenEmployee}>
+                          <Popover
+                            open={openEmployee}
+                            onOpenChange={setOpenEmployee}
+                          >
                             <PopoverTrigger asChild>
                               <Button
                                 variant="outline"
@@ -905,7 +999,8 @@ export default function PontoPage() {
                                 className="w-[300px] justify-between font-normal"
                               >
                                 <span className="truncate">
-                                  {selectedEmployeeName || "Selecione um colaborador..."}
+                                  {selectedEmployeeName ||
+                                    "Selecione um colaborador..."}
                                 </span>
                                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                               </Button>
@@ -1139,255 +1234,256 @@ export default function PontoPage() {
                       </p>
                     </div>
                   ) : (
-                  <div className="overflow-x-auto min-h-[200px]">
-                    <Table className="w-full min-w-[800px]">
-                      <TableHeader>
-                        <tr className="bg-gray-50/50">
-                          {dynamicColumns.map((item, index) => (
-                            <TableHead
-                              key={item}
-                              className={`px-4 py-3 text-left text-sm font-medium text-gray-700 whitespace-nowrap ${
-                                index < dynamicColumns.length - 1
-                                  ? "border-r border-gray-200"
-                                  : ""
-                              }`}
-                            >
-                              {item}
-                            </TableHead>
-                          ))}
-                        </tr>
-                      </TableHeader>
-                      <TableBody>
-                        {shouldSendDates && !isDateRangeValid ? (
-                          <TableRow>
-                            <TableCell
-                              colSpan={dynamicColumns.length}
-                              className="text-center py-8 text-red-500"
-                            >
-                              Data final deve ser maior ou igual à data inicial
-                            </TableCell>
-                          </TableRow>
-                        ) : punchesLoading ? (
-                          <TableRow>
-                            <TableCell
-                              colSpan={dynamicColumns.length}
-                              className="text-center py-8 text-muted-foreground"
-                            >
-                              Carregando pontos...
-                            </TableCell>
-                          </TableRow>
-                        ) : punchesError ? (
-                          <TableRow>
-                            <TableCell
-                              colSpan={dynamicColumns.length}
-                              className="text-center py-8 text-red-500"
-                            >
-                              {punchesError
-                                ? String(punchesError)
-                                : "Erro ao carregar pontos"}
-                            </TableCell>
-                          </TableRow>
-                        ) : groupedPunches.length > 0 ? (
-                          <>
-                            {groupedPunches.map((group, index) => (
-                              <TableRow
-                                key={group.key}
-                                className={
-                                  index % 2 === 0 ? "bg-white" : "bg-gray-100"
-                                }
+                    <div className="overflow-x-auto min-h-[200px]">
+                      <Table className="w-full min-w-[800px]">
+                        <TableHeader>
+                          <tr className="bg-gray-50/50">
+                            {dynamicColumns.map((item, index) => (
+                              <TableHead
+                                key={item}
+                                className={`px-4 py-3 text-left text-sm font-medium text-gray-700 whitespace-nowrap ${
+                                  index < dynamicColumns.length - 1
+                                    ? "border-r border-gray-200"
+                                    : ""
+                                }`}
                               >
-                                <TableCell className="px-4 py-3 border-r border-gray-200">
-                                  {group.employeeName}
-                                </TableCell>
-                                <TableCell className="px-4 py-3 border-r border-gray-200">
-                                  {group.company}
-                                </TableCell>
-                                <TableCell
-                                  className={`px-4 py-3 border-r border-gray-200 font-medium ${
-                                    group.ajusteTipo === "work"
-                                      ? "text-white"
-                                      : group.ajusteTipo === "non_work"
-                                      ? "text-white"
-                                      : group.isHoliday ||
-                                        group.dayOfWeekNumber === 0
-                                      ? "bg-blue-100 text-blue-800"
-                                      : ""
-                                  }`}
-                                  style={
-                                    group.ajusteTipo === "work"
-                                      ? { backgroundColor: "#0070C0" }
-                                      : group.ajusteTipo === "non_work"
-                                      ? { backgroundColor: "#00B0F0" }
-                                      : undefined
-                                  }
-                                >
-                                  {group.formattedDate}
-                                </TableCell>
-                                <TableCell
-                                  className={`px-4 py-3 border-r border-gray-200 capitalize font-medium ${
-                                    group.ajusteTipo === "work"
-                                      ? "text-white"
-                                      : group.ajusteTipo === "non_work"
-                                      ? "text-white"
-                                      : group.isHoliday ||
-                                        group.dayOfWeekNumber === 0
-                                      ? "bg-blue-100 text-blue-800"
-                                      : ""
-                                  }`}
-                                  style={
-                                    group.ajusteTipo === "work"
-                                      ? { backgroundColor: "#0070C0" }
-                                      : group.ajusteTipo === "non_work"
-                                      ? { backgroundColor: "#00B0F0" }
-                                      : undefined
-                                  }
-                                >
-                                  {group.dayOfWeek}
-                                </TableCell>
-
-                                {Array.from({ length: maxPunchPairs }).map(
-                                  (_, index) => {
-                                    const punch = group.punches[index];
-                                    const entryTime = punch?.dateIn
-                                      ? new Date(
-                                          punch.dateIn
-                                        ).toLocaleTimeString("pt-BR", {
-                                          hour: "2-digit",
-                                          minute: "2-digit",
-                                        })
-                                      : "-";
-                                    const exitTime = punch?.dateOut
-                                      ? new Date(
-                                          punch.dateOut
-                                        ).toLocaleTimeString("pt-BR", {
-                                          hour: "2-digit",
-                                          minute: "2-digit",
-                                        })
-                                      : "-";
-
-                                    return (
-                                      <Fragment
-                                        key={`punch-${group.key}-${index}`}
-                                      >
-                                        <TableCell className="px-4 py-3 border-r border-gray-200">
-                                          {entryTime}
-                                        </TableCell>
-                                        <TableCell className="px-4 py-3 border-r border-gray-200">
-                                          {exitTime}
-                                        </TableCell>
-                                      </Fragment>
-                                    );
-                                  }
-                                )}
-
-                                <TableCell className="px-4 py-3 border-r border-gray-200">
-                                  {group.horasDiurnas}
-                                </TableCell>
-                                <TableCell className="px-4 py-3 border-r border-gray-200">
-                                  {group.horasNoturnas}
-                                </TableCell>
-                                <TableCell className="px-4 py-3 border-r border-gray-200">
-                                  {group.horasFictas}
-                                </TableCell>
-                                <TableCell className="px-4 py-3 border-r border-gray-200">
-                                  {group.totalHoras}
-                                </TableCell>
-                                <TableCell className="px-4 py-3 border-r border-gray-200">
-                                  {group.horasNormais}
-                                </TableCell>
-                                <TableCell className="px-4 py-3 border-r border-gray-200">
-                                  {group.adicionalNoturno}
-                                </TableCell>
-                                <TableCell className="px-4 py-3 border-r border-gray-200">
-                                  {group.extra50Diurno}
-                                </TableCell>
-                                <TableCell className="px-4 py-3 border-r border-gray-200">
-                                  {group.extra50Noturno}
-                                </TableCell>
-                                <TableCell className="px-4 py-3 border-r border-gray-200">
-                                  {group.extra100Diurno}
-                                </TableCell>
-                                <TableCell className="px-4 py-3">
-                                  {group.extra100Noturno}
-                                </TableCell>
-                              </TableRow>
+                                {item}
+                              </TableHead>
                             ))}
-                            <TableRow className="bg-gray-50/50">
-                              {Array.from({
-                                length: 4 + maxPunchPairs * 2,
-                              }).map((_, idx) => (
-                                <TableCell
-                                  key={`totals-empty-${idx}`}
-                                  className="px-4 py-3 border-r border-gray-200 text-gray-700 font-medium"
-                                >
-                                  {idx === 0 ? "Totais" : "-"}
-                                </TableCell>
-                              ))}
-                              <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
-                                {totals.horasDiurnas}
-                              </TableCell>
-                              <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
-                                {totals.horasNoturnas}
-                              </TableCell>
-                              <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
-                                {totals.horasFictas}
-                              </TableCell>
-                              <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
-                                {totals.totalHoras}
-                              </TableCell>
-                              <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
-                                {totals.horasNormais}
-                              </TableCell>
-                              <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
-                                {totals.adicionalNoturno}
-                              </TableCell>
-                              <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
-                                {totals.extra50Diurno}
-                              </TableCell>
-                              <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
-                                {totals.extra50Noturno}
-                              </TableCell>
-                              <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
-                                {totals.extra100Diurno}
-                              </TableCell>
-                              <TableCell className="px-4 py-3 font-semibold">
-                                {totals.extra100Noturno}
-                              </TableCell>
-                            </TableRow>
-                            <TableRow ref={loadMoreRef}>
+                          </tr>
+                        </TableHeader>
+                        <TableBody>
+                          {shouldSendDates && !isDateRangeValid ? (
+                            <TableRow>
                               <TableCell
                                 colSpan={dynamicColumns.length}
-                                className="text-center py-4"
+                                className="text-center py-8 text-red-500"
                               >
-                                {isFetchingNextPage ? (
-                                  <span className="text-gray-500">
-                                    Carregando mais pontos...
-                                  </span>
-                                ) : hasNextPage ? (
-                                  <span className="text-gray-400 text-sm">
-                                    Role para carregar mais
-                                  </span>
-                                ) : (
-                                  <span className="text-gray-400 text-sm">
-                                    Todos os pontos foram carregados
-                                  </span>
-                                )}
+                                Data final deve ser maior ou igual à data
+                                inicial
                               </TableCell>
                             </TableRow>
-                          </>
-                        ) : (
-                          <TableRow>
-                            <TableCell
-                              colSpan={dynamicColumns.length}
-                              className="text-center py-8"
-                            >
-                              Nenhum ponto encontrado
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
+                          ) : punchesLoading ? (
+                            <TableRow>
+                              <TableCell
+                                colSpan={dynamicColumns.length}
+                                className="text-center py-8 text-muted-foreground"
+                              >
+                                Carregando pontos...
+                              </TableCell>
+                            </TableRow>
+                          ) : punchesError ? (
+                            <TableRow>
+                              <TableCell
+                                colSpan={dynamicColumns.length}
+                                className="text-center py-8 text-red-500"
+                              >
+                                {punchesError
+                                  ? String(punchesError)
+                                  : "Erro ao carregar pontos"}
+                              </TableCell>
+                            </TableRow>
+                          ) : groupedPunches.length > 0 ? (
+                            <>
+                              {groupedPunches.map((group, index) => (
+                                <TableRow
+                                  key={group.key}
+                                  className={
+                                    index % 2 === 0 ? "bg-white" : "bg-gray-100"
+                                  }
+                                >
+                                  <TableCell className="px-4 py-3 border-r border-gray-200">
+                                    {group.employeeName}
+                                  </TableCell>
+                                  <TableCell className="px-4 py-3 border-r border-gray-200">
+                                    {group.company}
+                                  </TableCell>
+                                  <TableCell
+                                    className={`px-4 py-3 border-r border-gray-200 font-medium ${
+                                      group.ajusteTipo === "work"
+                                        ? "text-white"
+                                        : group.ajusteTipo === "non_work"
+                                        ? "text-white"
+                                        : group.isHoliday ||
+                                          group.dayOfWeekNumber === 0
+                                        ? "bg-blue-100 text-blue-800"
+                                        : ""
+                                    }`}
+                                    style={
+                                      group.ajusteTipo === "work"
+                                        ? { backgroundColor: "#0070C0" }
+                                        : group.ajusteTipo === "non_work"
+                                        ? { backgroundColor: "#00B0F0" }
+                                        : undefined
+                                    }
+                                  >
+                                    {group.formattedDate}
+                                  </TableCell>
+                                  <TableCell
+                                    className={`px-4 py-3 border-r border-gray-200 capitalize font-medium ${
+                                      group.ajusteTipo === "work"
+                                        ? "text-white"
+                                        : group.ajusteTipo === "non_work"
+                                        ? "text-white"
+                                        : group.isHoliday ||
+                                          group.dayOfWeekNumber === 0
+                                        ? "bg-blue-100 text-blue-800"
+                                        : ""
+                                    }`}
+                                    style={
+                                      group.ajusteTipo === "work"
+                                        ? { backgroundColor: "#0070C0" }
+                                        : group.ajusteTipo === "non_work"
+                                        ? { backgroundColor: "#00B0F0" }
+                                        : undefined
+                                    }
+                                  >
+                                    {group.dayOfWeek}
+                                  </TableCell>
+
+                                  {Array.from({ length: maxPunchPairs }).map(
+                                    (_, index) => {
+                                      const punch = group.punches[index];
+                                      const entryTime = punch?.dateIn
+                                        ? new Date(
+                                            punch.dateIn
+                                          ).toLocaleTimeString("pt-BR", {
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                          })
+                                        : "-";
+                                      const exitTime = punch?.dateOut
+                                        ? new Date(
+                                            punch.dateOut
+                                          ).toLocaleTimeString("pt-BR", {
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                          })
+                                        : "-";
+
+                                      return (
+                                        <Fragment
+                                          key={`punch-${group.key}-${index}`}
+                                        >
+                                          <TableCell className="px-4 py-3 border-r border-gray-200">
+                                            {entryTime}
+                                          </TableCell>
+                                          <TableCell className="px-4 py-3 border-r border-gray-200">
+                                            {exitTime}
+                                          </TableCell>
+                                        </Fragment>
+                                      );
+                                    }
+                                  )}
+
+                                  <TableCell className="px-4 py-3 border-r border-gray-200">
+                                    {group.horasDiurnas}
+                                  </TableCell>
+                                  <TableCell className="px-4 py-3 border-r border-gray-200">
+                                    {group.horasNoturnas}
+                                  </TableCell>
+                                  <TableCell className="px-4 py-3 border-r border-gray-200">
+                                    {group.horasFictas}
+                                  </TableCell>
+                                  <TableCell className="px-4 py-3 border-r border-gray-200">
+                                    {group.totalHoras}
+                                  </TableCell>
+                                  <TableCell className="px-4 py-3 border-r border-gray-200">
+                                    {group.horasNormais}
+                                  </TableCell>
+                                  <TableCell className="px-4 py-3 border-r border-gray-200">
+                                    {group.adicionalNoturno}
+                                  </TableCell>
+                                  <TableCell className="px-4 py-3 border-r border-gray-200">
+                                    {group.extra50Diurno}
+                                  </TableCell>
+                                  <TableCell className="px-4 py-3 border-r border-gray-200">
+                                    {group.extra50Noturno}
+                                  </TableCell>
+                                  <TableCell className="px-4 py-3 border-r border-gray-200">
+                                    {group.extra100Diurno}
+                                  </TableCell>
+                                  <TableCell className="px-4 py-3">
+                                    {group.extra100Noturno}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                              <TableRow className="bg-gray-50/50">
+                                {Array.from({
+                                  length: 4 + maxPunchPairs * 2,
+                                }).map((_, idx) => (
+                                  <TableCell
+                                    key={`totals-empty-${idx}`}
+                                    className="px-4 py-3 border-r border-gray-200 text-gray-700 font-medium"
+                                  >
+                                    {idx === 0 ? "Totais" : "-"}
+                                  </TableCell>
+                                ))}
+                                <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                                  {totals.horasDiurnas}
+                                </TableCell>
+                                <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                                  {totals.horasNoturnas}
+                                </TableCell>
+                                <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                                  {totals.horasFictas}
+                                </TableCell>
+                                <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                                  {totals.totalHoras}
+                                </TableCell>
+                                <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                                  {totals.horasNormais}
+                                </TableCell>
+                                <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                                  {totals.adicionalNoturno}
+                                </TableCell>
+                                <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                                  {totals.extra50Diurno}
+                                </TableCell>
+                                <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                                  {totals.extra50Noturno}
+                                </TableCell>
+                                <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                                  {totals.extra100Diurno}
+                                </TableCell>
+                                <TableCell className="px-4 py-3 font-semibold">
+                                  {totals.extra100Noturno}
+                                </TableCell>
+                              </TableRow>
+                              <TableRow ref={loadMoreRef}>
+                                <TableCell
+                                  colSpan={dynamicColumns.length}
+                                  className="text-center py-4"
+                                >
+                                  {isFetchingNextPage ? (
+                                    <span className="text-gray-500">
+                                      Carregando mais pontos...
+                                    </span>
+                                  ) : hasNextPage ? (
+                                    <span className="text-gray-400 text-sm">
+                                      Role para carregar mais
+                                    </span>
+                                  ) : (
+                                    <span className="text-gray-400 text-sm">
+                                      Todos os pontos foram carregados
+                                    </span>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            </>
+                          ) : (
+                            <TableRow>
+                              <TableCell
+                                colSpan={dynamicColumns.length}
+                                className="text-center py-8"
+                              >
+                                Nenhum ponto encontrado
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
                   )}
                 </CardContent>
               </Card>

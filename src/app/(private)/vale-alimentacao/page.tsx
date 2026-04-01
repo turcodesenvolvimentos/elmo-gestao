@@ -73,6 +73,27 @@ interface EmployeeSummary {
   totalCostHelp: number;
 }
 
+function toDateKey(value: string | number | undefined): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value === "string") {
+    if (!value) return null;
+    return value.includes("T") ? value.split("T")[0] : value.substring(0, 10);
+  }
+  if (typeof value === "number") {
+    const d = new Date(value > 1e12 ? value : value * 1000);
+    if (isNaN(d.getTime())) return null;
+    return d.toISOString().split("T")[0];
+  }
+  return null;
+}
+
+function toYyyyMmDdFromUtcDate(date: Date): string {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export default function ValeAlimentacaoPage() {
   const { data: customHolidaysData } = useCustomHolidays();
   const customHolidaySet = useMemo(() => {
@@ -151,6 +172,7 @@ export default function ValeAlimentacaoPage() {
     hasFilters && isDateRangeValid && appliedFilters.startDate
       ? (() => {
           const date = new Date(appliedFilters.startDate + "T00:00:00Z");
+          date.setUTCDate(date.getUTCDate() - 1);
           return date.getTime().toString();
         })()
       : undefined;
@@ -162,10 +184,7 @@ export default function ValeAlimentacaoPage() {
         })()
       : undefined;
 
-  const {
-    data: punchesData,
-    isLoading: punchesLoading,
-  } = usePunchesInfinite(
+  const { data: punchesData, isLoading: punchesLoading } = usePunchesInfinite(
     1000,
     startDateTimestamp,
     endDateTimestamp,
@@ -199,6 +218,14 @@ export default function ValeAlimentacaoPage() {
 
     const allPunchesRaw =
       punchesData.pages.flatMap((page) => page.content || []) || [];
+    const contextStartDateStr =
+      appliedFilters.startDate && appliedFilters.endDate
+        ? (() => {
+            const d = new Date(appliedFilters.startDate + "T00:00:00Z");
+            d.setUTCDate(d.getUTCDate() - 1);
+            return toYyyyMmDdFromUtcDate(d);
+          })()
+        : null;
 
     if (allPunchesRaw.length === 0) {
       return new Map<number, WorkDay[]>();
@@ -214,28 +241,24 @@ export default function ValeAlimentacaoPage() {
         locationIn?: { address?: string };
         locationOut?: { address?: string };
       }) => {
-      const punchDateStr = punch.date
-        ? punch.date.includes("T")
-          ? punch.date.split("T")[0]
-          : punch.date.substring(0, 10)
-        : punch.dateIn
-          ? punch.dateIn.split("T")[0]
-          : punch.dateOut
-            ? punch.dateOut.split("T")[0]
-            : null;
+        const punchDateStr =
+          toDateKey(punch.dateIn) ??
+          toDateKey(punch.dateOut) ??
+          toDateKey(punch.date);
 
-      if (!punchDateStr) return false;
+        if (!punchDateStr) return false;
 
-      // Se temos filtros aplicados, validar o período
-      if (appliedFilters.startDate && appliedFilters.endDate) {
-        return (
-          punchDateStr >= appliedFilters.startDate &&
-          punchDateStr <= appliedFilters.endDate
-        );
+        // Se temos filtros aplicados, validar o período
+        if (appliedFilters.startDate && appliedFilters.endDate) {
+          return (
+            punchDateStr >= (contextStartDateStr || appliedFilters.startDate) &&
+            punchDateStr <= appliedFilters.endDate
+          );
+        }
+
+        return true;
       }
-
-      return true;
-    });
+    );
 
     // Agrupar por funcionário e data
     const grouped = new Map<
@@ -290,101 +313,98 @@ export default function ValeAlimentacaoPage() {
         locationIn?: { address?: string };
         locationOut?: { address?: string };
       }) => {
-      const employeeName = formatEmployeeName(punch.employee?.name) || "Sem Nome";
-      // Tentar encontrar por nome exato primeiro
-      let employeeId = employeesByNameMap.get(employeeName);
+        const employeeName =
+          formatEmployeeName(punch.employee?.name) || "Sem Nome";
+        // Tentar encontrar por nome exato primeiro
+        let employeeId = employeesByNameMap.get(employeeName);
 
-      // Se não encontrar, tentar com nome normalizado
-      if (!employeeId) {
-        const normalizedName = employeeName
-          .toLowerCase()
-          .trim()
-          .replace(/\s+/g, " ");
-        employeeId = employeesByNameNormalizedMap.get(normalizedName);
-      }
+        // Se não encontrar, tentar com nome normalizado
+        if (!employeeId) {
+          const normalizedName = employeeName
+            .toLowerCase()
+            .trim()
+            .replace(/\s+/g, " ");
+          employeeId = employeesByNameNormalizedMap.get(normalizedName);
+        }
 
-      if (!employeeId) {
-        // Funcionário não encontrado na lista - pode ser que o nome não corresponda exatamente
-        // ou o funcionário foi removido. Ignorar este ponto.
-        return;
-      }
+        if (!employeeId) {
+          // Funcionário não encontrado na lista - pode ser que o nome não corresponda exatamente
+          // ou o funcionário foi removido. Ignorar este ponto.
+          return;
+        }
 
-      const punchDateStr = punch.date
-        ? punch.date.includes("T")
-          ? punch.date.split("T")[0]
-          : punch.date.substring(0, 10)
-        : punch.dateIn
-          ? punch.dateIn.split("T")[0]
-          : punch.dateOut
-            ? punch.dateOut.split("T")[0]
-            : null;
+        const punchDateStr =
+          toDateKey(punch.dateIn) ??
+          toDateKey(punch.dateOut) ??
+          toDateKey(punch.date);
 
-      if (!punchDateStr) return;
+        if (!punchDateStr) return;
 
-      const entryDate = punch.dateIn ? new Date(punch.dateIn) : undefined;
-      const entryHour = entryDate ? entryDate.getHours() : undefined;
-      const isEarlyMorning = entryHour !== undefined ? entryHour < 12 : false;
-      const isNightShiftEntry =
-        entryHour !== undefined ? entryHour >= 18 : false;
+        const entryDate = punch.dateIn ? new Date(punch.dateIn) : undefined;
+        const entryHour = entryDate ? entryDate.getHours() : undefined;
+        const isEarlyMorning = entryHour !== undefined ? entryHour < 12 : false;
+        const isNightShiftEntry =
+          entryHour !== undefined ? entryHour >= 18 : false;
 
-      const lastGroup = lastGroupByEmployee.get(employeeName);
-      const shouldAttachToPreviousDay =
-        !!lastGroup &&
-        isEarlyMorning &&
-        (() => {
-          const [y, m, d] = lastGroup.dateStr.split("-").map(Number);
-          const lastDate = new Date(Date.UTC(y, m - 1, d));
-          const [cy, cm, cd] = punchDateStr.split("-").map(Number);
-          const currentDate = new Date(Date.UTC(cy, cm - 1, cd));
-          const diffDays =
-            (currentDate.getTime() - lastDate.getTime()) /
-            (1000 * 60 * 60 * 24);
-          return Math.round(diffDays) === 1 && lastGroup.hadNightShift;
-        })();
+        const lastGroup = lastGroupByEmployee.get(employeeName);
+        const shouldAttachToPreviousDay =
+          !!lastGroup &&
+          isEarlyMorning &&
+          (() => {
+            const [y, m, d] = lastGroup.dateStr.split("-").map(Number);
+            const lastDate = new Date(Date.UTC(y, m - 1, d));
+            const [cy, cm, cd] = punchDateStr.split("-").map(Number);
+            const currentDate = new Date(Date.UTC(cy, cm - 1, cd));
+            const diffDays =
+              (currentDate.getTime() - lastDate.getTime()) /
+              (1000 * 60 * 60 * 24);
+            return Math.round(diffDays) === 1 && lastGroup.hadNightShift;
+          })();
 
-      const baseDateStr = shouldAttachToPreviousDay
-        ? lastGroup!.dateStr
-        : punchDateStr;
-      const key = `${employeeName}-${baseDateStr}`;
+        const baseDateStr = shouldAttachToPreviousDay
+          ? lastGroup!.dateStr
+          : punchDateStr;
+        const key = `${employeeName}-${baseDateStr}`;
 
-      if (!grouped.has(employeeId)) {
-        grouped.set(employeeId, new Map());
-      }
+        if (!grouped.has(employeeId)) {
+          grouped.set(employeeId, new Map());
+        }
 
-      const employeeGroups = grouped.get(employeeId)!;
+        const employeeGroups = grouped.get(employeeId)!;
 
-      if (!employeeGroups.has(baseDateStr)) {
-        const [year, month, day] = baseDateStr.split("-");
-        const formattedDate = `${day}/${month}/${year}`;
-        const company = resolveWorkCompanyName({
-          employeeSolidesId: employeeId,
-          workDate: baseDateStr,
-          locationInAddress: punch.locationIn?.address,
-          locationOutAddress: punch.locationOut?.address,
-          escalaEntries,
+        if (!employeeGroups.has(baseDateStr)) {
+          const [year, month, day] = baseDateStr.split("-");
+          const formattedDate = `${day}/${month}/${year}`;
+          const company = resolveWorkCompanyName({
+            employeeSolidesId: employeeId,
+            workDate: baseDateStr,
+            locationInAddress: punch.locationIn?.address,
+            locationOutAddress: punch.locationOut?.address,
+            escalaEntries,
+          });
+
+          employeeGroups.set(baseDateStr, {
+            date: baseDateStr,
+            formattedDate,
+            company,
+            punches: [],
+          });
+        }
+
+        employeeGroups.get(baseDateStr)!.punches.push({
+          dateIn: punch.dateIn,
+          dateOut: punch.dateOut,
         });
 
-        employeeGroups.set(baseDateStr, {
-          date: baseDateStr,
-          formattedDate,
-          company,
-          punches: [],
+        const prev = lastGroupByEmployee.get(employeeName);
+        lastGroupByEmployee.set(employeeName, {
+          key,
+          dateStr: baseDateStr,
+          hadNightShift:
+            (prev?.hadNightShift && prev.key === key) || isNightShiftEntry,
         });
       }
-
-      employeeGroups.get(baseDateStr)!.punches.push({
-        dateIn: punch.dateIn,
-        dateOut: punch.dateOut,
-      });
-
-      const prev = lastGroupByEmployee.get(employeeName);
-      lastGroupByEmployee.set(employeeName, {
-        key,
-        dateStr: baseDateStr,
-        hadNightShift:
-          (prev?.hadNightShift && prev.key === key) || isNightShiftEntry,
-      });
-    });
+    );
 
     // Processar grupos e calcular valores
     const result = new Map<number, WorkDay[]>();
@@ -393,6 +413,13 @@ export default function ValeAlimentacaoPage() {
       const workDays: WorkDay[] = [];
 
       employeeGroups.forEach((group, dateStr) => {
+        const includeInSelectedRange =
+          !appliedFilters.startDate ||
+          !appliedFilters.endDate ||
+          (dateStr >= appliedFilters.startDate &&
+            dateStr <= appliedFilters.endDate);
+        if (!includeInSelectedRange) return;
+
         const calculoHoras = calcularHorasPorPeriodo(
           group.punches,
           dateStr,
@@ -784,7 +811,11 @@ export default function ValeAlimentacaoPage() {
         </header>
 
         <div className="flex flex-1 flex-col gap-6 p-6">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            className="w-full"
+          >
             <div className="flex items-center justify-between mb-6">
               <TabsList>
                 <TabsTrigger
@@ -805,433 +836,443 @@ export default function ValeAlimentacaoPage() {
             </div>
 
             <TabsContent value="visualizar" className="space-y-6">
-          <Card>
-            <CardContent className="">
-              <div className="flex flex-col gap-4 md:flex-row md:justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold">Filtros</h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Selecione os filtros para visualizar o relatório de vale alimentação
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-end lg:gap-6">
-                <div className="flex-1 space-y-4 lg:space-y-0 lg:flex lg:items-center lg:gap-4">
-                  <div className="flex items-center gap-2 flex-1">
-                    <div className="relative flex-1">
-                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Buscar por nome..."
-                        className="pl-8"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                      />
+              <Card>
+                <CardContent className="">
+                  <div className="flex flex-col gap-4 md:flex-row md:justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold">Filtros</h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Selecione os filtros para visualizar o relatório de vale
+                        alimentação
+                      </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <Input
-                        type="date"
-                        placeholder="Data inicial"
-                        className="w-full sm:w-auto"
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
-                      />
-                      <Input
-                        type="date"
-                        placeholder="Data final"
-                        className="w-full sm:w-auto"
-                        value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
-                      />
-                    </div>
-                    <Button
-                      className="whitespace-nowrap"
-                      onClick={handleApplyFilters}
-                      disabled={
-                        !startDate ||
-                        !endDate ||
-                        !isInputDateRangeValid ||
-                        punchesLoading
-                      }
-                    >
-                      {punchesLoading ? "Carregando..." : "Aplicar Filtros"}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-              {startDate && endDate && !isInputDateRangeValid && (
-                <div className="text-sm text-red-500 mt-2">
-                  Data final deve ser maior ou igual à data inicial
-                </div>
-              )}
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardContent className="">
-              <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-4 mb-4">
-                <div>
-                  <h3 className="text-lg font-semibold">
-                    Relatório de Vale Alimentação
-                  </h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Visualização dos valores de vale alimentação por funcionário
-                  </p>
-                </div>
-                <div className="flex items-center gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer text-sm text-muted-foreground">
-                    <Checkbox
-                      checked={showInactiveEmployees}
-                      onCheckedChange={(checked) =>
-                        setShowInactiveEmployees(checked === true)
-                      }
-                    />
-                    Exibir inativos
-                  </label>
-                  {employeeSummaries.length > 0 && hasFilters && (
-                  <Button
-                    onClick={handleExportReport}
-                    disabled={
-                      exportPDFMutation.isPending ||
-                      saveToHistoryMutation.isPending ||
-                      !appliedFilters.startDate ||
-                      !appliedFilters.endDate
-                    }
-                    className="gap-2"
-                  >
-                    {exportPDFMutation.isPending ||
-                    saveToHistoryMutation.isPending ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        {saveToHistoryMutation.isPending
-                          ? "Salvando..."
-                          : "Exportando..."}
-                      </>
-                    ) : (
-                      <>
-                        <Download className="h-4 w-4" />
-                        Exportar PDF
-                      </>
-                    )}
-                  </Button>
-                  )}
-                </div>
-              </div>
-
-              {employeesLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="h-10 w-10 rounded-full border-4 border-muted-foreground/30 border-t-green-700 animate-spin" />
-                </div>
-              ) : !hasFilters ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  Selecione um período de datas e clique em &quot;Aplicar Filtros&quot;
-                  para visualizar os dados
-                </div>
-              ) : punchesLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="h-10 w-10 rounded-full border-4 border-muted-foreground/30 border-t-green-700 animate-spin" />
-                </div>
-              ) : !punchesData ||
-                (punchesData.pages.length > 0 &&
-                  punchesData.pages.every(
-                    (page) => !page.content || page.content.length === 0
-                  )) ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  Nenhum ponto registrado encontrado no período selecionado
-                </div>
-              ) : filteredEmployees.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  {searchTerm
-                    ? "Nenhum funcionário encontrado com esse nome"
-                    : "Nenhum funcionário com pontos registrados no período selecionado"}
-                </div>
-              ) : (
-                <div className="rounded-md border">
-                  <table className="w-full text-sm gap-4">
-                    <thead>
-                      <tr className="border-b bg-muted/50">
-                        <th className="h-12 px-4 text-left align-middle font-medium">
-                          Funcionário
-                        </th>
-                        <th className="h-12 px-4 text-left align-middle font-medium">
-                          Vale Alimentação
-                        </th>
-                        <th className="h-12 px-4 text-left align-middle font-medium">
-                          Ajuda de Custo
-                        </th>
-                        <th className="h-12 px-4 text-left align-middle font-medium"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredEmployees.map((employee) => (
-                        <tr
-                          key={employee.id}
-                          className="border-b hover:bg-muted/50"
+                  <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-end lg:gap-6">
+                    <div className="flex-1 space-y-4 lg:space-y-0 lg:flex lg:items-center lg:gap-4">
+                      <div className="flex items-center gap-2 flex-1">
+                        <div className="relative flex-1">
+                          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            placeholder="Buscar por nome..."
+                            className="pl-8"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <Input
+                            type="date"
+                            placeholder="Data inicial"
+                            className="w-full sm:w-auto"
+                            value={startDate}
+                            onChange={(e) => setStartDate(e.target.value)}
+                          />
+                          <Input
+                            type="date"
+                            placeholder="Data final"
+                            className="w-full sm:w-auto"
+                            value={endDate}
+                            onChange={(e) => setEndDate(e.target.value)}
+                          />
+                        </div>
+                        <Button
+                          className="whitespace-nowrap"
+                          onClick={handleApplyFilters}
+                          disabled={
+                            !startDate ||
+                            !endDate ||
+                            !isInputDateRangeValid ||
+                            punchesLoading
+                          }
                         >
-                          <td className="p-4 align-middle font-medium">
-                            {formatEmployeeName(employee.name)}
-                          </td>
-                          <td className="p-4 align-middle">
-                            {formatCurrency(employee.totalVr)}
-                          </td>
-                          <td className="p-4 align-middle">
-                            {formatCurrency(employee.totalCostHelp)}
-                          </td>
-                          <td className="p-4 align-middle">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleOpenDetails(employee)}
+                          {punchesLoading ? "Carregando..." : "Aplicar Filtros"}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  {startDate && endDate && !isInputDateRangeValid && (
+                    <div className="text-sm text-red-500 mt-2">
+                      Data final deve ser maior ou igual à data inicial
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="">
+                  <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-4 mb-4">
+                    <div>
+                      <h3 className="text-lg font-semibold">
+                        Relatório de Vale Alimentação
+                      </h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Visualização dos valores de vale alimentação por
+                        funcionário
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <label className="flex items-center gap-2 cursor-pointer text-sm text-muted-foreground">
+                        <Checkbox
+                          checked={showInactiveEmployees}
+                          onCheckedChange={(checked) =>
+                            setShowInactiveEmployees(checked === true)
+                          }
+                        />
+                        Exibir inativos
+                      </label>
+                      {employeeSummaries.length > 0 && hasFilters && (
+                        <Button
+                          onClick={handleExportReport}
+                          disabled={
+                            exportPDFMutation.isPending ||
+                            saveToHistoryMutation.isPending ||
+                            !appliedFilters.startDate ||
+                            !appliedFilters.endDate
+                          }
+                          className="gap-2"
+                        >
+                          {exportPDFMutation.isPending ||
+                          saveToHistoryMutation.isPending ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              {saveToHistoryMutation.isPending
+                                ? "Salvando..."
+                                : "Exportando..."}
+                            </>
+                          ) : (
+                            <>
+                              <Download className="h-4 w-4" />
+                              Exportar PDF
+                            </>
+                          )}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {employeesLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="h-10 w-10 rounded-full border-4 border-muted-foreground/30 border-t-green-700 animate-spin" />
+                    </div>
+                  ) : !hasFilters ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      Selecione um período de datas e clique em &quot;Aplicar
+                      Filtros&quot; para visualizar os dados
+                    </div>
+                  ) : punchesLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="h-10 w-10 rounded-full border-4 border-muted-foreground/30 border-t-green-700 animate-spin" />
+                    </div>
+                  ) : !punchesData ||
+                    (punchesData.pages.length > 0 &&
+                      punchesData.pages.every(
+                        (page) => !page.content || page.content.length === 0
+                      )) ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      Nenhum ponto registrado encontrado no período selecionado
+                    </div>
+                  ) : filteredEmployees.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      {searchTerm
+                        ? "Nenhum funcionário encontrado com esse nome"
+                        : "Nenhum funcionário com pontos registrados no período selecionado"}
+                    </div>
+                  ) : (
+                    <div className="rounded-md border">
+                      <table className="w-full text-sm gap-4">
+                        <thead>
+                          <tr className="border-b bg-muted/50">
+                            <th className="h-12 px-4 text-left align-middle font-medium">
+                              Funcionário
+                            </th>
+                            <th className="h-12 px-4 text-left align-middle font-medium">
+                              Vale Alimentação
+                            </th>
+                            <th className="h-12 px-4 text-left align-middle font-medium">
+                              Ajuda de Custo
+                            </th>
+                            <th className="h-12 px-4 text-left align-middle font-medium"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredEmployees.map((employee) => (
+                            <tr
+                              key={employee.id}
+                              className="border-b hover:bg-muted/50"
                             >
-                              Ver Detalhes
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-            <DialogContent className="dialog-override flex flex-col p-6">
-              <DialogHeader>
-                <DialogTitle className="flex items-center justify-between text-xl">
-                  <span>
-                    Detalhes do Funcionário - {selectedEmployee?.name}
-                  </span>
-                  {selectedEmployee &&
-                    appliedFilters.startDate &&
-                    appliedFilters.endDate && (
-                      <Button
-                        onClick={handleExportDetailedReport}
-                        disabled={
-                          exportPDFMutation.isPending ||
-                          saveToHistoryMutation.isPending ||
-                          workDays.length === 0
-                        }
-                        className="gap-2"
-                        size="sm"
-                      >
-                        {exportPDFMutation.isPending ||
-                        saveToHistoryMutation.isPending ? (
-                          <>
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            {saveToHistoryMutation.isPending
-                              ? "Salvando..."
-                              : "Exportando..."}
-                          </>
-                        ) : (
-                          <>
-                            <Download className="h-4 w-4" />
-                            Exportar PDF
-                          </>
-                        )}
-                      </Button>
-                    )}
-                </DialogTitle>
-              </DialogHeader>
-
-              <div className="flex-1 flex flex-col gap-4 min-h-0 overflow-hidden">
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Nome</p>
-                        <p className="font-medium text-lg">
-                          {selectedEmployee?.name}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">
-                          Total Vale Alimentação
-                        </p>
-                        <p className="font-medium text-lg">
-                          {formatCurrency(
-                            workDays.reduce(
-                              (sum, day) =>
-                                sum + (day.valeAlimentacao ? day.vrValue : 0),
-                              0
-                            )
-                          )}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">
-                          Total Ajuda de Custo
-                        </p>
-                        <p className="font-medium text-lg">
-                          {formatCurrency(
-                            workDays.reduce(
-                              (sum, day) =>
-                                sum + (day.ajudaCusto ? day.costHelpValue : 0),
-                              0
-                            )
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="flex-1 overflow-hidden flex flex-col">
-                  <CardContent className="p-0 flex-1 overflow-hidden">
-                    <div className="h-full flex flex-col overflow-hidden">
-                      <div className="flex-1 overflow-auto relative">
-                        <table className="w-full text-sm">
-                          <thead className="sticky top-0 bg-background z-10 border-b shadow-sm">
-                            <tr className="border-b">
-                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
-                                Data
-                              </th>
-                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
-                                Empresa
-                              </th>
-                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
-                                Entrada 1
-                              </th>
-                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
-                                Saída 1
-                              </th>
-                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
-                                Entrada 2
-                              </th>
-                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
-                                Saída 2
-                              </th>
-                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
-                                Total
-                              </th>
-                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
-                                Vale Alimentação
-                              </th>
-                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
-                                Ajuda de Custo
-                              </th>
+                              <td className="p-4 align-middle font-medium">
+                                {formatEmployeeName(employee.name)}
+                              </td>
+                              <td className="p-4 align-middle">
+                                {formatCurrency(employee.totalVr)}
+                              </td>
+                              <td className="p-4 align-middle">
+                                {formatCurrency(employee.totalCostHelp)}
+                              </td>
+                              <td className="p-4 align-middle">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleOpenDetails(employee)}
+                                >
+                                  Ver Detalhes
+                                </Button>
+                              </td>
                             </tr>
-                          </thead>
-                          <tbody>
-                            {workDays.length === 0 ? (
-                              <tr>
-                                <td
-                                  colSpan={9}
-                                  className="p-8 text-center text-muted-foreground"
-                                >
-                                  Nenhum dia trabalhado encontrado no período
-                                  selecionado
-                                </td>
-                              </tr>
-                            ) : (
-                              workDays.map((day, index) => (
-                                <tr
-                                  key={index}
-                                  className="border-b hover:bg-muted/50"
-                                >
-                                  <td className="p-4 align-middle font-medium whitespace-nowrap">
-                                    {day.formattedDate}
-                                  </td>
-                                  <td className="p-4 align-middle whitespace-nowrap">
-                                    {day.company}
-                                  </td>
-                                  <td className="p-4 align-middle whitespace-nowrap">
-                                    {day.entry1}
-                                  </td>
-                                  <td className="p-4 align-middle whitespace-nowrap">
-                                    {day.exit1}
-                                  </td>
-                                  <td className="p-4 align-middle whitespace-nowrap">
-                                    {day.entry2 || "-"}
-                                  </td>
-                                  <td className="p-4 align-middle whitespace-nowrap">
-                                    {day.exit2 || "-"}
-                                  </td>
-                                  <td className="p-4 align-middle font-medium whitespace-nowrap">
-                                    {day.totalHours}
-                                  </td>
-                                  <td className="p-4 align-middle whitespace-nowrap">
-                                    <div className="flex flex-col gap-1">
-                                      <Button
-                                        variant={
-                                          day.valeAlimentacao
-                                            ? "default"
-                                            : "outline"
-                                        }
-                                        size="sm"
-                                        onClick={() =>
-                                          toggleValeAlimentacao(
-                                            selectedEmployee!.id,
-                                            day.date,
-                                            day.valeAlimentacao,
-                                            day.ajudaCusto,
-                                            day.companyId
-                                          )
-                                        }
-                                        disabled={
-                                          toggleFoodVoucherMutation.isPending
-                                        }
-                                        className="w-28"
-                                      >
-                                        {day.valeAlimentacao
-                                          ? "Ativado"
-                                          : "Desativado"}
-                                      </Button>
-                                      {day.valeAlimentacao &&
-                                        day.vrValue > 0 && (
-                                          <span className="text-xs text-muted-foreground">
-                                            {formatCurrency(day.vrValue)}
-                                          </span>
-                                        )}
-                                    </div>
-                                  </td>
-                                  <td className="p-4 align-middle whitespace-nowrap">
-                                    <div className="flex flex-col gap-1">
-                                      <Button
-                                        variant={
-                                          day.ajudaCusto ? "default" : "outline"
-                                        }
-                                        size="sm"
-                                        onClick={() =>
-                                          toggleAjudaCusto(
-                                            selectedEmployee!.id,
-                                            day.date,
-                                            day.valeAlimentacao,
-                                            day.ajudaCusto,
-                                            day.companyId
-                                          )
-                                        }
-                                        disabled={
-                                          toggleFoodVoucherMutation.isPending
-                                        }
-                                        className="w-28"
-                                      >
-                                        {day.ajudaCusto
-                                          ? "Ativado"
-                                          : "Desativado"}
-                                      </Button>
-                                      {day.ajudaCusto &&
-                                        day.costHelpValue > 0 && (
-                                          <span className="text-xs text-muted-foreground">
-                                            {formatCurrency(day.costHelpValue)}
-                                          </span>
-                                        )}
-                                    </div>
-                                  </td>
-                                </tr>
-                              ))
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </DialogContent>
-          </Dialog>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+                <DialogContent className="dialog-override flex flex-col p-6">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center justify-between text-xl">
+                      <span>
+                        Detalhes do Funcionário - {selectedEmployee?.name}
+                      </span>
+                      {selectedEmployee &&
+                        appliedFilters.startDate &&
+                        appliedFilters.endDate && (
+                          <Button
+                            onClick={handleExportDetailedReport}
+                            disabled={
+                              exportPDFMutation.isPending ||
+                              saveToHistoryMutation.isPending ||
+                              workDays.length === 0
+                            }
+                            className="gap-2"
+                            size="sm"
+                          >
+                            {exportPDFMutation.isPending ||
+                            saveToHistoryMutation.isPending ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                {saveToHistoryMutation.isPending
+                                  ? "Salvando..."
+                                  : "Exportando..."}
+                              </>
+                            ) : (
+                              <>
+                                <Download className="h-4 w-4" />
+                                Exportar PDF
+                              </>
+                            )}
+                          </Button>
+                        )}
+                    </DialogTitle>
+                  </DialogHeader>
+
+                  <div className="flex-1 flex flex-col gap-4 min-h-0 overflow-hidden">
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div>
+                            <p className="text-sm text-muted-foreground">
+                              Nome
+                            </p>
+                            <p className="font-medium text-lg">
+                              {selectedEmployee?.name}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">
+                              Total Vale Alimentação
+                            </p>
+                            <p className="font-medium text-lg">
+                              {formatCurrency(
+                                workDays.reduce(
+                                  (sum, day) =>
+                                    sum +
+                                    (day.valeAlimentacao ? day.vrValue : 0),
+                                  0
+                                )
+                              )}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">
+                              Total Ajuda de Custo
+                            </p>
+                            <p className="font-medium text-lg">
+                              {formatCurrency(
+                                workDays.reduce(
+                                  (sum, day) =>
+                                    sum +
+                                    (day.ajudaCusto ? day.costHelpValue : 0),
+                                  0
+                                )
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="flex-1 overflow-hidden flex flex-col">
+                      <CardContent className="p-0 flex-1 overflow-hidden">
+                        <div className="h-full flex flex-col overflow-hidden">
+                          <div className="flex-1 overflow-auto relative">
+                            <table className="w-full text-sm">
+                              <thead className="sticky top-0 bg-background z-10 border-b shadow-sm">
+                                <tr className="border-b">
+                                  <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
+                                    Data
+                                  </th>
+                                  <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
+                                    Empresa
+                                  </th>
+                                  <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
+                                    Entrada 1
+                                  </th>
+                                  <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
+                                    Saída 1
+                                  </th>
+                                  <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
+                                    Entrada 2
+                                  </th>
+                                  <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
+                                    Saída 2
+                                  </th>
+                                  <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
+                                    Total
+                                  </th>
+                                  <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
+                                    Vale Alimentação
+                                  </th>
+                                  <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
+                                    Ajuda de Custo
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {workDays.length === 0 ? (
+                                  <tr>
+                                    <td
+                                      colSpan={9}
+                                      className="p-8 text-center text-muted-foreground"
+                                    >
+                                      Nenhum dia trabalhado encontrado no
+                                      período selecionado
+                                    </td>
+                                  </tr>
+                                ) : (
+                                  workDays.map((day, index) => (
+                                    <tr
+                                      key={index}
+                                      className="border-b hover:bg-muted/50"
+                                    >
+                                      <td className="p-4 align-middle font-medium whitespace-nowrap">
+                                        {day.formattedDate}
+                                      </td>
+                                      <td className="p-4 align-middle whitespace-nowrap">
+                                        {day.company}
+                                      </td>
+                                      <td className="p-4 align-middle whitespace-nowrap">
+                                        {day.entry1}
+                                      </td>
+                                      <td className="p-4 align-middle whitespace-nowrap">
+                                        {day.exit1}
+                                      </td>
+                                      <td className="p-4 align-middle whitespace-nowrap">
+                                        {day.entry2 || "-"}
+                                      </td>
+                                      <td className="p-4 align-middle whitespace-nowrap">
+                                        {day.exit2 || "-"}
+                                      </td>
+                                      <td className="p-4 align-middle font-medium whitespace-nowrap">
+                                        {day.totalHours}
+                                      </td>
+                                      <td className="p-4 align-middle whitespace-nowrap">
+                                        <div className="flex flex-col gap-1">
+                                          <Button
+                                            variant={
+                                              day.valeAlimentacao
+                                                ? "default"
+                                                : "outline"
+                                            }
+                                            size="sm"
+                                            onClick={() =>
+                                              toggleValeAlimentacao(
+                                                selectedEmployee!.id,
+                                                day.date,
+                                                day.valeAlimentacao,
+                                                day.ajudaCusto,
+                                                day.companyId
+                                              )
+                                            }
+                                            disabled={
+                                              toggleFoodVoucherMutation.isPending
+                                            }
+                                            className="w-28"
+                                          >
+                                            {day.valeAlimentacao
+                                              ? "Ativado"
+                                              : "Desativado"}
+                                          </Button>
+                                          {day.valeAlimentacao &&
+                                            day.vrValue > 0 && (
+                                              <span className="text-xs text-muted-foreground">
+                                                {formatCurrency(day.vrValue)}
+                                              </span>
+                                            )}
+                                        </div>
+                                      </td>
+                                      <td className="p-4 align-middle whitespace-nowrap">
+                                        <div className="flex flex-col gap-1">
+                                          <Button
+                                            variant={
+                                              day.ajudaCusto
+                                                ? "default"
+                                                : "outline"
+                                            }
+                                            size="sm"
+                                            onClick={() =>
+                                              toggleAjudaCusto(
+                                                selectedEmployee!.id,
+                                                day.date,
+                                                day.valeAlimentacao,
+                                                day.ajudaCusto,
+                                                day.companyId
+                                              )
+                                            }
+                                            disabled={
+                                              toggleFoodVoucherMutation.isPending
+                                            }
+                                            className="w-28"
+                                          >
+                                            {day.ajudaCusto
+                                              ? "Ativado"
+                                              : "Desativado"}
+                                          </Button>
+                                          {day.ajudaCusto &&
+                                            day.costHelpValue > 0 && (
+                                              <span className="text-xs text-muted-foreground">
+                                                {formatCurrency(
+                                                  day.costHelpValue
+                                                )}
+                                              </span>
+                                            )}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  ))
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </TabsContent>
 
             <TabsContent value="historico" className="mt-6">

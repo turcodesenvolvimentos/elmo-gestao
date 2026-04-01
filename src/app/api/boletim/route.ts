@@ -20,6 +20,15 @@ const DAYS_OF_WEEK = [
   "Sábado",
 ];
 
+function getPreviousDate(dateStr: string): string {
+  const d = new Date(dateStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() - 1);
+  const year = d.getUTCFullYear();
+  const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 interface Punch {
   date: string;
   date_in: string;
@@ -39,7 +48,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-    if (!checkPermission(session, Permission.BOLETIM)) {
+  if (!checkPermission(session, Permission.BOLETIM)) {
     return NextResponse.json(
       { error: "Sem permissão para gerenciar boletim" },
       { status: 403 }
@@ -137,14 +146,15 @@ export async function GET(request: NextRequest) {
       employeeIds: employeeInternalIds,
     });
 
-    // Buscar pontos aprovados no período
+    // Buscar pontos aprovados no período (inclui 1 dia anterior para contexto de virada noturna)
+    const contextStartDate = getPreviousDate(startDate);
     const { data: punches, error: punchesError } = await supabaseAdmin
       .from("punches")
       .select(
         "employee_id, employee_name, date, date_in, date_out, location_in_address, location_out_address"
       )
       .in("employee_id", employeeSolidesIds)
-      .gte("date", startDate)
+      .gte("date", contextStartDate)
       .lte("date", endDate)
       .eq("status", "APPROVED")
       .order("date", { ascending: true })
@@ -262,6 +272,8 @@ export async function GET(request: NextRequest) {
       for (const date of [...punchesByWorkDate.keys()].sort((a, b) =>
         a.localeCompare(b)
       )) {
+        if (date < startDate || date > endDate) continue;
+
         const dayPunches = punchesByWorkDate.get(date) || [];
         // Ordenar punches do dia por horário de entrada
         const sortedPunches = [...dayPunches].sort(
@@ -281,30 +293,30 @@ export async function GET(request: NextRequest) {
         // Pegar os dois primeiros períodos (entry1/exit1, entry2/exit2)
         const entry1 = sortedPunches[0]
           ? new Date(sortedPunches[0].date_in).toLocaleTimeString("pt-BR", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })
+            hour: "2-digit",
+            minute: "2-digit",
+          })
           : undefined;
 
         const exit1 = sortedPunches[0]
           ? new Date(sortedPunches[0].date_out).toLocaleTimeString("pt-BR", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })
+            hour: "2-digit",
+            minute: "2-digit",
+          })
           : undefined;
 
         const entry2 = sortedPunches[1]
           ? new Date(sortedPunches[1].date_in).toLocaleTimeString("pt-BR", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })
+            hour: "2-digit",
+            minute: "2-digit",
+          })
           : undefined;
 
         const exit2 = sortedPunches[1]
           ? new Date(sortedPunches[1].date_out).toLocaleTimeString("pt-BR", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })
+            hour: "2-digit",
+            minute: "2-digit",
+          })
           : undefined;
 
         // Calcular horas usando o ponto-calculator
