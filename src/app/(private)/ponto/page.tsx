@@ -98,14 +98,25 @@ function classifyAjusteTipo(
 
 function toDateKey(value: string | number | undefined): string | null {
   if (value === undefined || value === null) return null;
+  const formatLocalDate = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
   if (typeof value === "string") {
     if (!value) return null;
-    return value.includes("T") ? value.split("T")[0] : value.substring(0, 10);
+    if (value.includes("T")) {
+      const d = new Date(value);
+      if (!isNaN(d.getTime())) return formatLocalDate(d);
+      return value.split("T")[0];
+    }
+    return value.substring(0, 10);
   }
   if (typeof value === "number") {
     const d = new Date(value > 1e12 ? value : value * 1000);
     if (isNaN(d.getTime())) return null;
-    return d.toISOString().split("T")[0];
+    return formatLocalDate(d);
   }
   return null;
 }

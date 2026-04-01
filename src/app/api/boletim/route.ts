@@ -29,6 +29,31 @@ function getPreviousDate(dateStr: string): string {
   return `${year}-${month}-${day}`;
 }
 
+function toLocalDateKey(value: string | number | undefined): string | null {
+  if (value === undefined || value === null) return null;
+  const formatLocalDate = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+  if (typeof value === "string") {
+    if (!value) return null;
+    if (value.includes("T")) {
+      const d = new Date(value);
+      if (!isNaN(d.getTime())) return formatLocalDate(d);
+      return value.split("T")[0];
+    }
+    return value.substring(0, 10);
+  }
+  if (typeof value === "number") {
+    const d = new Date(value > 1e12 ? value : value * 1000);
+    if (isNaN(d.getTime())) return null;
+    return formatLocalDate(d);
+  }
+  return null;
+}
+
 interface Punch {
   date: string;
   date_in: string;
@@ -229,7 +254,11 @@ export async function GET(request: NextRequest) {
         | undefined;
 
       sortedEmployeePunches.forEach((punch) => {
-        const punchDateStr = punch.date;
+        const punchDateStr =
+          toLocalDateKey(punch.date_in) ??
+          toLocalDateKey(punch.date_out) ??
+          toLocalDateKey(punch.date);
+        if (!punchDateStr) return;
         const entryDate = punch.date_in ? new Date(punch.date_in) : undefined;
         const entryHour = entryDate ? entryDate.getHours() : undefined;
         const isEarlyMorning = entryHour !== undefined ? entryHour < 12 : false;
