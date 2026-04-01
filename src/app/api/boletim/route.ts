@@ -29,6 +29,15 @@ function getPreviousDate(dateStr: string): string {
   return `${year}-${month}-${day}`;
 }
 
+function getNextDate(dateStr: string): string {
+  const d = new Date(dateStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + 1);
+  const year = d.getUTCFullYear();
+  const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function toLocalDateKey(value: string | number | undefined): string | null {
   if (value === undefined || value === null) return null;
   const formatLocalDate = (date: Date): string => {
@@ -173,6 +182,7 @@ export async function GET(request: NextRequest) {
 
     // Buscar pontos aprovados no período (inclui 1 dia anterior para contexto de virada noturna)
     const contextStartDate = getPreviousDate(startDate);
+    const contextEndDate = getNextDate(endDate);
     const { data: punches, error: punchesError } = await supabaseAdmin
       .from("punches")
       .select(
@@ -180,7 +190,7 @@ export async function GET(request: NextRequest) {
       )
       .in("employee_id", employeeSolidesIds)
       .gte("date", contextStartDate)
-      .lte("date", endDate)
+      .lte("date", contextEndDate)
       .eq("status", "APPROVED")
       .order("date", { ascending: true })
       .order("date_in", { ascending: true });

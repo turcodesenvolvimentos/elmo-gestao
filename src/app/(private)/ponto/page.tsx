@@ -289,6 +289,7 @@ export default function PontoPage() {
     shouldSendDates && isDateRangeValid && filter.endDate
       ? (() => {
           const date = new Date(filter.endDate + "T23:59:59.999Z");
+          date.setUTCDate(date.getUTCDate() + 1);
           return date.getTime().toString();
         })()
       : undefined;
@@ -335,6 +336,14 @@ export default function PontoPage() {
             return toYyyyMmDdFromUtcDate(d);
           })()
         : null;
+    const contextEndDateStr =
+      shouldSendDates && filter.endDate
+        ? (() => {
+            const d = new Date(filter.endDate + "T00:00:00Z");
+            d.setUTCDate(d.getUTCDate() + 1);
+            return toYyyyMmDdFromUtcDate(d);
+          })()
+        : null;
 
     if (shouldSendDates && filter.startDate && filter.endDate) {
       allPunchesRaw = allPunchesRaw.filter((punch: Punch) => {
@@ -347,7 +356,7 @@ export default function PontoPage() {
 
         return (
           punchDateStr >= (contextStartDateStr || filter.startDate) &&
-          punchDateStr <= filter.endDate
+          punchDateStr <= (contextEndDateStr || filter.endDate)
         );
       });
     }

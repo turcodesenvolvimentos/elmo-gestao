@@ -191,6 +191,7 @@ export default function ValeAlimentacaoPage() {
     hasFilters && isDateRangeValid && appliedFilters.endDate
       ? (() => {
           const date = new Date(appliedFilters.endDate + "T23:59:59.999Z");
+          date.setUTCDate(date.getUTCDate() + 1);
           return date.getTime().toString();
         })()
       : undefined;
@@ -237,6 +238,14 @@ export default function ValeAlimentacaoPage() {
             return toYyyyMmDdFromUtcDate(d);
           })()
         : null;
+    const contextEndDateStr =
+      appliedFilters.startDate && appliedFilters.endDate
+        ? (() => {
+            const d = new Date(appliedFilters.endDate + "T00:00:00Z");
+            d.setUTCDate(d.getUTCDate() + 1);
+            return toYyyyMmDdFromUtcDate(d);
+          })()
+        : null;
 
     if (allPunchesRaw.length === 0) {
       return new Map<number, WorkDay[]>();
@@ -263,7 +272,7 @@ export default function ValeAlimentacaoPage() {
         if (appliedFilters.startDate && appliedFilters.endDate) {
           return (
             punchDateStr >= (contextStartDateStr || appliedFilters.startDate) &&
-            punchDateStr <= appliedFilters.endDate
+          punchDateStr <= (contextEndDateStr || appliedFilters.endDate)
           );
         }
 
