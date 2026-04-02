@@ -137,6 +137,10 @@ function toYyyyMmDdFromUtcDate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+function isNoCompany(value?: string | null): boolean {
+  return (value || "").trim().toLowerCase() === "sem empresa";
+}
+
 interface GroupedPunch {
   key: string;
   employeeName: string;
@@ -1315,7 +1319,13 @@ export default function PontoPage() {
                                   <TableCell className="px-4 py-3 border-r border-gray-200">
                                     {group.employeeName}
                                   </TableCell>
-                                  <TableCell className="px-4 py-3 border-r border-gray-200">
+                                  <TableCell
+                                    className={`px-4 py-3 border-r border-gray-200 ${
+                                      isNoCompany(group.company)
+                                        ? "bg-yellow-100 text-yellow-900 font-semibold"
+                                        : ""
+                                    }`}
+                                  >
                                     {group.company}
                                   </TableCell>
                                   <TableCell

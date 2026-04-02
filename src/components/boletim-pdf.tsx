@@ -82,6 +82,19 @@ const styles = StyleSheet.create({
   col2: { width: "7%", fontSize: 7 }, // Função
   col3: { width: "6%", fontSize: 7 }, // Setor
   colLocal: { width: "7%", fontSize: 6 }, // Empresa no dia
+  colLocalContent: { width: "7%" }, // Empresa no dia (conteúdo)
+  companyBadge: {
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 2,
+    paddingVertical: 1,
+    alignSelf: "flex-start",
+  },
+  companyBadgeText: {
+    fontSize: 6.2,
+    color: "#92400E",
+    fontWeight: "bold",
+  },
+  companyText: { fontSize: 6 },
   col4: { width: "5%", fontSize: 7 }, // Dia
   col5: { width: "6%", fontSize: 7 }, // Dia Semana
   col6: { width: "4%", fontSize: 7 }, // Entrada 1
@@ -181,6 +194,9 @@ const formatCurrency = (value: number) => {
     currency: "BRL",
   }).format(value);
 };
+
+const isNoCompany = (value?: string | null): boolean =>
+  (value || "").trim().toLowerCase() === "sem empresa";
 
 const calculateTotals = (data: BoletimData[]) => {
   const parseTime = (time: string): number => {
@@ -333,9 +349,19 @@ export const BoletimPDF: React.FC<BoletimPDFProps> = ({
               </Text>
               <Text style={styles.col2}>{row.position}</Text>
               <Text style={styles.col3}>{row.department}</Text>
-              <Text style={styles.colLocal}>
-                {row.work_company ?? "—"}
-              </Text>
+              <View style={styles.colLocalContent}>
+                {isNoCompany(row.work_company) ? (
+                  <View style={styles.companyBadge}>
+                    <Text style={styles.companyBadgeText}>
+                      {row.work_company ?? "—"}
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={styles.companyText}>
+                    {row.work_company ?? "—"}
+                  </Text>
+                )}
+              </View>
               <Text style={styles.col4}>{formatDate(row.date)}</Text>
               <Text style={styles.col5}>{row.day_of_week}</Text>
               <Text style={styles.col6}>{row.entry1 || "-"}</Text>

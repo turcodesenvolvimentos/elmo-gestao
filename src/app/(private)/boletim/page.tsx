@@ -91,6 +91,10 @@ const ALL_VALUES = {
   DATE: "all-dates",
 };
 
+function isNoCompany(value?: string | null): boolean {
+  return (value || "").trim().toLowerCase() === "sem empresa";
+}
+
 export default function BoletimPage() {
   const [activeTab, setActiveTab] = useState("gerar");
   const [searchTerm, setSearchTerm] = useState("");
@@ -1042,7 +1046,13 @@ export default function BoletimPage() {
                                       <td className="p-3 align-middle whitespace-nowrap">
                                         {item.department}
                                       </td>
-                                      <td className="p-3 align-middle whitespace-nowrap">
+                                      <td
+                                        className={`p-3 align-middle whitespace-nowrap ${
+                                          isNoCompany(item.work_company)
+                                            ? "bg-yellow-100 text-yellow-900 font-semibold"
+                                            : ""
+                                        }`}
+                                      >
                                         {item.work_company ?? "—"}
                                       </td>
                                       <td className="p-3 align-middle whitespace-nowrap">

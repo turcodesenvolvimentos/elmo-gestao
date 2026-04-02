@@ -78,6 +78,21 @@ const styles = StyleSheet.create({
   },
   col1: { width: "9%", fontSize: 7 },
   col2: { width: "7%", fontSize: 7 },
+  col2Content: { width: "7%" },
+  companyBadge: {
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 2,
+    paddingVertical: 1,
+    alignSelf: "flex-start",
+  },
+  companyBadgeText: {
+    fontSize: 6.2,
+    color: "#92400E",
+    fontWeight: "bold",
+  },
+  companyText: {
+    fontSize: 7,
+  },
   col3: { width: "5.5%", fontSize: 6 },
   col4: { width: "4.5%", fontSize: 6 },
   col5: { width: "4%", fontSize: 6 },
@@ -229,6 +244,9 @@ const formatHours = (hours: number): string => {
     .padStart(2, "0")}`;
 };
 
+const isNoCompany = (value?: string | null): boolean =>
+  (value || "").trim().toLowerCase() === "sem empresa";
+
 const calculateTotals = (data: PontoData[]) => {
   const totals = data.reduce(
     (acc, item) => {
@@ -354,7 +372,15 @@ export const PontoPDF: React.FC<PontoPDFProps> = ({
               <Text style={styles.col1}>
                 {formatEmployeeName(row.employeeName)}
               </Text>
-              <Text style={styles.col2}>{row.company}</Text>
+              <View style={styles.col2Content}>
+                {isNoCompany(row.company) ? (
+                  <View style={styles.companyBadge}>
+                    <Text style={styles.companyBadgeText}>{row.company}</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.companyText}>{row.company}</Text>
+                )}
+              </View>
               <Text style={styles.col3}>{formatDate(row.date)}</Text>
               <Text style={styles.col4}>{row.dayOfWeek}</Text>
               <Text style={styles.col5}>{row.entry1 || "-"}</Text>
@@ -398,8 +424,7 @@ export const PontoPDF: React.FC<PontoPDFProps> = ({
 
         <View style={styles.signatureSection}>
           <Text style={styles.signatureDeclaration}>
-            Reconheço a exatidão e confirmo a frequência constante deste
-            cartão.
+            Reconheço a exatidão e confirmo a frequência constante deste cartão.
           </Text>
           <View style={styles.signatureRow}>
             <View style={styles.signatureBlock}>
