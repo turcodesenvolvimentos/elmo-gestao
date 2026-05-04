@@ -28,7 +28,7 @@ function parseDate(dateValue: string | Date | undefined): Date | null {
       const date2 = new Date(
         parseInt(parts[2]),
         parseInt(parts[1]) - 1,
-        parseInt(parts[0])
+        parseInt(parts[0]),
       );
       if (!isNaN(date2.getTime())) {
         return date2;
@@ -52,7 +52,7 @@ function dateToYyyyMmDdLocal(d: Date): string {
 
 function isLibOrCustomHoliday(
   d: Date,
-  customHolidayDates?: ReadonlySet<string>
+  customHolidayDates?: ReadonlySet<string>,
 ): boolean {
   const fromLib = !!hd.isHoliday(d);
   if (!customHolidayDates || customHolidayDates.size === 0) return fromLib;
@@ -62,7 +62,7 @@ function isLibOrCustomHoliday(
 /** Feriado nacional (lib BR) ou cadastrado em custom_holidays — mesma convenção de data YYYY-MM-DD do ponto */
 export function isHolidayForDisplay(
   dateStrYyyyMmDd: string,
-  customHolidayDates?: ReadonlySet<string>
+  customHolidayDates?: ReadonlySet<string>,
 ): boolean {
   const d = new Date(dateStrYyyyMmDd + "T12:00:00Z");
   return isLibOrCustomHoliday(d, customHolidayDates);
@@ -71,7 +71,7 @@ export function isHolidayForDisplay(
 export function calcularHorasPorPeriodo(
   punches: Array<{ dateIn?: string; dateOut?: string }>,
   dataReferencia?: string | Date,
-  customHolidayDates?: ReadonlySet<string>
+  customHolidayDates?: ReadonlySet<string>,
 ) {
   const periodos: Array<{ inicio: Date; fim: Date }> = [];
   punches.forEach((punch) => {
@@ -152,6 +152,17 @@ export function calcularHorasPorPeriodo(
     const tipo = isNoturno(hora) ? "noturna" : "diurna";
     const diaRealMinuto = minuto.getDay();
 
+    if (ehFeriado) {
+      if (tipo === "diurna") {
+        extra100Diurno += 1;
+        horasDiurnasReais += 1;
+      } else {
+        extra100Noturno += 1;
+        horasNoturnasReais += 1;
+      }
+      continue;
+    }
+
     if (ehDomingo) {
       if (diaRealMinuto === 0) {
         if (tipo === "diurna") {
@@ -189,12 +200,12 @@ export function calcularHorasPorPeriodo(
       const dataMinuto = new Date(
         minuto.getFullYear(),
         minuto.getMonth(),
-        minuto.getDate()
+        minuto.getDate(),
       );
       const dataPontoDate = new Date(
         dataPonto.getFullYear(),
         dataPonto.getMonth(),
-        dataPonto.getDate()
+        dataPonto.getDate(),
       );
       if (dataMinuto.getTime() > dataPontoDate.getTime()) {
         if (tipo === "diurna") {
@@ -300,7 +311,7 @@ export function calcularHorasPorPeriodo(
     } else {
       horasNormaisHoras = Math.max(
         0,
-        cargaHorariaDiaria - (extra100DiurnoHoras + extra100NoturnoHoras)
+        cargaHorariaDiaria - (extra100DiurnoHoras + extra100NoturnoHoras),
       );
 
       extra50Noturno =
@@ -329,7 +340,7 @@ export function calcularHorasPorPeriodo(
   const diaSemanaEntrada = entradaInicial.getDay();
   const ehFeriadoEntrada = isLibOrCustomHoliday(
     entradaInicial,
-    customHolidayDates
+    customHolidayDates,
   );
   const entradaEhDomingoOuFeriado = diaSemanaEntrada === 0 || ehFeriadoEntrada;
 
@@ -348,7 +359,7 @@ export function calcularHorasPorPeriodo(
       extra50Noturno = extra50Total;
     } else {
       const inicioExtra50 = new Date(
-        saidaFinal.getTime() - extra50Total * MINUTOS_POR_HORA * MS_POR_MINUTO
+        saidaFinal.getTime() - extra50Total * MINUTOS_POR_HORA * MS_POR_MINUTO,
       );
 
       let extra50DiurnoCalculado = 0;
@@ -398,6 +409,6 @@ export function formatarHoras(horas: number): string {
   }
   return `${String(horasInteiras).padStart(2, "0")}:${String(minutos).padStart(
     2,
-    "0"
+    "0",
   )}`;
 }
