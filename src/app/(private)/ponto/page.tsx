@@ -82,7 +82,7 @@ function removeAccentsFrom(str: string): string {
 
 /** Classifica em apenas 2 motivos: trabalho ou não relacionada ao trabalho. */
 function classifyAjusteTipo(
-  description: string | undefined
+  description: string | undefined,
 ): AjusteTipo | null {
   if (!description || !String(description).trim()) return null;
   const n = removeAccentsFrom(String(description).toLowerCase());
@@ -122,7 +122,7 @@ function toDateKey(value: string | number | undefined): string | null {
 }
 
 function getHourFromDateValue(
-  value: string | number | undefined
+  value: string | number | undefined,
 ): number | null {
   if (value === undefined || value === null) return null;
   const date = new Date(value);
@@ -173,7 +173,7 @@ interface GroupedPunch {
 
 /** Motivo de ajuste vindo da API Solides. */
 function getAdjustmentReasonDescription(
-  punch: PunchFromApi
+  punch: PunchFromApi,
 ): string | undefined {
   const desc =
     punch.adjustmentReason?.description ??
@@ -254,7 +254,7 @@ export default function PontoPage() {
   const navigateEmployee = (direction: "prev" | "next") => {
     if (employeeOptions.length === 0) return;
     const currentIndex = employeeOptions.findIndex(
-      (employee) => employee.id === filter.employeeId
+      (employee) => employee.id === filter.employeeId,
     );
     let nextIndex: number;
     if (currentIndex === -1) {
@@ -311,7 +311,7 @@ export default function PontoPage() {
     endDateTimestamp,
     filter.employeeId > 0 ? filter.employeeId : undefined,
     filter.status,
-    canFetch
+    canFetch,
   );
 
   const { data: escalaEntries = [] } = usePontoEscalaCompanies({
@@ -385,7 +385,7 @@ export default function PontoPage() {
 
     allPunchesRaw.sort((a: Punch, b: Punch) => {
       const employeeCompare = (a.employee?.name || "").localeCompare(
-        b.employee?.name || ""
+        b.employee?.name || "",
       );
       if (employeeCompare !== 0) return employeeCompare;
 
@@ -397,7 +397,12 @@ export default function PontoPage() {
     const grouped = new Map<string, GroupedPunch>();
     const lastGroupByEmployee = new Map<
       string,
-      { key: string; dateStr: string; hadNightShift: boolean }
+      {
+        key: string;
+        dateStr: string;
+        hadNightShift: boolean;
+        lastNightShiftOpen: boolean;
+      }
     >();
 
     allPunchesRaw.forEach((punch: Punch) => {
@@ -419,6 +424,7 @@ export default function PontoPage() {
       const shouldAttachToPreviousDay =
         !!lastGroup &&
         isEarlyMorning &&
+        lastGroup.lastNightShiftOpen &&
         (() => {
           const [y, m, d] = lastGroup.dateStr.split("-").map(Number);
           const lastDate = new Date(Date.UTC(y, m - 1, d));
@@ -488,11 +494,19 @@ export default function PontoPage() {
       });
 
       const prev = lastGroupByEmployee.get(employeeName);
+      const currentPunchIsNightShiftWithoutOut =
+        isNightShiftEntry && !punch.dateOut;
       lastGroupByEmployee.set(employeeName, {
         key,
         dateStr: baseDateStr,
         hadNightShift:
           (prev?.hadNightShift && prev.key === key) || isNightShiftEntry,
+        lastNightShiftOpen:
+          currentPunchIsNightShiftWithoutOut ||
+          (!!prev &&
+            prev.key === key &&
+            prev.lastNightShiftOpen &&
+            !isNightShiftEntry),
       });
     });
 
@@ -511,12 +525,16 @@ export default function PontoPage() {
         const previousGroup = groups[i - 1];
         const currentGroup = groups[i];
 
-        const previousHasNightShift = previousGroup.punches.some((p) => {
-          const entryHour = getHourFromDateValue(p.dateIn);
-          return entryHour !== null && entryHour >= 18;
-        });
+        const lastNightPunch = previousGroup.punches
+          .slice()
+          .reverse()
+          .find((p) => {
+            const entryHour = getHourFromDateValue(p.dateIn);
+            return entryHour !== null && entryHour >= 18;
+          });
 
-        if (!previousHasNightShift) continue;
+        // Só realocar se o último turno noturno está aberto (sem dateOut)
+        if (!lastNightPunch || lastNightPunch.dateOut) continue;
 
         const punchesToMove = currentGroup.punches.filter((p) => {
           const punchDate = toDateKey(p.dateIn) ?? toDateKey(p.dateOut);
@@ -529,7 +547,7 @@ export default function PontoPage() {
 
         previousGroup.punches.push(...punchesToMove);
         currentGroup.punches = currentGroup.punches.filter(
-          (p) => !punchesToMove.includes(p)
+          (p) => !punchesToMove.includes(p),
         );
       }
     });
@@ -570,7 +588,7 @@ export default function PontoPage() {
       const calculoHoras = calcularHorasPorPeriodo(
         group.punches,
         group.date,
-        customHolidaySet
+        customHolidaySet,
       );
       const includeInSelectedRange =
         !shouldSendDates ||
@@ -629,7 +647,7 @@ export default function PontoPage() {
         .map(Number);
       const [endYear, endMonth, endDay] = lastDate.split("-").map(Number);
       const startDateObj = new Date(
-        Date.UTC(startYear, startMonth - 1, startDay)
+        Date.UTC(startYear, startMonth - 1, startDay),
       );
       const endDateObj = new Date(Date.UTC(endYear, endMonth - 1, endDay));
 
@@ -699,7 +717,7 @@ export default function PontoPage() {
         if (!shouldSendDates || !filter.startDate || !filter.endDate)
           return true;
         return group.date >= filter.startDate && group.date <= filter.endDate;
-      }
+      },
     );
 
     groupedPunchesInSelectedRange.sort((a, b) => {
@@ -744,7 +762,7 @@ export default function PontoPage() {
   const prepareExportData = (): PontoData[] => {
     return groupedPunches.map((group) => {
       const emp = employees?.content?.find(
-        (e) => formatEmployeeName(e.name) === group.employeeName
+        (e) => formatEmployeeName(e.name) === group.employeeName,
       );
       const entry1 = group.punches[0]?.dateIn
         ? new Date(group.punches[0].dateIn).toLocaleTimeString("pt-BR", {
@@ -803,7 +821,7 @@ export default function PontoPage() {
 
     const exportData = prepareExportData();
     const selectedEmployee = employees?.content?.find(
-      (e) => e.id === filter.employeeId
+      (e) => e.id === filter.employeeId,
     );
 
     saveToHistoryMutation.mutate(
@@ -837,7 +855,7 @@ export default function PontoPage() {
             },
           });
         },
-      }
+      },
     );
   };
 
@@ -850,7 +868,7 @@ export default function PontoPage() {
           fetchNextPage();
         }
       },
-      { threshold: 0.1 }
+      { threshold: 0.1 },
     );
 
     const currentRef = loadMoreRef.current;
@@ -1052,7 +1070,7 @@ export default function PontoPage() {
                                           "mr-2 h-4 w-4",
                                           filter.employeeId === 0
                                             ? "opacity-100"
-                                            : "opacity-0"
+                                            : "opacity-0",
                                         )}
                                       />
                                       Todos
@@ -1075,7 +1093,7 @@ export default function PontoPage() {
                                               "mr-2 h-4 w-4",
                                               filter.employeeId === employee?.id
                                                 ? "opacity-100"
-                                                : "opacity-0"
+                                                : "opacity-0",
                                             )}
                                           />
                                           {employee.name}
@@ -1333,18 +1351,18 @@ export default function PontoPage() {
                                       group.ajusteTipo === "work"
                                         ? "text-white"
                                         : group.ajusteTipo === "non_work"
-                                        ? "text-white"
-                                        : group.isHoliday ||
-                                          group.dayOfWeekNumber === 0
-                                        ? "bg-blue-100 text-blue-800"
-                                        : ""
+                                          ? "text-white"
+                                          : group.isHoliday ||
+                                              group.dayOfWeekNumber === 0
+                                            ? "bg-blue-100 text-blue-800"
+                                            : ""
                                     }`}
                                     style={
                                       group.ajusteTipo === "work"
                                         ? { backgroundColor: "#0070C0" }
                                         : group.ajusteTipo === "non_work"
-                                        ? { backgroundColor: "#00B0F0" }
-                                        : undefined
+                                          ? { backgroundColor: "#00B0F0" }
+                                          : undefined
                                     }
                                   >
                                     {group.formattedDate}
@@ -1354,18 +1372,18 @@ export default function PontoPage() {
                                       group.ajusteTipo === "work"
                                         ? "text-white"
                                         : group.ajusteTipo === "non_work"
-                                        ? "text-white"
-                                        : group.isHoliday ||
-                                          group.dayOfWeekNumber === 0
-                                        ? "bg-blue-100 text-blue-800"
-                                        : ""
+                                          ? "text-white"
+                                          : group.isHoliday ||
+                                              group.dayOfWeekNumber === 0
+                                            ? "bg-blue-100 text-blue-800"
+                                            : ""
                                     }`}
                                     style={
                                       group.ajusteTipo === "work"
                                         ? { backgroundColor: "#0070C0" }
                                         : group.ajusteTipo === "non_work"
-                                        ? { backgroundColor: "#00B0F0" }
-                                        : undefined
+                                          ? { backgroundColor: "#00B0F0" }
+                                          : undefined
                                     }
                                   >
                                     {group.dayOfWeek}
@@ -1376,7 +1394,7 @@ export default function PontoPage() {
                                       const punch = group.punches[index];
                                       const entryTime = punch?.dateIn
                                         ? new Date(
-                                            punch.dateIn
+                                            punch.dateIn,
                                           ).toLocaleTimeString("pt-BR", {
                                             hour: "2-digit",
                                             minute: "2-digit",
@@ -1384,7 +1402,7 @@ export default function PontoPage() {
                                         : "-";
                                       const exitTime = punch?.dateOut
                                         ? new Date(
-                                            punch.dateOut
+                                            punch.dateOut,
                                           ).toLocaleTimeString("pt-BR", {
                                             hour: "2-digit",
                                             minute: "2-digit",
@@ -1403,7 +1421,7 @@ export default function PontoPage() {
                                           </TableCell>
                                         </Fragment>
                                       );
-                                    }
+                                    },
                                   )}
 
                                   <TableCell className="px-4 py-3 border-r border-gray-200">
