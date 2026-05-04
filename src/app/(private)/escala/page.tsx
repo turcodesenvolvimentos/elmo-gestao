@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import {
   SidebarInset,
@@ -36,6 +36,7 @@ import {
   Trash2,
   Copy,
   ChevronDown,
+  Pencil,
 } from "lucide-react";
 import {
   Dialog,
@@ -73,6 +74,34 @@ import {
 } from "@/components/ui/collapsible";
 import { formatEmployeeName } from "@/utils/employee-name-format";
 
+// Tipo para grupo de escala (agrupado por shift + período)
+interface EscalaAgrupada {
+  shiftId: string;
+  shiftName: string;
+  entry1: string;
+  exit1: string;
+  entry2: string | null;
+  exit2: string | null;
+  startDate: string;
+  endDate: string | null;
+  funcionarios: {
+    nome: string;
+    escalaId: string;
+    employeeId: string;
+  }[];
+}
+
+// Função auxiliar para formatar data sem fuso horário (mantém o dia exato)
+function formatDateLocal(dateString: string): string {
+  const [year, month, day] = dateString.split("-");
+  return `${day}/${month}/${year}`;
+}
+
+// Função para formatar hora (hh:mm)
+function formatTime(time: string): string {
+  return time.slice(0, 5);
+}
+
 export default function EscalaPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
@@ -81,16 +110,16 @@ export default function EscalaPage() {
     new Set()
   );
   const [selectedShiftId, setSelectedShiftId] = useState("");
-  const [selectedEmployeeFilter, setSelectedEmployeeFilter] = useState<
-    "all" | string
-  >("all");
-  const [funcionariosExpandido, setFuncionariosExpandido] = useState<
-    Set<string>
-  >(new Set());
   const [startDate, setStartDate] = useState(
     new Date().toISOString().split("T")[0]
   );
   const [endDate, setEndDate] = useState("");
+
+  // Estados para o modal de visualização/edição
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [viewCompanyId, setViewCompanyId] = useState<string | null>(null);
+  const [filterDate, setFilterDate] = useState(""); // filtro único
+  const [editingGroup, setEditingGroup] = useState<EscalaAgrupada | null>(null);
 
   // Hooks
   const { data: companiesData } = useCompanies();
@@ -103,7 +132,6 @@ export default function EscalaPage() {
   });
   const batchCreateEscalasMutation = useBatchCreateEscalas();
   const deleteEscalaMutation = useDeleteEscala();
-  // Buscar todas as escalas aplicadas e filtrar por empresa no cliente
   const { data: escalasData, isLoading: escalasLoading } = useEscalas();
 
   const companies = useMemo(
@@ -115,74 +143,11 @@ export default function EscalaPage() {
   const allShifts = allShiftsData?.shifts || [];
   const escalas = escalasData?.escalas || [];
 
-  // Escalas apenas da empresa selecionada (com base no company_id do turno)
-  const escalasByCompany = useMemo(
-    () =>
-      escalas.filter(
-        (escala) =>
-          !!selectedCompany && escala.shift?.company_id === selectedCompany
-      ),
-    [escalas, selectedCompany]
-  );
-
-  // Agrupar por escala (turno) + período: cada item = uma escala aplicada com lista de funcionários
-  type EscalaAgrupada = {
-    shiftId: string;
-    shiftName: string;
-    entry1: string;
-    exit1: string;
-    entry2: string | null;
-    exit2: string | null;
-    startDate: string;
-    endDate: string | null;
-    funcionarios: { nome: string; escalaId: string }[];
-  };
-  const escalasAgrupadas = useMemo((): EscalaAgrupada[] => {
-    const map = new Map<
-      string,
-      {
-        shiftId: string;
-        shiftName: string;
-        entry1: string;
-        exit1: string;
-        entry2: string | null;
-        exit2: string | null;
-        startDate: string;
-        endDate: string | null;
-        funcionarios: { nome: string; escalaId: string }[];
-      }
-    >();
-    escalasByCompany.forEach((e) => {
-      const key = `${e.shift_id}-${e.start_date}-${e.end_date ?? "indefinido"}`;
-      if (!map.has(key)) {
-        map.set(key, {
-          shiftId: e.shift_id,
-          shiftName: e.shift?.name ?? "Escala",
-          entry1: e.shift?.entry1 ?? "",
-          exit1: e.shift?.exit1 ?? "",
-          entry2: e.shift?.entry2 ?? null,
-          exit2: e.shift?.exit2 ?? null,
-          startDate: e.start_date,
-          endDate: e.end_date ?? null,
-          funcionarios: [],
-        });
-      }
-      const g = map.get(key)!;
-      g.funcionarios.push({
-        nome: e.employee?.name ?? "Funcionário não encontrado",
-        escalaId: e.id,
-      });
-    });
-    return Array.from(map.values()).sort((a, b) =>
-      a.shiftName.localeCompare(b.shiftName, "pt-BR")
-    );
-  }, [escalasByCompany]);
-
-  // Por empresa: quantas escalas (turnos) distintas estão aplicadas e para quantos funcionários
+  // Badge de escalas por empresa (contagem de turnos distintos e funcionários)
   const escalasBadgeByCompanyId = useMemo(() => {
     const distinctShifts: Record<string, Set<string>> = {};
     const funcionariosCount: Record<string, number> = {};
-    escalas.forEach((e) => {
+    escalas.forEach((e: any) => {
       const cid = e.shift?.company_id;
       if (!cid) return;
       if (!distinctShifts[cid]) distinctShifts[cid] = new Set();
@@ -200,10 +165,21 @@ export default function EscalaPage() {
 
   // Filtrar empresas por termo de busca
   const filteredCompanies = useMemo(() => {
-    return companies.filter((company) =>
+    return companies.filter((company: any) =>
       company.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [companies, searchTerm]);
+
+  // Efeito para pré-preencher dados ao editar uma escala
+  useEffect(() => {
+    if (editingGroup && isDialogOpen && selectedCompany) {
+      setSelectedShiftId(editingGroup.shiftId);
+      setStartDate(editingGroup.startDate);
+      setEndDate(editingGroup.endDate || "");
+      const ids = new Set(editingGroup.funcionarios.map((f) => f.employeeId));
+      setSelectedEmployeeIds(ids);
+    }
+  }, [editingGroup, isDialogOpen, selectedCompany]);
 
   const handleDeleteEscala = async (id: string) => {
     const confirmed = window.confirm(
@@ -223,9 +199,9 @@ export default function EscalaPage() {
 
   const handleCopyEscalaAgrupada = async (grupo: EscalaAgrupada) => {
     const empresa =
-      companies.find((c) => c.id === selectedCompany)?.name || "Não informada";
-    const inicio = formatDate(grupo.startDate);
-    const fim = grupo.endDate ? formatDate(grupo.endDate) : "indefinido";
+      companies.find((c: any) => c.id === viewCompanyId)?.name || "Não informada";
+    const inicio = formatDateLocal(grupo.startDate);
+    const fim = grupo.endDate ? formatDateLocal(grupo.endDate) : "indefinido";
     const horariosPrincipal = `${formatTime(grupo.entry1)} - ${formatTime(
       grupo.exit1
     )}`;
@@ -268,6 +244,7 @@ export default function EscalaPage() {
     const today = new Date();
     setStartDate(today.toISOString().split("T")[0]);
     setEndDate("");
+    setEditingGroup(null);
     setIsDialogOpen(true);
   };
 
@@ -285,7 +262,7 @@ export default function EscalaPage() {
     if (selectedEmployeeIds.size === companyEmployees.length) {
       setSelectedEmployeeIds(new Set());
     } else {
-      const allIds = new Set(companyEmployees.map((emp) => emp.id));
+      const allIds = new Set(companyEmployees.map((emp: any) => emp.id));
       setSelectedEmployeeIds(allIds);
     }
   };
@@ -304,37 +281,41 @@ export default function EscalaPage() {
     }
 
     try {
-      const selectedShift = companyShifts.find((s) => s.id === selectedShiftId);
+      // Se estiver editando, primeiro remove as escalas antigas do grupo
+      if (editingGroup) {
+        const deletePromises = editingGroup.funcionarios.map((f) =>
+          deleteEscalaMutation.mutateAsync(f.escalaId)
+        );
+        await Promise.all(deletePromises);
+      }
+
+      const selectedShift = companyShifts.find((s: any) => s.id === selectedShiftId);
       await batchCreateEscalasMutation.mutateAsync({
         employee_ids: Array.from(selectedEmployeeIds),
         shift_id: selectedShiftId,
         start_date: startDate,
         end_date: endDate || undefined,
       });
+
       const periodText = endDate
-        ? `de ${formatDate(startDate)} até ${formatDate(endDate)}`
-        : `a partir de ${formatDate(startDate)}`;
+        ? `de ${formatDateLocal(startDate)} até ${formatDateLocal(endDate)}`
+        : `a partir de ${formatDateLocal(startDate)}`;
       toast.success(
-        `Escala "${selectedShift?.name}" aplicada para ${selectedEmployeeIds.size} funcionário(s) ${periodText}!`
+        editingGroup
+          ? `Escala "${selectedShift?.name}" atualizada para ${selectedEmployeeIds.size} funcionário(s) ${periodText}!`
+          : `Escala "${selectedShift?.name}" aplicada para ${selectedEmployeeIds.size} funcionário(s) ${periodText}!`
       );
+
       setIsDialogOpen(false);
+      setEditingGroup(null);
       setSelectedEmployeeIds(new Set());
       setSelectedShiftId("");
       setEndDate("");
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Erro ao aplicar escalas"
+        error instanceof Error ? error.message : "Erro ao processar escalas"
       );
     }
-  };
-
-  const formatTime = (time: string) => {
-    return time.slice(0, 5);
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("pt-BR");
   };
 
   return (
@@ -406,7 +387,7 @@ export default function EscalaPage() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {filteredCompanies.map((company) => {
+                          {filteredCompanies.map((company: any) => {
                             const badge = escalasBadgeByCompanyId[
                               company.id
                             ] ?? {
@@ -451,8 +432,9 @@ export default function EscalaPage() {
                                       variant="outline"
                                       size="sm"
                                       onClick={() => {
-                                        setSelectedCompany(company.id);
-                                        setSelectedEmployeeFilter("all");
+                                        setViewCompanyId(company.id);
+                                        setIsViewDialogOpen(true);
+                                        setFilterDate("");
                                       }}
                                     >
                                       <Eye className="h-4 w-4 mr-2" />
@@ -479,187 +461,77 @@ export default function EscalaPage() {
                 </div>
               </CardContent>
             </Card>
-            {/* Lista de escalas aplicadas */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Escalas aplicadas</CardTitle>
-                <CardDescription>
-                  Veja as escalas já aplicadas para os funcionários da empresa
-                  selecionada
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {!selectedCompany ? (
-                  <p className="text-muted-foreground">
-                    Selecione uma empresa na tabela acima (botão{" "}
-                    <span className="font-medium">&quot;Ver Escalas&quot;</span>
-                    ) para visualizar as escalas aplicadas.
-                  </p>
-                ) : escalasLoading ? (
-                  <div className="py-8 text-center text-muted-foreground">
-                    Carregando escalas...
-                  </div>
-                ) : escalasAgrupadas.length === 0 ? (
-                  <div className="py-8 text-center text-muted-foreground">
-                    Nenhuma escala aplicada encontrada para esta empresa.
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <p className="text-sm text-muted-foreground">
-                      Empresa selecionada:{" "}
-                      <span className="font-medium text-foreground">
-                        {companies.find((c) => c.id === selectedCompany)?.name}
-                      </span>
-                    </p>
-
-                    <div className="space-y-4">
-                      {escalasAgrupadas.map((grupo) => (
-                        <div
-                          key={`${grupo.shiftId}-${grupo.startDate}-${
-                            grupo.endDate ?? "indefinido"
-                          }`}
-                          className="rounded-lg border p-4 space-y-3"
-                        >
-                          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                            <div className="grid gap-1 text-sm">
-                              <p>
-                                <span className="text-muted-foreground">
-                                  Empresa:
-                                </span>{" "}
-                                {
-                                  companies.find(
-                                    (c) => c.id === selectedCompany
-                                  )?.name
-                                }
-                              </p>
-                              <p>
-                                <span className="text-muted-foreground">
-                                  Escala:
-                                </span>{" "}
-                                {grupo.shiftName}
-                              </p>
-                              <p>
-                                <span className="text-muted-foreground">
-                                  Período:
-                                </span>{" "}
-                                {formatDate(grupo.startDate)} até{" "}
-                                {grupo.endDate
-                                  ? formatDate(grupo.endDate)
-                                  : "Indefinido"}
-                              </p>
-                              <p>
-                                <span className="text-muted-foreground">
-                                  Horários:
-                                </span>{" "}
-                                {formatTime(grupo.entry1)} -{" "}
-                                {formatTime(grupo.exit1)}
-                                {grupo.entry2 &&
-                                  grupo.exit2 &&
-                                  ` | ${formatTime(
-                                    grupo.entry2
-                                  )} - ${formatTime(grupo.exit2)}`}
-                              </p>
-                            </div>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleCopyEscalaAgrupada(grupo)}
-                              className="shrink-0"
-                            >
-                              <Copy className="h-4 w-4 mr-2" />
-                              Copiar
-                            </Button>
-                          </div>
-                          <Collapsible
-                            open={funcionariosExpandido.has(
-                              `${grupo.shiftId}-${grupo.startDate}-${
-                                grupo.endDate ?? "indefinido"
-                              }`
-                            )}
-                            onOpenChange={(open) => {
-                              const key = `${grupo.shiftId}-${
-                                grupo.startDate
-                              }-${grupo.endDate ?? "indefinido"}`;
-                              setFuncionariosExpandido((prev) => {
-                                const next = new Set(prev);
-                                if (open) next.add(key);
-                                else next.delete(key);
-                                return next;
-                              });
-                            }}
-                          >
-                            <div className="border-t pt-3">
-                              <CollapsibleTrigger asChild>
-                                <button
-                                  type="button"
-                                  className="flex w-full items-center justify-between gap-2 py-1 text-left text-sm font-medium text-muted-foreground hover:text-foreground"
-                                >
-                                  <span>
-                                    Funcionários ({grupo.funcionarios.length})
-                                  </span>
-                                  <ChevronDown
-                                    className={`h-4 w-4 shrink-0 transition-transform duration-200 ${
-                                      funcionariosExpandido.has(
-                                        `${grupo.shiftId}-${grupo.startDate}-${
-                                          grupo.endDate ?? "indefinido"
-                                        }`
-                                      )
-                                        ? "rotate-180"
-                                        : ""
-                                    }`}
-                                  />
-                                </button>
-                              </CollapsibleTrigger>
-                              <CollapsibleContent>
-                                <ul className="list-disc list-inside text-sm space-y-1 pt-2">
-                                  {grupo.funcionarios
-                                    .slice()
-                                    .sort((a, b) =>
-                                      a.nome.localeCompare(b.nome, "pt-BR")
-                                    )
-                                    .map((f) => (
-                                      <li
-                                        key={f.escalaId}
-                                        className="flex items-center justify-between gap-2"
-                                      >
-                                        <span>{f.nome}</span>
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-7 w-7 text-destructive"
-                                          onClick={(e) => {
-                                            e.preventDefault();
-                                            handleDeleteEscala(f.escalaId);
-                                          }}
-                                          disabled={
-                                            deleteEscalaMutation.isPending
-                                          }
-                                        >
-                                          <Trash2 className="h-3.5 w-3.5" />
-                                        </Button>
-                                      </li>
-                                    ))}
-                                </ul>
-                              </CollapsibleContent>
-                            </div>
-                          </Collapsible>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
           </div>
 
-          {/* Modal para aplicar escala */}
+          {/* Modal de Visualização/Edição de Escalas */}
+          <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+            <DialogContent className="!max-w-6xl sm:!max-w-6xl md:!max-w-6xl max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Escalas Aplicadas</DialogTitle>
+                <DialogDescription>
+                  Visualize e edite as escalas da empresa{" "}
+                  {viewCompanyId &&
+                    companies.find((c: any) => c.id === viewCompanyId)?.name}
+                </DialogDescription>
+              </DialogHeader>
+
+              {viewCompanyId && (
+                <div className="space-y-6">
+                  {/* Filtro por data única com largura reduzida */}
+                  <div className="flex items-end gap-4">
+                    <div className="w-full max-w-xs">
+                      <Label>Filtrar por dia</Label>
+                      <Input
+                        type="date"
+                        value={filterDate}
+                        onChange={(e) => setFilterDate(e.target.value)}
+                      />
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={() => setFilterDate("")}
+                    >
+                      Limpar filtro
+                    </Button>
+                  </div>
+
+                  {/* Lista de escalas filtradas */}
+                  {escalasLoading ? (
+                    <div className="py-8 text-center text-muted-foreground">
+                      Carregando escalas...
+                    </div>
+                  ) : (
+                    <EscalasList
+                      companyId={viewCompanyId}
+                      filterDate={filterDate}
+                      escalas={escalas}
+                      onEdit={(grupo) => {
+                        setIsViewDialogOpen(false);
+                        setEditingGroup(grupo);
+                        setSelectedCompany(viewCompanyId);
+                        setIsDialogOpen(true);
+                      }}
+                      onDelete={handleDeleteEscala}
+                      onCopy={handleCopyEscalaAgrupada}
+                      companies={companies}
+                    />
+                  )}
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+
+          {/* Modal para aplicar/editar escala */}
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogContent className="!max-w-6xl sm:!max-w-6xl md:!max-w-6xl max-h-[80vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Aplicar Escala</DialogTitle>
+                <DialogTitle>
+                  {editingGroup ? "Editar Escala" : "Aplicar Escala"}
+                </DialogTitle>
                 <DialogDescription>
-                  Selecione os funcionários, escolha uma escala e defina o
-                  período
+                  {editingGroup
+                    ? "Altere os funcionários, escala ou período"
+                    : "Selecione os funcionários, escolha uma escala e defina o período"}
                 </DialogDescription>
               </DialogHeader>
 
@@ -687,18 +559,22 @@ export default function EscalaPage() {
                           </div>
                         ) : (
                           <div className="space-y-2">
-                            {companyEmployees.map((employee) => (
+                            {companyEmployees.map((employee: any) => (
                               <div
                                 key={employee.id}
                                 className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded"
                               >
                                 <Checkbox
+                                  id={`employee-${employee.id}`}
                                   checked={selectedEmployeeIds.has(employee.id)}
                                   onCheckedChange={() =>
                                     handleEmployeeToggle(employee.id)
                                   }
                                 />
-                                <Label className="flex-1 cursor-pointer">
+                                <Label
+                                  htmlFor={`employee-${employee.id}`}
+                                  className="flex-1 cursor-pointer"
+                                >
                                   <div className="font-medium">
                                     {formatEmployeeName(employee.name)}
                                   </div>
@@ -722,7 +598,7 @@ export default function EscalaPage() {
                             <SelectValue placeholder="Selecione uma escala" />
                           </SelectTrigger>
                           <SelectContent>
-                            {companyShifts.map((shift) => (
+                            {companyShifts.map((shift: any) => (
                               <SelectItem key={shift.id} value={shift.id}>
                                 <div className="flex flex-col">
                                   <span>{shift.name}</span>
@@ -798,7 +674,7 @@ export default function EscalaPage() {
                             <span>Empresa:</span>
                             <span className="font-medium">
                               {
-                                companies.find((c) => c.id === selectedCompany)
+                                companies.find((c: any) => c.id === selectedCompany)
                                   ?.name
                               }
                             </span>
@@ -814,7 +690,7 @@ export default function EscalaPage() {
                             <span className="font-medium">
                               {selectedShiftId
                                 ? companyShifts.find(
-                                    (s) => s.id === selectedShiftId
+                                    (s: any) => s.id === selectedShiftId
                                   )?.name
                                 : "Não selecionada"}
                             </span>
@@ -822,8 +698,8 @@ export default function EscalaPage() {
                           <div className="flex justify-between">
                             <span>Período:</span>
                             <span className="font-medium">
-                              {formatDate(startDate)}
-                              {endDate && ` até ${formatDate(endDate)}`}
+                              {formatDateLocal(startDate)}
+                              {endDate && ` até ${formatDateLocal(endDate)}`}
                               {!endDate && " (indefinido)"}
                             </span>
                           </div>
@@ -835,7 +711,10 @@ export default function EscalaPage() {
                   <DialogFooter>
                     <Button
                       variant="outline"
-                      onClick={() => setIsDialogOpen(false)}
+                      onClick={() => {
+                        setIsDialogOpen(false);
+                        setEditingGroup(null);
+                      }}
                     >
                       Cancelar
                     </Button>
@@ -849,7 +728,11 @@ export default function EscalaPage() {
                       }
                     >
                       {batchCreateEscalasMutation.isPending
-                        ? "Aplicando..."
+                        ? editingGroup
+                          ? "Atualizando..."
+                          : "Aplicando..."
+                        : editingGroup
+                        ? "Salvar Alterações"
                         : "Aplicar Escala"}
                     </Button>
                   </DialogFooter>
@@ -860,5 +743,185 @@ export default function EscalaPage() {
         </div>
       </SidebarInset>
     </SidebarProvider>
+  );
+}
+
+// Componente auxiliar para listar escalas dentro do modal de visualização
+interface EscalasListProps {
+  companyId: string;
+  filterDate: string;
+  escalas: any[];
+  onEdit: (grupo: EscalaAgrupada) => void;
+  onDelete: (id: string) => void;
+  onCopy: (grupo: EscalaAgrupada) => void;
+  companies: any[];
+}
+
+function EscalasList({
+  companyId,
+  filterDate,
+  escalas,
+  onEdit,
+  onDelete,
+  onCopy,
+  companies,
+}: EscalasListProps) {
+  const [funcionariosExpandido, setFuncionariosExpandido] = useState<
+    Set<string>
+  >(new Set());
+
+  const escalasByCompany = useMemo(
+    () => escalas.filter((e) => e.shift?.company_id === companyId),
+    [escalas, companyId]
+  );
+
+  const grupos = useMemo((): EscalaAgrupada[] => {
+    const map = new Map<string, EscalaAgrupada>();
+    escalasByCompany.forEach((e) => {
+      const key = `${e.shift_id}-${e.start_date}-${e.end_date ?? "indefinido"}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          shiftId: e.shift_id,
+          shiftName: e.shift?.name ?? "Escala",
+          entry1: e.shift?.entry1 ?? "",
+          exit1: e.shift?.exit1 ?? "",
+          entry2: e.shift?.entry2 ?? null,
+          exit2: e.shift?.exit2 ?? null,
+          startDate: e.start_date,
+          endDate: e.end_date ?? null,
+          funcionarios: [],
+        });
+      }
+      map.get(key)!.funcionarios.push({
+        nome: e.employee?.name ?? "Funcionário não encontrado",
+        escalaId: e.id,
+        employeeId: e.employee_id,
+      });
+    });
+    return Array.from(map.values()).sort((a, b) =>
+      a.shiftName.localeCompare(b.shiftName, "pt-BR")
+    );
+  }, [escalasByCompany]);
+
+  // Filtrar por data única: se filterDate estiver preenchida, só mostra grupos cujo período cobre a data
+  const gruposFiltrados = useMemo(() => {
+    if (!filterDate) return grupos;
+    return grupos.filter((g) => {
+      const start = g.startDate;
+      const end = g.endDate || "9999-12-31"; // se não tem fim, considera infinito
+      return filterDate >= start && filterDate <= end;
+    });
+  }, [grupos, filterDate]);
+
+  if (gruposFiltrados.length === 0) {
+    return (
+      <div className="py-8 text-center text-muted-foreground">
+        Nenhuma escala aplicada encontrada para os filtros selecionados.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {gruposFiltrados.map((grupo) => {
+        const groupKey = `${grupo.shiftId}-${grupo.startDate}-${
+          grupo.endDate ?? "indefinido"
+        }`;
+        return (
+          <div key={groupKey} className="rounded-lg border p-4 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+              <div className="grid gap-1 text-sm">
+                <p>
+                  <span className="text-muted-foreground">Empresa:</span>{" "}
+                  {companies.find((c: any) => c.id === companyId)?.name}
+                </p>
+                <p>
+                  <span className="text-muted-foreground">Escala:</span>{" "}
+                  {grupo.shiftName}
+                </p>
+                <p>
+                  <span className="text-muted-foreground">Período:</span>{" "}
+                  {formatDateLocal(grupo.startDate)} até{" "}
+                  {grupo.endDate ? formatDateLocal(grupo.endDate) : "Indefinido"}
+                </p>
+                <p>
+                  <span className="text-muted-foreground">Horários:</span>{" "}
+                  {formatTime(grupo.entry1)} - {formatTime(grupo.exit1)}
+                  {grupo.entry2 &&
+                    grupo.exit2 &&
+                    ` | ${formatTime(grupo.entry2)} - ${formatTime(
+                      grupo.exit2
+                    )}`}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => onEdit(grupo)}>
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Editar
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => onCopy(grupo)}>
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copiar
+                </Button>
+              </div>
+            </div>
+
+            <Collapsible
+              open={funcionariosExpandido.has(groupKey)}
+              onOpenChange={(open) => {
+                setFuncionariosExpandido((prev) => {
+                  const next = new Set(prev);
+                  if (open) next.add(groupKey);
+                  else next.delete(groupKey);
+                  return next;
+                });
+              }}
+            >
+              <div className="border-t pt-3">
+                <CollapsibleTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between gap-2 py-1 text-left text-sm font-medium text-muted-foreground hover:text-foreground"
+                  >
+                    <span>Funcionários ({grupo.funcionarios.length})</span>
+                    <ChevronDown
+                      className={`h-4 w-4 shrink-0 transition-transform duration-200 ${
+                        funcionariosExpandido.has(groupKey) ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <ul className="list-disc list-inside text-sm space-y-1 pt-2">
+                    {grupo.funcionarios
+                      .slice()
+                      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
+                      .map((f) => (
+                        <li
+                          key={f.escalaId}
+                          className="flex items-center justify-between gap-2"
+                        >
+                          <span>{f.nome}</span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              onDelete(f.escalaId);
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </li>
+                      ))}
+                  </ul>
+                </CollapsibleContent>
+              </div>
+            </Collapsible>
+          </div>
+        );
+      })}
+    </div>
   );
 }
