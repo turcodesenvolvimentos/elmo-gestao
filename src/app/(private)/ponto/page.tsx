@@ -77,7 +77,7 @@ import { cn } from "@/lib/utils";
 export type AjusteTipo = "work" | "non_work";
 
 function removeAccentsFrom(str: string): string {
-  return str.normalize("NFD").replace(/\u0300-\u036f/g, "");
+  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
 /** Classifica em apenas 2 motivos: trabalho ou não relacionada ao trabalho. */
@@ -1048,7 +1048,17 @@ export default function PontoPage() {
                               </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-[300px] p-0">
-                              <Command>
+                              <Command
+                                filter={(value, search) => {
+                                  const v = removeAccentsFrom(
+                                    value,
+                                  ).toLowerCase();
+                                  const s = removeAccentsFrom(
+                                    search,
+                                  ).toLowerCase();
+                                  return v.includes(s) ? 1 : 0;
+                                }}
+                              >
                                 <CommandInput placeholder="Pesquisar colaborador..." />
                                 <CommandList>
                                   <CommandEmpty>
