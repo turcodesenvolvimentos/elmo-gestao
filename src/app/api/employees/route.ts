@@ -77,9 +77,8 @@ export async function GET(request: NextRequest) {
     }
 
     const totalElements = includeFired ? allEmployees.length : (solidesResponse?.data?.totalElements ?? 0);
-    const totalPages = includeFired ? Math.ceil(totalElements / size) : (solidesResponse?.data?.totalPages ?? 1);
-    const start = includeFired ? (page - 1) * size : 0;
-    const slice = includeFired ? allEmployees.slice(start, start + size) : allEmployees;
+    const totalPages = includeFired ? 1 : (solidesResponse?.data?.totalPages ?? 1);
+    const slice = includeFired ? allEmployees : allEmployees;
 
     // Buscar empresas associadas para cada funcionário da página
     const employeesWithCompanies = await Promise.all(
@@ -151,7 +150,7 @@ export async function GET(request: NextRequest) {
       size,
       number: page,
       first: page === 1,
-      last: includeFired ? page >= totalPages : (solidesResponse?.data?.last ?? true),
+      last: includeFired ? true : (solidesResponse?.data?.last ?? true),
     });
   } catch (error: unknown) {
     if (error instanceof AxiosError) {

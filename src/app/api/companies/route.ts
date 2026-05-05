@@ -162,11 +162,11 @@ export async function GET() {
       })
     );
 
-    // Buscar total de funcionários únicos (na tabela employees)
     const { count: totalEmployees, error: employeesCountError } =
       await supabaseAdmin
         .from("employees")
-        .select("*", { count: "exact", head: true });
+        .select("*", { count: "exact", head: true })
+        .eq("fired", false);
 
     if (employeesCountError) {
       console.error(

@@ -315,6 +315,14 @@ async function saveEmployee(employee) {
       .single();
 
     if (error) throw error;
+
+    if (employeeData.fired) {
+      await supabase
+        .from("employee_companies")
+        .delete()
+        .eq("employee_id", data.id);
+    }
+
     return data.id; // Retorna o UUID do funcionário
   } catch (error) {
     log(`Erro ao salvar funcionário ${employee.id}: ${error.message}`, "error");
