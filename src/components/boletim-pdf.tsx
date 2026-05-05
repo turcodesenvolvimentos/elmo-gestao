@@ -101,6 +101,11 @@ const styles = StyleSheet.create({
   col7: { width: "4%", fontSize: 7 }, // Saída 1
   col8: { width: "4%", fontSize: 7 }, // Entrada 2
   col9: { width: "4%", fontSize: 7 }, // Saída 2
+  missingCell: {
+    backgroundColor: "#FCA5A5",
+    color: "#7F1D1D",
+    fontWeight: "bold",
+  },
   col10: { width: "4%", fontSize: 7 }, // Total
   col11: { width: "4%", fontSize: 7 }, // Normal
   col12: { width: "4%", fontSize: 7 }, // Adicional Noturno
@@ -342,7 +347,12 @@ export const BoletimPDF: React.FC<BoletimPDFProps> = ({
           </View>
 
           {/* Rows */}
-          {data.map((row, index) => (
+          {data.map((row, index) => {
+            const hasNoPunch =
+              !row.entry1 && !row.exit1 && !row.entry2 && !row.exit2;
+            const shouldHighlight =
+              hasNoPunch && !isNoCompany(row.work_company);
+            return (
             <View key={index} style={styles.tableRow}>
               <Text style={styles.col1}>
                 {formatEmployeeName(row.employee_name)}
@@ -364,10 +374,18 @@ export const BoletimPDF: React.FC<BoletimPDFProps> = ({
               </View>
               <Text style={styles.col4}>{formatDate(row.date)}</Text>
               <Text style={styles.col5}>{row.day_of_week}</Text>
-              <Text style={styles.col6}>{row.entry1 || "-"}</Text>
-              <Text style={styles.col7}>{row.exit1 || "-"}</Text>
-              <Text style={styles.col8}>{row.entry2 || "-"}</Text>
-              <Text style={styles.col9}>{row.exit2 || "-"}</Text>
+              <Text style={[styles.col6, shouldHighlight && styles.missingCell]}>
+                {row.entry1 || "-"}
+              </Text>
+              <Text style={[styles.col7, shouldHighlight && styles.missingCell]}>
+                {row.exit1 || "-"}
+              </Text>
+              <Text style={[styles.col8, shouldHighlight && styles.missingCell]}>
+                {row.entry2 || "-"}
+              </Text>
+              <Text style={[styles.col9, shouldHighlight && styles.missingCell]}>
+                {row.exit2 || "-"}
+              </Text>
               <Text style={styles.col10}>{row.total_hours}</Text>
               <Text style={styles.col11}>{row.normal_hours}</Text>
               <Text style={styles.col12}>
@@ -379,7 +397,8 @@ export const BoletimPDF: React.FC<BoletimPDFProps> = ({
               <Text style={styles.col16}>{row.extra_100_night}</Text>
               <Text style={styles.col17}>{formatCurrency(row.value)}</Text>
             </View>
-          ))}
+            );
+          })}
 
           {/* Total Row */}
           <View style={styles.tableTotalRow}>

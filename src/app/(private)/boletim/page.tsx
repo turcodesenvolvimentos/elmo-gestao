@@ -1021,6 +1021,16 @@ export default function BoletimPage() {
                                 {filteredBulletinData.map((item, index) => {
                                   const key = `${item.employee_id}-${item.date}`;
                                   const isEdited = !!editedData[key];
+                                  const hasNoPunch =
+                                    !item.entry1 &&
+                                    !item.exit1 &&
+                                    !item.entry2 &&
+                                    !item.exit2;
+                                  const shouldHighlight =
+                                    hasNoPunch && !isNoCompany(item.work_company);
+                                  const missingClass = shouldHighlight
+                                    ? "bg-red-300 text-red-900 font-semibold"
+                                    : "";
 
                                   return (
                                     <tr
@@ -1058,16 +1068,16 @@ export default function BoletimPage() {
                                       <td className="p-3 align-middle whitespace-nowrap">
                                         {formatDate(item.date)}
                                       </td>
-                                      <td className="p-3 align-middle whitespace-nowrap">
-                                        {item.entry1}
+                                      <td className={`p-3 align-middle whitespace-nowrap ${missingClass}`}>
+                                        {item.entry1 || "-"}
                                       </td>
-                                      <td className="p-3 align-middle whitespace-nowrap">
-                                        {item.exit1}
+                                      <td className={`p-3 align-middle whitespace-nowrap ${missingClass}`}>
+                                        {item.exit1 || "-"}
                                       </td>
-                                      <td className="p-3 align-middle whitespace-nowrap">
+                                      <td className={`p-3 align-middle whitespace-nowrap ${missingClass}`}>
                                         {item.entry2 || "-"}
                                       </td>
-                                      <td className="p-3 align-middle whitespace-nowrap">
+                                      <td className={`p-3 align-middle whitespace-nowrap ${missingClass}`}>
                                         {item.exit2 || "-"}
                                       </td>
                                       <td className="p-3 align-middle whitespace-nowrap font-medium">

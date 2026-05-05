@@ -5,10 +5,6 @@ import { calcularHorasPorPeriodo, formatarHoras } from "@/lib/ponto-calculator";
 import { Permission } from "@/types/permissions";
 import { checkPermission } from "@/lib/auth/permissions";
 import type { BoletimData } from "@/services/boletim.service";
-import {
-  fetchEscalaCompanyEntries,
-  resolveWorkCompanyName,
-} from "@/lib/punch-company-resolution";
 
 const DAYS_OF_WEEK = [
   "Domingo",
@@ -71,7 +67,6 @@ interface Punch {
   location_out_address?: string | null;
 }
 
-// GET - Buscar dados do boletim por empresa e período
 export async function GET(request: NextRequest) {
   const session = await auth();
 
@@ -95,7 +90,6 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get("start_date");
     const endDate = searchParams.get("end_date");
 
-    // Validação
     if (!companyId) {
       return NextResponse.json(
         { error: "ID da empresa é obrigatório" },
@@ -110,7 +104,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Validar formato de data
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
       return NextResponse.json(
@@ -119,7 +112,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Validar que end_date >= start_date
     if (new Date(endDate) < new Date(startDate)) {
       return NextResponse.json(
         { error: "Data final deve ser maior ou igual à data inicial" },
@@ -127,60 +119,147 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Buscar funcionários da empresa com seus cargos
-    const { data: employeeCompanies, error: employeeError } =
-      await supabaseAdmin
-        .from("employee_companies")
-        .select(
-          `
-          employee_id,
-          department,
-          position_id,
-          employees!inner (
-            id,
-            name,
-            solides_id
-          ),
-          positions (
-            id,
-            name,
-            hour_value
-          )
-        `
+    const { data: companyRow } = await supabaseAdmin
+      .from("companies")
+      .select("name")
+      .eq("id", companyId)
+      .single();
+
+    const companyName = companyRow?.name ?? "";
+
+    const { data: companyShifts } = await supabaseAdmin
+      .from("shifts")
+      .select("id")
+      .eq("company_id", companyId);
+
+    const shiftIds = (companyShifts || []).map((s: { id: string }) => s.id);
+
+    const { data: escalasRows, error: escalasError } =
+      shiftIds.length === 0
+        ? { data: [], error: null }
+        : await supabaseAdmin
+            .from("escalas")
+            .select(
+              `
+        employee_id,
+        start_date,
+        end_date,
+        employees!inner (
+          id,
+          name,
+          solides_id,
+          fired
         )
-        .eq("company_id", companyId);
+      `
+            )
+            .in("shift_id", shiftIds)
+            .lte("start_date", endDate)
+            .or(`end_date.is.null,end_date.gte.${startDate}`);
 
-    if (employeeError) {
-      throw employeeError;
+    if (escalasError) throw escalasError;
+
+    type EscalaRowJoined = {
+      employee_id: string;
+      start_date: string;
+      end_date: string | null;
+      employees:
+        | { id: string; name: string; solides_id: number; fired: boolean }
+        | { id: string; name: string; solides_id: number; fired: boolean }[]
+        | null;
+    };
+
+    const normalizeEmployee = (row: EscalaRowJoined) => {
+      const e = row.employees;
+      if (!e) return null;
+      return Array.isArray(e) ? e[0] ?? null : e;
+    };
+
+    const validEscalas = ((escalasRows || []) as EscalaRowJoined[]).filter(
+      (row) => {
+        const emp = normalizeEmployee(row);
+        return emp && !emp.fired;
+      }
+    );
+
+    const employeeUuids = Array.from(
+      new Set(validEscalas.map((row) => row.employee_id))
+    );
+
+    const employeeMap = new Map<
+      string,
+      { id: string; name: string; solidesId: number; isOrphan?: boolean }
+    >();
+    for (const row of validEscalas) {
+      const emp = normalizeEmployee(row);
+      if (!emp) continue;
+      if (!employeeMap.has(emp.id)) {
+        employeeMap.set(emp.id, {
+          id: emp.id,
+          name: emp.name,
+          solidesId: emp.solides_id,
+        });
+      }
     }
 
-    if (!employeeCompanies || employeeCompanies.length === 0) {
-      return NextResponse.json(
-        { error: "Nenhum funcionário encontrado para esta empresa" },
-        { status: 404 }
-      );
+    const employeeSolidesIds = Array.from(
+      new Set(Array.from(employeeMap.values()).map((e) => e.solidesId))
+    ).filter((id): id is number => typeof id === "number");
+
+    const { data: employeeCompaniesRows } = await supabaseAdmin
+      .from("employee_companies")
+      .select(
+        `
+        employee_id,
+        department,
+        positions (
+          id,
+          name,
+          hour_value
+        )
+      `
+      )
+      .eq("company_id", companyId)
+      .in("employee_id", employeeUuids);
+
+    type PositionRow = { id: string; name: string; hour_value: number };
+    type EcRow = {
+      employee_id: string;
+      department: string | null;
+      positions: PositionRow | PositionRow[] | null;
+    };
+
+    const positionByEmployee = new Map<
+      string,
+      { department: string | null; position: PositionRow | null }
+    >();
+    for (const ec of (employeeCompaniesRows || []) as EcRow[]) {
+      const pos = Array.isArray(ec.positions)
+        ? ec.positions[0] ?? null
+        : ec.positions ?? null;
+      positionByEmployee.set(ec.employee_id, {
+        department: ec.department,
+        position: pos,
+      });
     }
 
-    // Extrair IDs dos funcionários (solides_id para buscar punches)
-    const employeeSolidesIds = employeeCompanies
-      .map((ec) => (ec as { employees?: { solides_id?: number } }).employees?.solides_id)
-      .filter((id: number | null | undefined): id is number => id !== null && id !== undefined);
+    const scheduledDaysByEmployee = new Map<string, Set<string>>();
+    for (const row of validEscalas) {
+      const employeeUuid = row.employee_id;
+      let cursor = row.start_date > startDate ? row.start_date : startDate;
+      const escalaEnd = row.end_date ?? endDate;
+      const limit = escalaEnd < endDate ? escalaEnd : endDate;
 
-    if (employeeSolidesIds.length === 0) {
-      return NextResponse.json({ data: [] }, { status: 200 });
+      if (!scheduledDaysByEmployee.has(employeeUuid)) {
+        scheduledDaysByEmployee.set(employeeUuid, new Set<string>());
+      }
+      const set = scheduledDaysByEmployee.get(employeeUuid)!;
+
+      while (cursor <= limit) {
+        set.add(cursor);
+        cursor = getNextDate(cursor);
+      }
     }
 
-    const employeeInternalIds = employeeCompanies
-      .map((ec) => (ec as { employee_id?: string }).employee_id)
-      .filter((id: string | undefined): id is string => !!id);
-
-    const escalaEntries = await fetchEscalaCompanyEntries(supabaseAdmin, {
-      startDate,
-      endDate,
-      employeeIds: employeeInternalIds,
-    });
-
-    // Buscar pontos aprovados no período (inclui 1 dia anterior para contexto de virada noturna)
     const contextStartDate = getPreviousDate(startDate);
     const contextEndDate = getNextDate(endDate);
     const { data: punches, error: punchesError } = await supabaseAdmin
@@ -188,7 +267,6 @@ export async function GET(request: NextRequest) {
       .select(
         "employee_id, employee_name, date, date_in, date_out, location_in_address, location_out_address"
       )
-      .in("employee_id", employeeSolidesIds)
       .gte("date", contextStartDate)
       .lte("date", contextEndDate)
       .eq("status", "APPROVED")
@@ -209,7 +287,6 @@ export async function GET(request: NextRequest) {
       )
     );
 
-    // Agrupar punches por funcionário
     const punchesByEmployee = new Map<number, Punch[]>();
 
     if (punches) {
@@ -236,23 +313,77 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Processar dados para o boletim
+    const solidesIdsWithPunches = Array.from(punchesByEmployee.keys());
+
+    if (solidesIdsWithPunches.length > 0) {
+      const { data: allEscalasInPeriod } = await supabaseAdmin
+        .from("escalas")
+        .select("employee_id")
+        .lte("start_date", endDate)
+        .or(`end_date.is.null,end_date.gte.${startDate}`);
+
+      const scheduledEmployeeUuids = new Set<string>(
+        (allEscalasInPeriod || []).map(
+          (e: { employee_id: string }) => e.employee_id
+        )
+      );
+
+      const { data: employeesWithPunches } = await supabaseAdmin
+        .from("employees")
+        .select("id, name, solides_id, fired")
+        .in("solides_id", solidesIdsWithPunches);
+
+      type EmpInfo = {
+        id: string;
+        name: string;
+        solides_id: number;
+        fired: boolean;
+      };
+
+      const orphanEmployees = ((employeesWithPunches || []) as EmpInfo[]).filter(
+        (emp) => !emp.fired && !scheduledEmployeeUuids.has(emp.id)
+      );
+
+      for (const orphan of orphanEmployees) {
+        if (!employeeMap.has(orphan.id)) {
+          employeeMap.set(orphan.id, {
+            id: orphan.id,
+            name: orphan.name,
+            solidesId: orphan.solides_id,
+            isOrphan: true,
+          });
+        }
+
+        if (!scheduledDaysByEmployee.has(orphan.id)) {
+          scheduledDaysByEmployee.set(orphan.id, new Set<string>());
+        }
+        const orphanDays = scheduledDaysByEmployee.get(orphan.id)!;
+
+        const orphanPunches = punchesByEmployee.get(orphan.solides_id) || [];
+        for (const p of orphanPunches) {
+          const day =
+            toLocalDateKey(p.date_in) ??
+            toLocalDateKey(p.date_out) ??
+            toLocalDateKey(p.date);
+          if (day && day >= startDate && day <= endDate) {
+            orphanDays.add(day);
+          }
+        }
+      }
+    }
+
     const boletimData: BoletimData[] = [];
 
-    for (const ec of employeeCompanies) {
-      const employee = ec.employees as {
-        id?: string;
-        solides_id?: number;
-        name?: string;
-      } | null;
-      const position = ec.positions as { name?: string; hour_value?: number } | null;
-      const employeeSolidesId = employee?.solides_id;
+    for (const [employeeUuid, employee] of employeeMap.entries()) {
+      const scheduledDays = scheduledDaysByEmployee.get(employeeUuid);
+      if (!scheduledDays || scheduledDays.size === 0) continue;
 
-      if (!employeeSolidesId) continue;
+      const positionInfo = positionByEmployee.get(employeeUuid);
+      const position = positionInfo?.position ?? null;
+      const department = positionInfo?.department ?? null;
 
-      const employeePunches = punchesByEmployee.get(employeeSolidesId) || [];
+      const employeePunches = punchesByEmployee.get(employee.solidesId) || [];
 
-      // Agrupar punches por "dia de trabalho" (preserva ciclo noturno)
       const punchesByWorkDate = new Map<string, Punch[]>();
       const sortedEmployeePunches = [...employeePunches].sort(
         (a, b) =>
@@ -279,14 +410,18 @@ export async function GET(request: NextRequest) {
           !!lastGroupByEmployee &&
           isEarlyMorning &&
           (() => {
-            const [y, m, d] = lastGroupByEmployee!.dateStr.split("-").map(Number);
+            const [y, m, d] = lastGroupByEmployee!.dateStr
+              .split("-")
+              .map(Number);
             const lastDate = new Date(Date.UTC(y, m - 1, d));
             const [cy, cm, cd] = punchDateStr.split("-").map(Number);
             const currentDate = new Date(Date.UTC(cy, cm - 1, cd));
             const diffDays =
               (currentDate.getTime() - lastDate.getTime()) /
               (1000 * 60 * 60 * 24);
-            return Math.round(diffDays) === 1 && lastGroupByEmployee!.hadNightShift;
+            return (
+              Math.round(diffDays) === 1 && lastGroupByEmployee!.hadNightShift
+            );
           })();
 
         const workDate = shouldAttachToPreviousDay
@@ -307,72 +442,71 @@ export async function GET(request: NextRequest) {
         };
       });
 
-      // Processar cada dia
-      for (const date of [...punchesByWorkDate.keys()].sort((a, b) =>
+      const hourValue = position?.hour_value || 0;
+      const ADICIONAL_NOTURNO_FATOR = 0.142857;
+
+      const sortedDays = Array.from(scheduledDays).sort((a, b) =>
         a.localeCompare(b)
-      )) {
+      );
+
+      for (const date of sortedDays) {
         if (date < startDate || date > endDate) continue;
 
         const dayPunches = punchesByWorkDate.get(date) || [];
-        // Ordenar punches do dia por horário de entrada
         const sortedPunches = [...dayPunches].sort(
           (a, b) =>
             new Date(a.date_in).getTime() - new Date(b.date_in).getTime()
         );
 
-        const firstPunch = sortedPunches[0];
-        const workCompany = resolveWorkCompanyName({
-          employeeSolidesId: employeeSolidesId,
-          workDate: date,
-          locationInAddress: firstPunch?.location_in_address,
-          locationOutAddress: firstPunch?.location_out_address,
-          escalaEntries,
-        });
-
-        // Pegar os dois primeiros períodos (entry1/exit1, entry2/exit2)
-        const entry1 = sortedPunches[0]
+        const entry1 = sortedPunches[0]?.date_in
           ? new Date(sortedPunches[0].date_in).toLocaleTimeString("pt-BR", {
-            hour: "2-digit",
-            minute: "2-digit",
-          })
+              hour: "2-digit",
+              minute: "2-digit",
+            })
           : undefined;
 
-        const exit1 = sortedPunches[0]
+        const exit1 = sortedPunches[0]?.date_out
           ? new Date(sortedPunches[0].date_out).toLocaleTimeString("pt-BR", {
-            hour: "2-digit",
-            minute: "2-digit",
-          })
+              hour: "2-digit",
+              minute: "2-digit",
+            })
           : undefined;
 
-        const entry2 = sortedPunches[1]
+        const entry2 = sortedPunches[1]?.date_in
           ? new Date(sortedPunches[1].date_in).toLocaleTimeString("pt-BR", {
-            hour: "2-digit",
-            minute: "2-digit",
-          })
+              hour: "2-digit",
+              minute: "2-digit",
+            })
           : undefined;
 
-        const exit2 = sortedPunches[1]
+        const exit2 = sortedPunches[1]?.date_out
           ? new Date(sortedPunches[1].date_out).toLocaleTimeString("pt-BR", {
-            hour: "2-digit",
-            minute: "2-digit",
-          })
+              hour: "2-digit",
+              minute: "2-digit",
+            })
           : undefined;
 
-        // Calcular horas usando o ponto-calculator
         const punchesForCalculation = sortedPunches.map((p) => ({
           dateIn: p.date_in,
           dateOut: p.date_out,
         }));
 
-        const horasCalculadas = calcularHorasPorPeriodo(
-          punchesForCalculation,
-          date,
-          customHolidaySet
-        );
-
-        // Calcular valor monetário
-        const hourValue = position?.hour_value || 0;
-        const ADICIONAL_NOTURNO_FATOR = 0.142857; // 20% de adicional noturno
+        const horasCalculadas =
+          punchesForCalculation.length > 0
+            ? calcularHorasPorPeriodo(
+                punchesForCalculation,
+                date,
+                customHolidaySet
+              )
+            : {
+                totalHoras: 0,
+                horasNormais: 0,
+                adicionalNoturno: 0,
+                extra50Diurno: 0,
+                extra50Noturno: 0,
+                extra100Diurno: 0,
+                extra100Noturno: 0,
+              };
 
         const valorNormal = horasCalculadas.horasNormais * hourValue;
         const valorAdicionalNoturno =
@@ -391,18 +525,15 @@ export async function GET(request: NextRequest) {
         const valorTotal =
           valorNormal + valorAdicionalNoturno + valorExtra50 + valorExtra100;
 
-        // Obter dia da semana
         const dateObj = new Date(date + "T12:00:00Z");
         const dayOfWeek = DAYS_OF_WEEK[dateObj.getDay()];
-        const employeeId = String(employee?.id ?? "");
-        const employeeName = employee?.name ?? "";
 
         boletimData.push({
-          employee_id: employeeId,
-          employee_name: employeeName,
-          work_company: workCompany,
+          employee_id: employee.id,
+          employee_name: employee.name,
+          work_company: employee.isOrphan ? "Sem empresa" : companyName,
           position: position?.name || "Sem cargo",
-          department: ec.department || "Sem setor",
+          department: department || "Sem setor",
           date,
           day_of_week: dayOfWeek,
           entry1,
@@ -421,16 +552,12 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Ordenar por data e depois por horário de entrada (mais cedo para mais tarde)
     boletimData.sort((a, b) => {
-      // Primeiro ordenar por data
       const dateCompare = a.date.localeCompare(b.date);
       if (dateCompare !== 0) return dateCompare;
 
-      // Se a data for igual, ordenar por horário de entrada
-      // Converter horário para minutos para comparação
       const parseTime = (time?: string): number => {
-        if (!time || time === "-") return Infinity; // Sem horário vai para o final
+        if (!time || time === "-") return Infinity;
         const [hours, minutes] = time.split(":").map(Number);
         return hours * 60 + minutes;
       };
@@ -440,7 +567,6 @@ export async function GET(request: NextRequest) {
 
       if (timeA !== timeB) return timeA - timeB;
 
-      // Se o horário for igual, ordenar por nome do funcionário como critério de desempate
       return a.employee_name.localeCompare(b.employee_name);
     });
 

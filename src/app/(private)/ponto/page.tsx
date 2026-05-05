@@ -315,10 +315,10 @@ export default function PontoPage() {
   );
 
   const { data: escalaEntries = [] } = usePontoEscalaCompanies({
-    startDate: filter.startDate,
-    endDate: filter.endDate,
+    startDate: filter.startDate || "1900-01-01",
+    endDate: filter.endDate || "2100-12-31",
     employeeSolidesId: filter.employeeId > 0 ? filter.employeeId : undefined,
-    enabled: canFetch && shouldSendDates && isDateRangeValid,
+    enabled: canFetch && (shouldSendDates ? isDateRangeValid : true),
   });
 
   const syncMutation = useSyncPunches();
@@ -1389,40 +1389,58 @@ export default function PontoPage() {
                                     {group.dayOfWeek}
                                   </TableCell>
 
-                                  {Array.from({ length: maxPunchPairs }).map(
-                                    (_, index) => {
-                                      const punch = group.punches[index];
-                                      const entryTime = punch?.dateIn
-                                        ? new Date(
-                                            punch.dateIn,
-                                          ).toLocaleTimeString("pt-BR", {
-                                            hour: "2-digit",
-                                            minute: "2-digit",
-                                          })
-                                        : "-";
-                                      const exitTime = punch?.dateOut
-                                        ? new Date(
-                                            punch.dateOut,
-                                          ).toLocaleTimeString("pt-BR", {
-                                            hour: "2-digit",
-                                            minute: "2-digit",
-                                          })
-                                        : "-";
-
-                                      return (
-                                        <Fragment
-                                          key={`punch-${group.key}-${index}`}
-                                        >
-                                          <TableCell className="px-4 py-3 border-r border-gray-200">
-                                            {entryTime}
-                                          </TableCell>
-                                          <TableCell className="px-4 py-3 border-r border-gray-200">
-                                            {exitTime}
-                                          </TableCell>
-                                        </Fragment>
+                                  {(() => {
+                                    const dayHasIncomplete =
+                                      group.punches.length === 0 ||
+                                      group.punches.some(
+                                        (p) => !p.dateIn || !p.dateOut,
                                       );
-                                    },
-                                  )}
+                                    const highlightDay =
+                                      dayHasIncomplete &&
+                                      !isNoCompany(group.company);
+                                    const cellHighlight = highlightDay
+                                      ? "bg-red-300 text-red-900 font-semibold"
+                                      : "";
+
+                                    return Array.from({ length: maxPunchPairs }).map(
+                                      (_, index) => {
+                                        const punch = group.punches[index];
+                                        const entryTime = punch?.dateIn
+                                          ? new Date(
+                                              punch.dateIn,
+                                            ).toLocaleTimeString("pt-BR", {
+                                              hour: "2-digit",
+                                              minute: "2-digit",
+                                            })
+                                          : "-";
+                                        const exitTime = punch?.dateOut
+                                          ? new Date(
+                                              punch.dateOut,
+                                            ).toLocaleTimeString("pt-BR", {
+                                              hour: "2-digit",
+                                              minute: "2-digit",
+                                            })
+                                          : "-";
+
+                                        return (
+                                          <Fragment
+                                            key={`punch-${group.key}-${index}`}
+                                          >
+                                            <TableCell
+                                              className={`px-4 py-3 border-r border-gray-200 ${cellHighlight}`}
+                                            >
+                                              {entryTime}
+                                            </TableCell>
+                                            <TableCell
+                                              className={`px-4 py-3 border-r border-gray-200 ${cellHighlight}`}
+                                            >
+                                              {exitTime}
+                                            </TableCell>
+                                          </Fragment>
+                                        );
+                                      },
+                                    );
+                                  })()}
 
                                   <TableCell className="px-4 py-3 border-r border-gray-200">
                                     {group.horasDiurnas}
