@@ -374,16 +374,16 @@ export const BoletimPDF: React.FC<BoletimPDFProps> = ({
               </View>
               <Text style={styles.col4}>{formatDate(row.date)}</Text>
               <Text style={styles.col5}>{row.day_of_week}</Text>
-              <Text style={[styles.col6, shouldHighlight && styles.missingCell]}>
+              <Text style={shouldHighlight ? [styles.col6, styles.missingCell] : styles.col6}>
                 {row.entry1 || "-"}
               </Text>
-              <Text style={[styles.col7, shouldHighlight && styles.missingCell]}>
+              <Text style={shouldHighlight ? [styles.col7, styles.missingCell] : styles.col7}>
                 {row.exit1 || "-"}
               </Text>
-              <Text style={[styles.col8, shouldHighlight && styles.missingCell]}>
+              <Text style={shouldHighlight ? [styles.col8, styles.missingCell] : styles.col8}>
                 {row.entry2 || "-"}
               </Text>
-              <Text style={[styles.col9, shouldHighlight && styles.missingCell]}>
+              <Text style={shouldHighlight ? [styles.col9, styles.missingCell] : styles.col9}>
                 {row.exit2 || "-"}
               </Text>
               <Text style={styles.col10}>{row.total_hours}</Text>
