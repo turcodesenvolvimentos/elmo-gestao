@@ -97,23 +97,16 @@ export default function LoginPage() {
                 <Image
                   src={logo}
                   alt="Logo da Elmosys"
-                  width={200}
-                  height={200}
+                  width={360}
+                  height={360}
                   className="object-contain drop-shadow-[0_12px_32px_rgba(0,0,0,0.35)]"
                   priority
                 />
               </div>
 
-              <div>
-                <h2 className="text-xl font-semibold leading-tight tracking-tight">
-                  Gestão operacional
-                  <br />
-                  com clareza.
-                </h2>
-                <p className="mt-2 text-sm text-white/70">
-                  Ponto, escalas e benefícios em um só lugar — para o time da Elmo.
-                </p>
-              </div>
+              <h2 className="text-center text-2xl font-semibold leading-tight tracking-tight">
+                Gestão operacional com clareza.
+              </h2>
             </div>
 
             <form className="p-6 md:p-10" onSubmit={handleSubmit}>
