@@ -12,8 +12,7 @@ export const ADDRESS_TO_COMPANY: Record<string, string> = {
     "Ourofértil 2",
 };
 
-/** Nome amigável quando não há escala nem endereço mapeado nos pontos. */
-export const NO_MAPPED_COMPANY_LABEL = "Sem empresa";
+export const NO_MAPPED_COMPANY_LABEL = "Não escalado";
 
 export function getCompanyNameFromRawAddresses(
   locationInAddress?: string | null,
