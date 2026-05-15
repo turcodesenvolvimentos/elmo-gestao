@@ -12,6 +12,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Senha", type: "password" },
+        keepLogged: { label: "Manter conectado", type: "text" },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
@@ -48,11 +49,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             throw new Error("Email ou senha inválidos");
           }
 
+          const keepLogged = credentials?.keepLogged !== "false";
+
           return {
             id: user.id.toString(),
             email: user.email,
             name: user.name || "",
             permissions: user.permissions || [],
+            keepLogged,
           };
         } catch (error) {
           console.error("Erro na autenticação:", error);
@@ -69,6 +73,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (user) {
         token.id = user.id;
         token.permissions = (user as { permissions?: string[] }).permissions || [];
+        const keepLogged = (user as { keepLogged?: boolean }).keepLogged ?? true;
+        token.keepLogged = keepLogged;
+        const now = Math.floor(Date.now() / 1000);
+        token.exp = now + (keepLogged ? 30 * 24 * 60 * 60 : 4 * 60 * 60);
       }
       return token;
     },
@@ -82,6 +90,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   session: {
     strategy: "jwt",
-    maxAge: 7 * 24 * 60 * 60,
+    maxAge: 30 * 24 * 60 * 60,
   },
 });
