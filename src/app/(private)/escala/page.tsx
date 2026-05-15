@@ -1,12 +1,6 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { AppSidebar } from "@/components/app-sidebar";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
 import {
   Card,
   CardContent,
@@ -66,7 +60,6 @@ import {
 } from "@/hooks/use-escalas";
 import { useQuery } from "@tanstack/react-query";
 import { fetchAllShifts } from "@/services/shifts.service";
-import { Separator } from "@/components/ui/separator";
 import {
   Collapsible,
   CollapsibleContent,
@@ -143,21 +136,26 @@ export default function EscalaPage() {
   const allShifts = allShiftsData?.shifts || [];
   const escalas = escalasData?.escalas || [];
 
-  // Badge de escalas por empresa (contagem de turnos distintos e funcionários)
+ 
   const escalasBadgeByCompanyId = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
     const distinctShifts: Record<string, Set<string>> = {};
-    const funcionariosCount: Record<string, number> = {};
+    const distinctEmployees: Record<string, Set<string>> = {};
     escalas.forEach((e: any) => {
       const cid = e.shift?.company_id;
       if (!cid) return;
+      const starts = e.start_date <= today;
+      const open = !e.end_date || e.end_date >= today;
+      if (!starts || !open) return;
       if (!distinctShifts[cid]) distinctShifts[cid] = new Set();
+      if (!distinctEmployees[cid]) distinctEmployees[cid] = new Set();
       distinctShifts[cid].add(e.shift_id);
-      funcionariosCount[cid] = (funcionariosCount[cid] ?? 0) + 1;
+      distinctEmployees[cid].add(e.employee_id);
     });
     return Object.keys(distinctShifts).reduce((acc, cid) => {
       acc[cid] = {
         escalas: distinctShifts[cid].size,
-        funcionarios: funcionariosCount[cid] ?? 0,
+        funcionarios: distinctEmployees[cid]?.size ?? 0,
       };
       return acc;
     }, {} as Record<string, { escalas: number; funcionarios: number }>);
@@ -319,430 +317,425 @@ export default function EscalaPage() {
   };
 
   return (
-    <SidebarProvider>
-      <AppSidebar collapsible="icon" />
-      <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-          <div className="flex items-center gap-2">
-            <SidebarTrigger />
-            <Separator orientation="vertical" className="mr-2 h-4" />
-            <h1 className="text-xl font-semibold">Escalas</h1>
-          </div>
-        </header>
+    <>
+  <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+    <div className="flex items-center gap-2">
+      <h1 className="text-xl font-semibold">Escalas</h1>
+    </div>
+  </header>
 
-        <div className="flex flex-1 flex-col gap-6 p-6">
-          <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <h2 className="scroll-m-20 text-3xl font-semibold tracking-tight">
-                  Gerenciar Escalas
-                </h2>
-                <p className="text-muted-foreground mt-1">
-                  Aplique escalas aos funcionários das empresas
-                </p>
+  <div className="flex flex-1 flex-col gap-6 p-6">
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h2 className="scroll-m-20 text-3xl font-semibold tracking-tight">
+            Gerenciar Escalas
+          </h2>
+          <p className="text-muted-foreground mt-1">
+            Aplique escalas aos funcionários das empresas
+          </p>
+        </div>
+
+        <Button asChild variant="outline">
+          <Link href="/escala/criar">
+            <Settings className="h-4 w-4 mr-2" />
+            Gerenciar Escalas
+          </Link>
+        </Button>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Empresas</CardTitle>
+          <CardDescription>
+            Selecione uma empresa para gerenciar as escalas dos
+            funcionários
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+              <Input
+                placeholder="Buscar empresa..."
+                className="pl-9"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+
+            {filteredCompanies.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                Nenhuma empresa encontrada
               </div>
+            ) : (
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead>Empresa</TableHead>
+                      <TableHead>Endereço</TableHead>
+                      <TableHead>Funcionários</TableHead>
+                      <TableHead>Escalas</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredCompanies.map((company: any) => {
+                      const badge = escalasBadgeByCompanyId[
+                        company.id
+                      ] ?? {
+                        escalas: 0,
+                        funcionarios: 0,
+                      };
 
-              <Button asChild variant="outline">
-                <Link href="/escala/criar">
-                  <Settings className="h-4 w-4 mr-2" />
-                  Gerenciar Escalas
-                </Link>
+                      return (
+                        <TableRow key={company.id}>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              <Building className="h-4 w-4 text-muted-foreground" />
+                              {company.name}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">
+                            {company.address}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">
+                              <Users className="h-3 w-3 mr-1" />
+                              {company.employee_count}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">
+                              {badge.escalas} escala
+                              {badge.escalas !== 1 ? "s" : ""} aplicada
+                              {badge.escalas !== 1 ? "s" : ""}
+                              {badge.funcionarios > 0 && (
+                                <>
+                                  {" "}
+                                  · {badge.funcionarios} funcionário
+                                  {badge.funcionarios !== 1 ? "s" : ""}
+                                </>
+                              )}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setViewCompanyId(company.id);
+                                  setIsViewDialogOpen(true);
+                                  setFilterDate("");
+                                }}
+                              >
+                                <Eye className="h-4 w-4 mr-2" />
+                                Ver Escalas
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() =>
+                                  handleOpenDialog(company.id)
+                                }
+                              >
+                                <Plus className="h-4 w-4 mr-2" />
+                                Aplicar Escala
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+
+    {/* Modal de Visualização/Edição de Escalas */}
+    <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+      <DialogContent className="!max-w-6xl sm:!max-w-6xl md:!max-w-6xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Escalas Aplicadas</DialogTitle>
+          <DialogDescription>
+            Visualize e edite as escalas da empresa{" "}
+            {viewCompanyId &&
+              companies.find((c: any) => c.id === viewCompanyId)?.name}
+          </DialogDescription>
+        </DialogHeader>
+
+        {viewCompanyId && (
+          <div className="space-y-6">
+            {/* Filtro por data única com largura reduzida */}
+            <div className="flex items-end gap-4">
+              <div className="w-full max-w-xs">
+                <Label>Filtrar por dia</Label>
+                <Input
+                  type="date"
+                  value={filterDate}
+                  onChange={(e) => setFilterDate(e.target.value)}
+                />
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => setFilterDate("")}
+              >
+                Limpar filtro
               </Button>
             </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Empresas</CardTitle>
-                <CardDescription>
-                  Selecione uma empresa para gerenciar as escalas dos
-                  funcionários
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                    <Input
-                      placeholder="Buscar empresa..."
-                      className="pl-9"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                  </div>
-
-                  {filteredCompanies.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      Nenhuma empresa encontrada
-                    </div>
-                  ) : (
-                    <div className="rounded-md border">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-muted/50">
-                            <TableHead>Empresa</TableHead>
-                            <TableHead>Endereço</TableHead>
-                            <TableHead>Funcionários</TableHead>
-                            <TableHead>Escalas</TableHead>
-                            <TableHead className="text-right">Ações</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {filteredCompanies.map((company: any) => {
-                            const badge = escalasBadgeByCompanyId[
-                              company.id
-                            ] ?? {
-                              escalas: 0,
-                              funcionarios: 0,
-                            };
-
-                            return (
-                              <TableRow key={company.id}>
-                                <TableCell className="font-medium">
-                                  <div className="flex items-center gap-2">
-                                    <Building className="h-4 w-4 text-muted-foreground" />
-                                    {company.name}
-                                  </div>
-                                </TableCell>
-                                <TableCell className="text-muted-foreground text-sm">
-                                  {company.address}
-                                </TableCell>
-                                <TableCell>
-                                  <Badge variant="secondary">
-                                    <Users className="h-3 w-3 mr-1" />
-                                    {company.employee_count}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell>
-                                  <Badge variant="outline">
-                                    {badge.escalas} escala
-                                    {badge.escalas !== 1 ? "s" : ""} aplicada
-                                    {badge.escalas !== 1 ? "s" : ""}
-                                    {badge.funcionarios > 0 && (
-                                      <>
-                                        {" "}
-                                        · {badge.funcionarios} funcionário
-                                        {badge.funcionarios !== 1 ? "s" : ""}
-                                      </>
-                                    )}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  <div className="flex justify-end gap-2">
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => {
-                                        setViewCompanyId(company.id);
-                                        setIsViewDialogOpen(true);
-                                        setFilterDate("");
-                                      }}
-                                    >
-                                      <Eye className="h-4 w-4 mr-2" />
-                                      Ver Escalas
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      onClick={() =>
-                                        handleOpenDialog(company.id)
-                                      }
-                                    >
-                                      <Plus className="h-4 w-4 mr-2" />
-                                      Aplicar Escala
-                                    </Button>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+            {/* Lista de escalas filtradas */}
+            {escalasLoading ? (
+              <div className="py-8 text-center text-muted-foreground">
+                Carregando escalas...
+              </div>
+            ) : (
+              <EscalasList
+                companyId={viewCompanyId}
+                filterDate={filterDate}
+                escalas={escalas}
+                onEdit={(grupo) => {
+                  setIsViewDialogOpen(false);
+                  setEditingGroup(grupo);
+                  setSelectedCompany(viewCompanyId);
+                  setIsDialogOpen(true);
+                }}
+                onDelete={handleDeleteEscala}
+                onCopy={handleCopyEscalaAgrupada}
+                companies={companies}
+              />
+            )}
           </div>
+        )}
+      </DialogContent>
+    </Dialog>
 
-          {/* Modal de Visualização/Edição de Escalas */}
-          <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-            <DialogContent className="!max-w-6xl sm:!max-w-6xl md:!max-w-6xl max-h-[80vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Escalas Aplicadas</DialogTitle>
-                <DialogDescription>
-                  Visualize e edite as escalas da empresa{" "}
-                  {viewCompanyId &&
-                    companies.find((c: any) => c.id === viewCompanyId)?.name}
-                </DialogDescription>
-              </DialogHeader>
+    {/* Modal para aplicar/editar escala */}
+    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <DialogContent className="!max-w-6xl sm:!max-w-6xl md:!max-w-6xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>
+            {editingGroup ? "Editar Escala" : "Aplicar Escala"}
+          </DialogTitle>
+          <DialogDescription>
+            {editingGroup
+              ? "Altere os funcionários, escala ou período"
+              : "Selecione os funcionários, escolha uma escala e defina o período"}
+          </DialogDescription>
+        </DialogHeader>
 
-              {viewCompanyId && (
-                <div className="space-y-6">
-                  {/* Filtro por data única com largura reduzida */}
-                  <div className="flex items-end gap-4">
-                    <div className="w-full max-w-xs">
-                      <Label>Filtrar por dia</Label>
-                      <Input
-                        type="date"
-                        value={filterDate}
-                        onChange={(e) => setFilterDate(e.target.value)}
-                      />
-                    </div>
-                    <Button
-                      variant="outline"
-                      onClick={() => setFilterDate("")}
-                    >
-                      Limpar filtro
-                    </Button>
-                  </div>
-
-                  {/* Lista de escalas filtradas */}
-                  {escalasLoading ? (
-                    <div className="py-8 text-center text-muted-foreground">
-                      Carregando escalas...
+        {selectedCompany && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Lista de funcionários */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold">Funcionários</h3>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSelectAll}
+                  >
+                    {selectedEmployeeIds.size === companyEmployees.length
+                      ? "Desmarcar Todos"
+                      : "Selecionar Todos"}
+                  </Button>
+                </div>
+                <div className="border rounded-lg p-4 max-h-[300px] overflow-y-auto">
+                  {companyEmployees.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      Nenhum funcionário encontrado para esta empresa
                     </div>
                   ) : (
-                    <EscalasList
-                      companyId={viewCompanyId}
-                      filterDate={filterDate}
-                      escalas={escalas}
-                      onEdit={(grupo) => {
-                        setIsViewDialogOpen(false);
-                        setEditingGroup(grupo);
-                        setSelectedCompany(viewCompanyId);
-                        setIsDialogOpen(true);
-                      }}
-                      onDelete={handleDeleteEscala}
-                      onCopy={handleCopyEscalaAgrupada}
-                      companies={companies}
-                    />
+                    <div className="space-y-2">
+                      {companyEmployees.map((employee: any) => (
+                        <div
+                          key={employee.id}
+                          className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded"
+                        >
+                          <Checkbox
+                            id={`employee-${employee.id}`}
+                            checked={selectedEmployeeIds.has(employee.id)}
+                            onCheckedChange={() =>
+                              handleEmployeeToggle(employee.id)
+                            }
+                          />
+                          <Label
+                            htmlFor={`employee-${employee.id}`}
+                            className="flex-1 cursor-pointer"
+                          >
+                            <div className="font-medium">
+                              {formatEmployeeName(employee.name)}
+                            </div>
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
-              )}
-            </DialogContent>
-          </Dialog>
+              </div>
 
-          {/* Modal para aplicar/editar escala */}
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogContent className="!max-w-6xl sm:!max-w-6xl md:!max-w-6xl max-h-[80vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>
-                  {editingGroup ? "Editar Escala" : "Aplicar Escala"}
-                </DialogTitle>
-                <DialogDescription>
-                  {editingGroup
-                    ? "Altere os funcionários, escala ou período"
-                    : "Selecione os funcionários, escolha uma escala e defina o período"}
-                </DialogDescription>
-              </DialogHeader>
-
-              {selectedCompany && (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {/* Lista de funcionários */}
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-semibold">Funcionários</h3>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleSelectAll}
-                        >
-                          {selectedEmployeeIds.size === companyEmployees.length
-                            ? "Desmarcar Todos"
-                            : "Selecionar Todos"}
-                        </Button>
-                      </div>
-                      <div className="border rounded-lg p-4 max-h-[300px] overflow-y-auto">
-                        {companyEmployees.length === 0 ? (
-                          <div className="text-center py-8 text-muted-foreground">
-                            Nenhum funcionário encontrado para esta empresa
+              {/* Seleção de escala e datas */}
+              <div className="space-y-4">
+                <div>
+                  <h3 className="font-semibold mb-3">Escala</h3>
+                  <Select
+                    value={selectedShiftId}
+                    onValueChange={setSelectedShiftId}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione uma escala" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {companyShifts.map((shift: any) => (
+                        <SelectItem key={shift.id} value={shift.id}>
+                          <div className="flex flex-col">
+                            <span>{shift.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {formatTime(shift.entry1)} -{" "}
+                              {formatTime(shift.exit1)}
+                              {shift.entry2 &&
+                                shift.exit2 &&
+                                ` | ${formatTime(
+                                  shift.entry2
+                                )} - ${formatTime(shift.exit2)}`}
+                            </span>
                           </div>
-                        ) : (
-                          <div className="space-y-2">
-                            {companyEmployees.map((employee: any) => (
-                              <div
-                                key={employee.id}
-                                className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded"
-                              >
-                                <Checkbox
-                                  id={`employee-${employee.id}`}
-                                  checked={selectedEmployeeIds.has(employee.id)}
-                                  onCheckedChange={() =>
-                                    handleEmployeeToggle(employee.id)
-                                  }
-                                />
-                                <Label
-                                  htmlFor={`employee-${employee.id}`}
-                                  className="flex-1 cursor-pointer"
-                                >
-                                  <div className="font-medium">
-                                    {formatEmployeeName(employee.name)}
-                                  </div>
-                                </Label>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                    {/* Seleção de escala e datas */}
-                    <div className="space-y-4">
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="font-semibold mb-3">Período</h3>
+                    <div className="space-y-3">
                       <div>
-                        <h3 className="font-semibold mb-3">Escala</h3>
-                        <Select
-                          value={selectedShiftId}
-                          onValueChange={setSelectedShiftId}
+                        <Label
+                          htmlFor="start-date"
+                          className="mb-2 block"
                         >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione uma escala" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {companyShifts.map((shift: any) => (
-                              <SelectItem key={shift.id} value={shift.id}>
-                                <div className="flex flex-col">
-                                  <span>{shift.name}</span>
-                                  <span className="text-xs text-muted-foreground">
-                                    {formatTime(shift.entry1)} -{" "}
-                                    {formatTime(shift.exit1)}
-                                    {shift.entry2 &&
-                                      shift.exit2 &&
-                                      ` | ${formatTime(
-                                        shift.entry2
-                                      )} - ${formatTime(shift.exit2)}`}
-                                  </span>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-4">
-                        <div>
-                          <h3 className="font-semibold mb-3">Período</h3>
-                          <div className="space-y-3">
-                            <div>
-                              <Label
-                                htmlFor="start-date"
-                                className="mb-2 block"
-                              >
-                                Data Inicial{" "}
-                                <span className="text-destructive">*</span>
-                              </Label>
-                              <div className="flex items-center gap-2">
-                                <Calendar className="h-4 w-4 text-muted-foreground" />
-                                <Input
-                                  id="start-date"
-                                  type="date"
-                                  value={startDate}
-                                  onChange={(e) => setStartDate(e.target.value)}
-                                  className="flex-1"
-                                />
-                              </div>
-                            </div>
-                            <div>
-                              <Label htmlFor="end-date" className="mb-2 block">
-                                Data Final{" "}
-                                <span className="text-muted-foreground text-xs">
-                                  (opcional)
-                                </span>
-                              </Label>
-                              <div className="flex items-center gap-2">
-                                <Calendar className="h-4 w-4 text-muted-foreground" />
-                                <Input
-                                  id="end-date"
-                                  type="date"
-                                  value={endDate}
-                                  onChange={(e) => setEndDate(e.target.value)}
-                                  className="flex-1"
-                                  min={startDate}
-                                />
-                              </div>
-                              <p className="text-xs text-muted-foreground mt-1">
-                                Deixe em branco para aplicar indefinidamente
-                              </p>
-                            </div>
-                          </div>
+                          Data Inicial{" "}
+                          <span className="text-destructive">*</span>
+                        </Label>
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-muted-foreground" />
+                          <Input
+                            id="start-date"
+                            type="date"
+                            value={startDate}
+                            onChange={(e) => setStartDate(e.target.value)}
+                            className="flex-1"
+                          />
                         </div>
                       </div>
-
-                      <div className="pt-4 border-t">
-                        <h4 className="font-semibold mb-2">Resumo</h4>
-                        <div className="space-y-2 text-sm">
-                          <div className="flex justify-between">
-                            <span>Empresa:</span>
-                            <span className="font-medium">
-                              {
-                                companies.find((c: any) => c.id === selectedCompany)
-                                  ?.name
-                              }
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Funcionários selecionados:</span>
-                            <span className="font-medium">
-                              {selectedEmployeeIds.size}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Escala:</span>
-                            <span className="font-medium">
-                              {selectedShiftId
-                                ? companyShifts.find(
-                                    (s: any) => s.id === selectedShiftId
-                                  )?.name
-                                : "Não selecionada"}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Período:</span>
-                            <span className="font-medium">
-                              {formatDateLocal(startDate)}
-                              {endDate && ` até ${formatDateLocal(endDate)}`}
-                              {!endDate && " (indefinido)"}
-                            </span>
-                          </div>
+                      <div>
+                        <Label htmlFor="end-date" className="mb-2 block">
+                          Data Final{" "}
+                          <span className="text-muted-foreground text-xs">
+                            (opcional)
+                          </span>
+                        </Label>
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-muted-foreground" />
+                          <Input
+                            id="end-date"
+                            type="date"
+                            value={endDate}
+                            onChange={(e) => setEndDate(e.target.value)}
+                            className="flex-1"
+                            min={startDate}
+                          />
                         </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Deixe em branco para aplicar indefinidamente
+                        </p>
                       </div>
                     </div>
                   </div>
+                </div>
 
-                  <DialogFooter>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setIsDialogOpen(false);
-                        setEditingGroup(null);
-                      }}
-                    >
-                      Cancelar
-                    </Button>
-                    <Button
-                      onClick={handleAssignShifts}
-                      disabled={
-                        selectedEmployeeIds.size === 0 ||
-                        !selectedShiftId ||
-                        !startDate ||
-                        batchCreateEscalasMutation.isPending
-                      }
-                    >
-                      {batchCreateEscalasMutation.isPending
-                        ? editingGroup
-                          ? "Atualizando..."
-                          : "Aplicando..."
-                        : editingGroup
-                        ? "Salvar Alterações"
-                        : "Aplicar Escala"}
-                    </Button>
-                  </DialogFooter>
-                </>
-              )}
-            </DialogContent>
-          </Dialog>
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+                <div className="pt-4 border-t">
+                  <h4 className="font-semibold mb-2">Resumo</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span>Empresa:</span>
+                      <span className="font-medium">
+                        {
+                          companies.find((c: any) => c.id === selectedCompany)
+                            ?.name
+                        }
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Funcionários selecionados:</span>
+                      <span className="font-medium">
+                        {selectedEmployeeIds.size}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Escala:</span>
+                      <span className="font-medium">
+                        {selectedShiftId
+                          ? companyShifts.find(
+                              (s: any) => s.id === selectedShiftId
+                            )?.name
+                          : "Não selecionada"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Período:</span>
+                      <span className="font-medium">
+                        {formatDateLocal(startDate)}
+                        {endDate && ` até ${formatDateLocal(endDate)}`}
+                        {!endDate && " (indefinido)"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsDialogOpen(false);
+                  setEditingGroup(null);
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleAssignShifts}
+                disabled={
+                  selectedEmployeeIds.size === 0 ||
+                  !selectedShiftId ||
+                  !startDate ||
+                  batchCreateEscalasMutation.isPending
+                }
+              >
+                {batchCreateEscalasMutation.isPending
+                  ? editingGroup
+                    ? "Atualizando..."
+                    : "Aplicando..."
+                  : editingGroup
+                  ? "Salvar Alterações"
+                  : "Aplicar Escala"}
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  </div>
+    </>
   );
 }
 
@@ -798,9 +791,11 @@ function EscalasList({
         employeeId: e.employee_id,
       });
     });
-    return Array.from(map.values()).sort((a, b) =>
-      a.shiftName.localeCompare(b.shiftName, "pt-BR")
-    );
+    return Array.from(map.values()).sort((a, b) => {
+      const startDiff = b.startDate.localeCompare(a.startDate);
+      if (startDiff !== 0) return startDiff;
+      return a.shiftName.localeCompare(b.shiftName, "pt-BR");
+    });
   }, [escalasByCompany]);
 
   // Filtrar por data única: se filterDate estiver preenchida, só mostra grupos cujo período cobre a data

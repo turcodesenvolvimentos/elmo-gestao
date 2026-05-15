@@ -3,12 +3,6 @@
 
 import { useState, useMemo, useEffect } from "react";
 import dynamic from "next/dynamic";
-import { AppSidebar } from "@/components/app-sidebar";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Card,
@@ -65,7 +59,6 @@ import {
 } from "@/hooks/use-boletim";
 import type { BoletimData } from "@/services/boletim.service";
 import { BoletimHistory } from "./components/boletim-history";
-import { Separator } from "@/components/ui/separator";
 import { formatEmployeeName } from "@/utils/employee-name-format";
 
 // Importação dinâmica do PDFViewer (só funciona no client-side)
@@ -582,918 +575,913 @@ export default function BoletimPage() {
   };
 
   return (
-    <SidebarProvider>
-      <AppSidebar collapsible="icon" />
-      <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-          <div className="flex items-center gap-2">
-            <SidebarTrigger />
-            <Separator orientation="vertical" className="mr-2 h-4" />
-            <h1 className="text-xl font-semibold">Boletim</h1>
-          </div>
-        </header>
+    <>
+  <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+    <div className="flex items-center gap-2">
+      <h1 className="text-xl font-semibold">Boletim</h1>
+    </div>
+  </header>
 
-        <div className="flex flex-1 flex-col gap-6 p-6">
-          <div>
-            <h2 className="scroll-m-20 text-3xl font-semibold tracking-tight">
-              Boletim de Ponto
-            </h2>
-            <p className="text-muted-foreground mt-1">
-              Gere boletins de ponto por empresa e período
-            </p>
-          </div>
+  <div className="flex flex-1 flex-col gap-6 p-6">
+    <div>
+      <h2 className="scroll-m-20 text-3xl font-semibold tracking-tight">
+        Boletim de Ponto
+      </h2>
+      <p className="text-muted-foreground mt-1">
+        Gere boletins de ponto por empresa e período
+      </p>
+    </div>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid-cols-2">
-              <TabsTrigger value="gerar" className="gap-2">
-                <FileText className="h-4 w-4" />
-                Boletim
-              </TabsTrigger>
-              <TabsTrigger value="historico" className="gap-2">
-                <History className="h-4 w-4" />
-                Histórico
-              </TabsTrigger>
-            </TabsList>
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+      <TabsList className="grid-cols-2">
+        <TabsTrigger value="gerar" className="gap-2">
+          <FileText className="h-4 w-4" />
+          Boletim
+        </TabsTrigger>
+        <TabsTrigger value="historico" className="gap-2">
+          <History className="h-4 w-4" />
+          Histórico
+        </TabsTrigger>
+      </TabsList>
 
-            <TabsContent value="gerar" className="space-y-6 mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Filtros do Boletim</CardTitle>
-              <CardDescription>
-                Defina o período para geração do boletim
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col md:flex-row gap-4 items-start md:items-end">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1">
-                  <div>
-                    <Label htmlFor="start-date" className="mb-2 block">
-                      Data Inicial <span className="text-destructive">*</span>
-                    </Label>
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="start-date"
-                        type="date"
-                        value={startDate}
-                        onChange={(e) =>
-                          handleDateChange("start", e.target.value)
-                        }
-                        className="flex-1"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="end-date" className="mb-2 block">
-                      Data Final <span className="text-destructive">*</span>
-                    </Label>
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="end-date"
-                        type="date"
-                        value={endDate}
-                        onChange={(e) =>
-                          handleDateChange("end", e.target.value)
-                        }
-                        min={startDate}
-                        className={`flex-1 ${
-                          !isDateRangeValid ? "border-destructive" : ""
-                        }`}
-                      />
-                    </div>
-                    {!isDateRangeValid && (
-                      <p className="text-sm text-destructive mt-1">
-                        Data final deve ser maior ou igual à data inicial
-                      </p>
-                    )}
-                  </div>
-                </div>
+      <TabsContent value="gerar" className="space-y-6 mt-6">
+    <Card>
+      <CardHeader>
+        <CardTitle>Filtros do Boletim</CardTitle>
+        <CardDescription>
+          Defina o período para geração do boletim
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-col md:flex-row gap-4 items-start md:items-end">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1">
+            <div>
+              <Label htmlFor="start-date" className="mb-2 block">
+                Data Inicial <span className="text-destructive">*</span>
+              </Label>
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="start-date"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) =>
+                    handleDateChange("start", e.target.value)
+                  }
+                  className="flex-1"
+                />
               </div>
-            </CardContent>
-          </Card>
+            </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Empresas</CardTitle>
-              <CardDescription>
-                Selecione uma empresa para gerar o boletim
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                  <Input
-                    placeholder="Buscar empresa..."
-                    className="pl-9"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
-
-                {isLoadingCompanies ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Loader2 className="h-8 w-8 animate-spin mx-auto" />
-                    <p className="mt-2">Carregando empresas...</p>
-                  </div>
-                ) : filteredCompanies.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    Nenhuma empresa encontrada
-                  </div>
-                ) : (
-                  <div className="rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-muted/50">
-                          <TableHead>Empresa</TableHead>
-                          <TableHead>Endereço</TableHead>
-                          <TableHead className="text-right">Ações</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredCompanies.map((company) => (
-                          <TableRow key={company.id}>
-                            <TableCell className="font-medium">
-                              <div className="flex items-center gap-2">
-                                <Building className="h-4 w-4 text-muted-foreground" />
-                                {company.name}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-muted-foreground text-sm">
-                              {company.address || "Sem endereço"}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Button
-                                size="sm"
-                                onClick={() =>
-                                  handleGenerateBulletin(company.id)
-                                }
-                                disabled={
-                                  !startDate ||
-                                  !endDate ||
-                                  !isDateRangeValid ||
-                                  isLoadingBoletim
-                                }
-                              >
-                                {isLoadingBoletim &&
-                                selectedCompany === company.id ? (
-                                  <>
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    Gerando...
-                                  </>
-                                ) : (
-                                  <>
-                                    <FileText className="h-4 w-4 mr-2" />
-                                    Gerar Boletim
-                                  </>
-                                )}
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
+            <div>
+              <Label htmlFor="end-date" className="mb-2 block">
+                Data Final <span className="text-destructive">*</span>
+              </Label>
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="end-date"
+                  type="date"
+                  value={endDate}
+                  onChange={(e) =>
+                    handleDateChange("end", e.target.value)
+                  }
+                  min={startDate}
+                  className={`flex-1 ${
+                    !isDateRangeValid ? "border-destructive" : ""
+                  }`}
+                />
               </div>
-            </CardContent>
-          </Card>
-            </TabsContent>
-
-            <TabsContent value="historico" className="mt-6">
-              <BoletimHistory />
-            </TabsContent>
-          </Tabs>
+              {!isDateRangeValid && (
+                <p className="text-sm text-destructive mt-1">
+                  Data final deve ser maior ou igual à data inicial
+                </p>
+              )}
+            </div>
+          </div>
         </div>
+      </CardContent>
+    </Card>
 
-        {/* Modal principal do Boletim */}
-        <Dialog
-          open={isBulletinDialogOpen}
-          onOpenChange={setIsBulletinDialogOpen}
-        >
-          <DialogContent className="dialog-override overflow-hidden flex flex-col">
-            <DialogHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <DialogTitle className="text-2xl">
-                    Boletim de Ponto
-                  </DialogTitle>
-                  <DialogDescription>
-                    {selectedCompanyName}
-                    {" - "}
-                    Período: {formatDate(startDate)} até {formatDate(endDate)}
-                  </DialogDescription>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant={showPDFPreview ? "default" : "outline"}
-                    onClick={() => setShowPDFPreview(!showPDFPreview)}
-                    className="gap-2"
-                  >
-                    <FileText className="h-4 w-4" />
-                    {showPDFPreview ? "Ver Tabela" : "Preview PDF"}
-                  </Button>
-                  <Button
-                    onClick={handleExportBulletin}
-                    disabled={
-                      isSavingToHistory ||
-                      isExportingPDF ||
-                      filteredBulletinData.length === 0
-                    }
-                    className="gap-2"
-                  >
-                    {isSavingToHistory || isExportingPDF ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        {isSavingToHistory ? "Salvando..." : "Exportando..."}
-                      </>
-                    ) : (
-                      <>
-                        <Download className="h-4 w-4" />
-                        Exportar PDF
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </DialogHeader>
+    <Card>
+      <CardHeader>
+        <CardTitle>Empresas</CardTitle>
+        <CardDescription>
+          Selecione uma empresa para gerar o boletim
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+            <Input
+              placeholder="Buscar empresa..."
+              className="pl-9"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
 
-            <div className="flex-1 overflow-hidden flex flex-col gap-4">
-              {showPDFPreview ? (
-                <div className="flex-1 overflow-hidden border rounded-lg">
-                  <PDFViewer width="100%" height="100%">
-                    <BoletimPDF
-                      companyName={selectedCompanyName}
-                      startDate={startDate}
-                      endDate={endDate}
-                      data={filteredBulletinData}
-                      logoBase64={logoBase64}
-                    />
-                  </PDFViewer>
-                </div>
+          {isLoadingCompanies ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+              <p className="mt-2">Carregando empresas...</p>
+            </div>
+          ) : filteredCompanies.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              Nenhuma empresa encontrada
+            </div>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead>Empresa</TableHead>
+                    <TableHead>Endereço</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredCompanies.map((company) => (
+                    <TableRow key={company.id}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          <Building className="h-4 w-4 text-muted-foreground" />
+                          {company.name}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {company.address || "Sem endereço"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            handleGenerateBulletin(company.id)
+                          }
+                          disabled={
+                            !startDate ||
+                            !endDate ||
+                            !isDateRangeValid ||
+                            isLoadingBoletim
+                          }
+                        >
+                          {isLoadingBoletim &&
+                          selectedCompany === company.id ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Gerando...
+                            </>
+                          ) : (
+                            <>
+                              <FileText className="h-4 w-4 mr-2" />
+                              Gerar Boletim
+                            </>
+                          )}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+      </TabsContent>
+
+      <TabsContent value="historico" className="mt-6">
+        <BoletimHistory />
+      </TabsContent>
+    </Tabs>
+  </div>
+
+  {/* Modal principal do Boletim */}
+  <Dialog
+    open={isBulletinDialogOpen}
+    onOpenChange={setIsBulletinDialogOpen}
+  >
+    <DialogContent className="dialog-override overflow-hidden flex flex-col">
+      <DialogHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <DialogTitle className="text-2xl">
+              Boletim de Ponto
+            </DialogTitle>
+            <DialogDescription>
+              {selectedCompanyName}
+              {" - "}
+              Período: {formatDate(startDate)} até {formatDate(endDate)}
+            </DialogDescription>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant={showPDFPreview ? "default" : "outline"}
+              onClick={() => setShowPDFPreview(!showPDFPreview)}
+              className="gap-2"
+            >
+              <FileText className="h-4 w-4" />
+              {showPDFPreview ? "Ver Tabela" : "Preview PDF"}
+            </Button>
+            <Button
+              onClick={handleExportBulletin}
+              disabled={
+                isSavingToHistory ||
+                isExportingPDF ||
+                filteredBulletinData.length === 0
+              }
+              className="gap-2"
+            >
+              {isSavingToHistory || isExportingPDF ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {isSavingToHistory ? "Salvando..." : "Exportando..."}
+                </>
               ) : (
                 <>
-                  {/* Filtros do modal */}
-                  <Card>
-                    <CardContent className="p-4">
-                      <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-                        <div className="md:col-span-2">
-                          <Label className="text-sm font-medium mb-2 block">
-                            <Filter className="h-3 w-3 inline mr-1" />
-                            Colaborador
-                          </Label>
-                          <Input
-                            placeholder="Filtrar por nome..."
-                            value={employeeFilter}
-                            onChange={(e) => setEmployeeFilter(e.target.value)}
-                            className="text-sm"
-                          />
-                        </div>
-
-                        <div>
-                          <Label className="text-sm font-medium mb-2 block">
-                            <Filter className="h-3 w-3 inline mr-1" />
-                            Função
-                          </Label>
-                          <Select
-                            value={positionFilter}
-                            onValueChange={setPositionFilter}
-                          >
-                            <SelectTrigger className="text-sm">
-                              <SelectValue placeholder="Todas funções" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value={ALL_VALUES.POSITION}>
-                                Todas funções
-                              </SelectItem>
-                              {uniquePositions.map((position) => (
-                                <SelectItem key={position} value={position}>
-                                  {position}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div>
-                          <Label className="text-sm font-medium mb-2 block">
-                            <Filter className="h-3 w-3 inline mr-1" />
-                            Setor
-                          </Label>
-                          <Select
-                            value={departmentFilter}
-                            onValueChange={setDepartmentFilter}
-                          >
-                            <SelectTrigger className="text-sm">
-                              <SelectValue placeholder="Todos setores" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value={ALL_VALUES.DEPARTMENT}>
-                                Todos setores
-                              </SelectItem>
-                              {uniqueDepartments.map((department) => (
-                                <SelectItem key={department} value={department}>
-                                  {department}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div>
-                          <Label className="text-sm font-medium mb-2 block">
-                            <Filter className="h-3 w-3 inline mr-1" />
-                            Dia
-                          </Label>
-                          <Select
-                            value={dateFilter}
-                            onValueChange={setDateFilter}
-                          >
-                            <SelectTrigger className="text-sm">
-                              <SelectValue placeholder="Todos os dias" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value={ALL_VALUES.DATE}>
-                                Todos os dias
-                              </SelectItem>
-                              {uniqueDates.map((date) => (
-                                <SelectItem key={date} value={date}>
-                                  {formatDate(date)}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="flex items-end">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={clearAllFilters}
-                            className="text-sm gap-2 w-full h-10"
-                          >
-                            <X className="h-3 w-3" />
-                            Limpar Filtros
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Tabela do boletim */}
-                  <Card className="flex-1 overflow-hidden flex flex-col">
-                    <CardContent className="p-0 flex-1 overflow-hidden">
-                      <div className="h-full overflow-auto">
-                        <table className="w-full text-sm">
-                          <thead className="sticky top-0 bg-background z-10 border-b">
-                            <tr className="border-b">
-                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background sticky left-0 z-20">
-                                Colaborador
-                              </th>
-                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
-                                Função
-                              </th>
-                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
-                                Setor
-                              </th>
-                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
-                                Empresa (dia)
-                              </th>
-                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
-                                Dia
-                              </th>
-                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
-                                Entrada 1
-                              </th>
-                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
-                                Saída 1
-                              </th>
-                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
-                                Entrada 2
-                              </th>
-                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
-                                Saída 2
-                              </th>
-                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
-                                Total Horas
-                              </th>
-                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
-                                Hora Normal
-                              </th>
-                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
-                                Adicional Noturno
-                              </th>
-                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
-                                50% Diurna
-                              </th>
-                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
-                                50% Noturna
-                              </th>
-                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
-                                100% Diurna
-                              </th>
-                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
-                                100% Noturna
-                              </th>
-                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
-                                Valor
-                              </th>
-                              <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background sticky right-0 z-20">
-                                Ações
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {filteredBulletinData.length === 0 ? (
-                              <tr>
-                                <td
-                                  colSpan={17}
-                                  className="p-8 text-center text-muted-foreground"
-                                >
-                                  Nenhum registro encontrado com os filtros
-                                  selecionados
-                                </td>
-                              </tr>
-                            ) : (
-                              <>
-                                {filteredBulletinData.map((item, index) => {
-                                  const key = `${item.employee_id}-${item.date}`;
-                                  const isEdited = !!editedData[key];
-                                  const hasNoPunch =
-                                    !item.entry1 &&
-                                    !item.exit1 &&
-                                    !item.entry2 &&
-                                    !item.exit2;
-                                  const shouldHighlight =
-                                    hasNoPunch && !isNoCompany(item.work_company);
-                                  const missingClass = shouldHighlight
-                                    ? "bg-red-300 text-red-900 font-semibold"
-                                    : "";
-
-                                  return (
-                                    <tr
-                                      key={`${item.employee_id}-${item.date}-${index}`}
-                                      className={`border-b hover:bg-muted/50 ${
-                                        isEdited
-                                          ? "bg-yellow-50 dark:bg-yellow-950/20"
-                                          : ""
-                                      }`}
-                                    >
-                                      <td
-                                        className={`p-3 align-middle font-medium whitespace-nowrap sticky left-0 ${
-                                          isEdited
-                                            ? "bg-yellow-50 dark:bg-yellow-950/20"
-                                            : "bg-background"
-                                        }`}
-                                      >
-                                        {formatEmployeeName(item.employee_name)}
-                                      </td>
-                                      <td className="p-3 align-middle whitespace-nowrap">
-                                        {item.position}
-                                      </td>
-                                      <td className="p-3 align-middle whitespace-nowrap">
-                                        {item.department}
-                                      </td>
-                                      <td
-                                        className={`p-3 align-middle whitespace-nowrap ${
-                                          isNoCompany(item.work_company)
-                                            ? "bg-yellow-100 text-yellow-900 font-semibold"
-                                            : ""
-                                        }`}
-                                      >
-                                        {item.work_company ?? "—"}
-                                      </td>
-                                      <td className="p-3 align-middle whitespace-nowrap">
-                                        {formatDate(item.date)}
-                                      </td>
-                                      <td className={`p-3 align-middle whitespace-nowrap ${missingClass}`}>
-                                        {item.entry1 || "-"}
-                                      </td>
-                                      <td className={`p-3 align-middle whitespace-nowrap ${missingClass}`}>
-                                        {item.exit1 || "-"}
-                                      </td>
-                                      <td className={`p-3 align-middle whitespace-nowrap ${missingClass}`}>
-                                        {item.entry2 || "-"}
-                                      </td>
-                                      <td className={`p-3 align-middle whitespace-nowrap ${missingClass}`}>
-                                        {item.exit2 || "-"}
-                                      </td>
-                                      <td className="p-3 align-middle whitespace-nowrap font-medium">
-                                        {item.total_hours}
-                                      </td>
-                                      <td className="p-3 align-middle whitespace-nowrap">
-                                        {item.normal_hours}
-                                      </td>
-                                      <td className="p-3 align-middle whitespace-nowrap">
-                                        {item.night_additional || "00:00"}
-                                      </td>
-                                      <td className="p-3 align-middle whitespace-nowrap">
-                                        {item.extra_50_day}
-                                      </td>
-                                      <td className="p-3 align-middle whitespace-nowrap">
-                                        {item.extra_50_night}
-                                      </td>
-                                      <td className="p-3 align-middle whitespace-nowrap">
-                                        {item.extra_100_day}
-                                      </td>
-                                      <td className="p-3 align-middle whitespace-nowrap">
-                                        {item.extra_100_night}
-                                      </td>
-                                      <td className="p-3 align-middle whitespace-nowrap font-medium">
-                                        {formatCurrency(item.value)}
-                                      </td>
-                                      <td
-                                        className={`p-3 align-middle whitespace-nowrap sticky right-0 ${
-                                          isEdited
-                                            ? "bg-yellow-50 dark:bg-yellow-950/20"
-                                            : "bg-background"
-                                        }`}
-                                      >
-                                        <div className="flex items-center gap-2">
-                                          {isEdited && (
-                                            <span className="text-xs text-yellow-600 dark:text-yellow-400">
-                                              Editado
-                                            </span>
-                                          )}
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => handleEditRow(index)}
-                                            className="h-8 w-8 p-0"
-                                          >
-                                            <Edit className="h-4 w-4" />
-                                          </Button>
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-
-                                {/* Linha de totais */}
-                                <tr className="border-t bg-muted/50 font-semibold">
-                                  <td
-                                    colSpan={9}
-                                    className="p-3 align-middle text-right"
-                                  >
-                                    Totais:
-                                  </td>
-                                  <td className="p-3 align-middle whitespace-nowrap">
-                                    {formatHours(totals.totalHours)}
-                                  </td>
-                                  <td className="p-3 align-middle whitespace-nowrap">
-                                    {formatHours(totals.totalNormalHours)}
-                                  </td>
-                                  <td className="p-3 align-middle whitespace-nowrap">
-                                    {formatHours(totals.totalNightAdditional)}
-                                  </td>
-                                  <td className="p-3 align-middle whitespace-nowrap">
-                                    {formatHours(totals.totalExtra50Day)}
-                                  </td>
-                                  <td className="p-3 align-middle whitespace-nowrap">
-                                    {formatHours(totals.totalExtra50Night)}
-                                  </td>
-                                  <td className="p-3 align-middle whitespace-nowrap">
-                                    {formatHours(totals.totalExtra100Day)}
-                                  </td>
-                                  <td className="p-3 align-middle whitespace-nowrap">
-                                    {formatHours(totals.totalExtra100Night)}
-                                  </td>
-                                  <td className="p-3 align-middle whitespace-nowrap">
-                                    {formatCurrency(totals.totalValue)}
-                                  </td>
-                                  <td className="p-3 align-middle whitespace-nowrap sticky right-0 bg-background"></td>
-                                </tr>
-                              </>
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Resumo rápido */}
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <Card>
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm text-muted-foreground">
-                              Total de Horas
-                            </p>
-                            <p className="text-2xl font-bold">
-                              {formatHours(totals.totalHours)}
-                            </p>
-                          </div>
-                          <Calendar className="h-8 w-8 text-muted-foreground" />
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm text-muted-foreground">
-                              Horas Extras 50%
-                            </p>
-                            <p className="text-2xl font-bold">
-                              {formatHours(
-                                totals.totalExtra50Day +
-                                  totals.totalExtra50Night
-                              )}
-                            </p>
-                          </div>
-                          <FileText className="h-8 w-8 text-muted-foreground" />
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm text-muted-foreground">
-                              Horas Extras 100%
-                            </p>
-                            <p className="text-2xl font-bold">
-                              {formatHours(
-                                totals.totalExtra100Day +
-                                  totals.totalExtra100Night
-                              )}
-                            </p>
-                          </div>
-                          <FileText className="h-8 w-8 text-muted-foreground" />
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm text-muted-foreground">
-                              Valor Total
-                            </p>
-                            <p className="text-2xl font-bold">
-                              {formatCurrency(totals.totalValue)}
-                            </p>
-                          </div>
-                          <Users className="h-8 w-8 text-muted-foreground" />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
+                  <Download className="h-4 w-4" />
+                  Exportar PDF
                 </>
               )}
+            </Button>
+          </div>
+        </div>
+      </DialogHeader>
+
+      <div className="flex-1 overflow-hidden flex flex-col gap-4">
+        {showPDFPreview ? (
+          <div className="flex-1 overflow-hidden border rounded-lg">
+            <PDFViewer width="100%" height="100%">
+              <BoletimPDF
+                companyName={selectedCompanyName}
+                startDate={startDate}
+                endDate={endDate}
+                data={filteredBulletinData}
+                logoBase64={logoBase64}
+              />
+            </PDFViewer>
+          </div>
+        ) : (
+          <>
+            {/* Filtros do modal */}
+            <Card>
+              <CardContent className="p-4">
+                <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+                  <div className="md:col-span-2">
+                    <Label className="text-sm font-medium mb-2 block">
+                      <Filter className="h-3 w-3 inline mr-1" />
+                      Colaborador
+                    </Label>
+                    <Input
+                      placeholder="Filtrar por nome..."
+                      value={employeeFilter}
+                      onChange={(e) => setEmployeeFilter(e.target.value)}
+                      className="text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="text-sm font-medium mb-2 block">
+                      <Filter className="h-3 w-3 inline mr-1" />
+                      Função
+                    </Label>
+                    <Select
+                      value={positionFilter}
+                      onValueChange={setPositionFilter}
+                    >
+                      <SelectTrigger className="text-sm">
+                        <SelectValue placeholder="Todas funções" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={ALL_VALUES.POSITION}>
+                          Todas funções
+                        </SelectItem>
+                        {uniquePositions.map((position) => (
+                          <SelectItem key={position} value={position}>
+                            {position}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label className="text-sm font-medium mb-2 block">
+                      <Filter className="h-3 w-3 inline mr-1" />
+                      Setor
+                    </Label>
+                    <Select
+                      value={departmentFilter}
+                      onValueChange={setDepartmentFilter}
+                    >
+                      <SelectTrigger className="text-sm">
+                        <SelectValue placeholder="Todos setores" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={ALL_VALUES.DEPARTMENT}>
+                          Todos setores
+                        </SelectItem>
+                        {uniqueDepartments.map((department) => (
+                          <SelectItem key={department} value={department}>
+                            {department}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label className="text-sm font-medium mb-2 block">
+                      <Filter className="h-3 w-3 inline mr-1" />
+                      Dia
+                    </Label>
+                    <Select
+                      value={dateFilter}
+                      onValueChange={setDateFilter}
+                    >
+                      <SelectTrigger className="text-sm">
+                        <SelectValue placeholder="Todos os dias" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={ALL_VALUES.DATE}>
+                          Todos os dias
+                        </SelectItem>
+                        {uniqueDates.map((date) => (
+                          <SelectItem key={date} value={date}>
+                            {formatDate(date)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex items-end">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearAllFilters}
+                      className="text-sm gap-2 w-full h-10"
+                    >
+                      <X className="h-3 w-3" />
+                      Limpar Filtros
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Tabela do boletim */}
+            <Card className="flex-1 overflow-hidden flex flex-col">
+              <CardContent className="p-0 flex-1 overflow-hidden">
+                <div className="h-full overflow-auto">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 bg-background z-10 border-b">
+                      <tr className="border-b">
+                        <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background sticky left-0 z-20">
+                          Colaborador
+                        </th>
+                        <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
+                          Função
+                        </th>
+                        <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
+                          Setor
+                        </th>
+                        <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
+                          Empresa (dia)
+                        </th>
+                        <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
+                          Dia
+                        </th>
+                        <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
+                          Entrada 1
+                        </th>
+                        <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
+                          Saída 1
+                        </th>
+                        <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
+                          Entrada 2
+                        </th>
+                        <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
+                          Saída 2
+                        </th>
+                        <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
+                          Total Horas
+                        </th>
+                        <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
+                          Hora Normal
+                        </th>
+                        <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
+                          Adicional Noturno
+                        </th>
+                        <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
+                          50% Diurna
+                        </th>
+                        <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
+                          50% Noturna
+                        </th>
+                        <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
+                          100% Diurna
+                        </th>
+                        <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
+                          100% Noturna
+                        </th>
+                        <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
+                          Valor
+                        </th>
+                        <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background sticky right-0 z-20">
+                          Ações
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredBulletinData.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={17}
+                            className="p-8 text-center text-muted-foreground"
+                          >
+                            Nenhum registro encontrado com os filtros
+                            selecionados
+                          </td>
+                        </tr>
+                      ) : (
+                        <>
+                          {filteredBulletinData.map((item, index) => {
+                            const key = `${item.employee_id}-${item.date}`;
+                            const isEdited = !!editedData[key];
+                            const hasNoPunch =
+                              !item.entry1 &&
+                              !item.exit1 &&
+                              !item.entry2 &&
+                              !item.exit2;
+                            const shouldHighlight =
+                              hasNoPunch && !isNoCompany(item.work_company);
+                            const missingClass = shouldHighlight
+                              ? "bg-red-300 text-red-900 font-semibold"
+                              : "";
+
+                            return (
+                              <tr
+                                key={`${item.employee_id}-${item.date}-${index}`}
+                                className={`border-b hover:bg-muted/50 ${
+                                  isEdited
+                                    ? "bg-yellow-50 dark:bg-yellow-950/20"
+                                    : ""
+                                }`}
+                              >
+                                <td
+                                  className={`p-3 align-middle font-medium whitespace-nowrap sticky left-0 ${
+                                    isEdited
+                                      ? "bg-yellow-50 dark:bg-yellow-950/20"
+                                      : "bg-background"
+                                  }`}
+                                >
+                                  {formatEmployeeName(item.employee_name)}
+                                </td>
+                                <td className="p-3 align-middle whitespace-nowrap">
+                                  {item.position}
+                                </td>
+                                <td className="p-3 align-middle whitespace-nowrap">
+                                  {item.department}
+                                </td>
+                                <td
+                                  className={`p-3 align-middle whitespace-nowrap ${
+                                    isNoCompany(item.work_company)
+                                      ? "bg-yellow-100 text-yellow-900 font-semibold"
+                                      : ""
+                                  }`}
+                                >
+                                  {item.work_company ?? "—"}
+                                </td>
+                                <td className="p-3 align-middle whitespace-nowrap">
+                                  {formatDate(item.date)}
+                                </td>
+                                <td className={`p-3 align-middle whitespace-nowrap ${missingClass}`}>
+                                  {item.entry1 || "-"}
+                                </td>
+                                <td className={`p-3 align-middle whitespace-nowrap ${missingClass}`}>
+                                  {item.exit1 || "-"}
+                                </td>
+                                <td className={`p-3 align-middle whitespace-nowrap ${missingClass}`}>
+                                  {item.entry2 || "-"}
+                                </td>
+                                <td className={`p-3 align-middle whitespace-nowrap ${missingClass}`}>
+                                  {item.exit2 || "-"}
+                                </td>
+                                <td className="p-3 align-middle whitespace-nowrap font-medium">
+                                  {item.total_hours}
+                                </td>
+                                <td className="p-3 align-middle whitespace-nowrap">
+                                  {item.normal_hours}
+                                </td>
+                                <td className="p-3 align-middle whitespace-nowrap">
+                                  {item.night_additional || "00:00"}
+                                </td>
+                                <td className="p-3 align-middle whitespace-nowrap">
+                                  {item.extra_50_day}
+                                </td>
+                                <td className="p-3 align-middle whitespace-nowrap">
+                                  {item.extra_50_night}
+                                </td>
+                                <td className="p-3 align-middle whitespace-nowrap">
+                                  {item.extra_100_day}
+                                </td>
+                                <td className="p-3 align-middle whitespace-nowrap">
+                                  {item.extra_100_night}
+                                </td>
+                                <td className="p-3 align-middle whitespace-nowrap font-medium">
+                                  {formatCurrency(item.value)}
+                                </td>
+                                <td
+                                  className={`p-3 align-middle whitespace-nowrap sticky right-0 ${
+                                    isEdited
+                                      ? "bg-yellow-50 dark:bg-yellow-950/20"
+                                      : "bg-background"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    {isEdited && (
+                                      <span className="text-xs text-yellow-600 dark:text-yellow-400">
+                                        Editado
+                                      </span>
+                                    )}
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleEditRow(index)}
+                                      className="h-8 w-8 p-0"
+                                    >
+                                      <Edit className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+
+                          {/* Linha de totais */}
+                          <tr className="border-t bg-muted/50 font-semibold">
+                            <td
+                              colSpan={9}
+                              className="p-3 align-middle text-right"
+                            >
+                              Totais:
+                            </td>
+                            <td className="p-3 align-middle whitespace-nowrap">
+                              {formatHours(totals.totalHours)}
+                            </td>
+                            <td className="p-3 align-middle whitespace-nowrap">
+                              {formatHours(totals.totalNormalHours)}
+                            </td>
+                            <td className="p-3 align-middle whitespace-nowrap">
+                              {formatHours(totals.totalNightAdditional)}
+                            </td>
+                            <td className="p-3 align-middle whitespace-nowrap">
+                              {formatHours(totals.totalExtra50Day)}
+                            </td>
+                            <td className="p-3 align-middle whitespace-nowrap">
+                              {formatHours(totals.totalExtra50Night)}
+                            </td>
+                            <td className="p-3 align-middle whitespace-nowrap">
+                              {formatHours(totals.totalExtra100Day)}
+                            </td>
+                            <td className="p-3 align-middle whitespace-nowrap">
+                              {formatHours(totals.totalExtra100Night)}
+                            </td>
+                            <td className="p-3 align-middle whitespace-nowrap">
+                              {formatCurrency(totals.totalValue)}
+                            </td>
+                            <td className="p-3 align-middle whitespace-nowrap sticky right-0 bg-background"></td>
+                          </tr>
+                        </>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Resumo rápido */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">
+                        Total de Horas
+                      </p>
+                      <p className="text-2xl font-bold">
+                        {formatHours(totals.totalHours)}
+                      </p>
+                    </div>
+                    <Calendar className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">
+                        Horas Extras 50%
+                      </p>
+                      <p className="text-2xl font-bold">
+                        {formatHours(
+                          totals.totalExtra50Day +
+                            totals.totalExtra50Night
+                        )}
+                      </p>
+                    </div>
+                    <FileText className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">
+                        Horas Extras 100%
+                      </p>
+                      <p className="text-2xl font-bold">
+                        {formatHours(
+                          totals.totalExtra100Day +
+                            totals.totalExtra100Night
+                        )}
+                      </p>
+                    </div>
+                    <FileText className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">
+                        Valor Total
+                      </p>
+                      <p className="text-2xl font-bold">
+                        {formatCurrency(totals.totalValue)}
+                      </p>
+                    </div>
+                    <Users className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                </CardContent>
+              </Card>
             </div>
+          </>
+        )}
+      </div>
 
-            <DialogFooter>
-              {hasEdits && (
-                <Button
-                  variant="destructive"
-                  onClick={clearAllEdits}
-                  className="mr-auto"
-                >
-                  Descartar Edições ({Object.keys(editedData).length})
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setIsBulletinDialogOpen(false);
-                  setShowPDFPreview(false);
-                }}
-              >
-                Fechar
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+      <DialogFooter>
+        {hasEdits && (
+          <Button
+            variant="destructive"
+            onClick={clearAllEdits}
+            className="mr-auto"
+          >
+            Descartar Edições ({Object.keys(editedData).length})
+          </Button>
+        )}
+        <Button
+          variant="outline"
+          onClick={() => {
+            setIsBulletinDialogOpen(false);
+            setShowPDFPreview(false);
+          }}
+        >
+          Fechar
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 
-        {/* Modal de Edição (separado do modal principal) */}
-        <Dialog open={isEditDialogOpen} onOpenChange={handleCancelEdit}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Editar Valores</DialogTitle>
-              <DialogDescription>
-                Edite os valores para{" "}
-                {editingRow !== null &&
-                  formatEmployeeName(filteredBulletinData[editingRow]?.employee_name)}
-              </DialogDescription>
-            </DialogHeader>
+  {/* Modal de Edição (separado do modal principal) */}
+  <Dialog open={isEditDialogOpen} onOpenChange={handleCancelEdit}>
+    <DialogContent className="max-w-2xl">
+      <DialogHeader>
+        <DialogTitle>Editar Valores</DialogTitle>
+        <DialogDescription>
+          Edite os valores para{" "}
+          {editingRow !== null &&
+            formatEmployeeName(filteredBulletinData[editingRow]?.employee_name)}
+        </DialogDescription>
+      </DialogHeader>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 py-4">
-              <div>
-                <Label htmlFor="edit-employee-position">Função</Label>
-                <Input
-                  id="edit-employee-position"
-                  type="text"
-                  value={editFormData.position}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      position: e.target.value,
-                    })
-                  }
-                  placeholder="Digite a função"
-                />
-              </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 py-4">
+        <div>
+          <Label htmlFor="edit-employee-position">Função</Label>
+          <Input
+            id="edit-employee-position"
+            type="text"
+            value={editFormData.position}
+            onChange={(e) =>
+              setEditFormData({
+                ...editFormData,
+                position: e.target.value,
+              })
+            }
+            placeholder="Digite a função"
+          />
+        </div>
 
-              <div>
-                <Label htmlFor="edit-employee-department">Setor</Label>
-                <Input
-                  id="edit-employee-department"
-                  type="text"
-                  value={editFormData.department}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      department: e.target.value,
-                    })
-                  }
-                  placeholder="Digite o setor"
-                />
-              </div>
+        <div>
+          <Label htmlFor="edit-employee-department">Setor</Label>
+          <Input
+            id="edit-employee-department"
+            type="text"
+            value={editFormData.department}
+            onChange={(e) =>
+              setEditFormData({
+                ...editFormData,
+                department: e.target.value,
+              })
+            }
+            placeholder="Digite o setor"
+          />
+        </div>
 
-              <div>
-                <Label htmlFor="edit-entry1">Entrada 1</Label>
-                <Input
-                  id="edit-entry1"
-                  type="time"
-                  value={editFormData.entry1}
-                  onChange={(e) =>
-                    setEditFormData({ ...editFormData, entry1: e.target.value })
-                  }
-                />
-              </div>
+        <div>
+          <Label htmlFor="edit-entry1">Entrada 1</Label>
+          <Input
+            id="edit-entry1"
+            type="time"
+            value={editFormData.entry1}
+            onChange={(e) =>
+              setEditFormData({ ...editFormData, entry1: e.target.value })
+            }
+          />
+        </div>
 
-              <div>
-                <Label htmlFor="edit-exit1">Saída 1</Label>
-                <Input
-                  id="edit-exit1"
-                  type="time"
-                  value={editFormData.exit1}
-                  onChange={(e) =>
-                    setEditFormData({ ...editFormData, exit1: e.target.value })
-                  }
-                />
-              </div>
+        <div>
+          <Label htmlFor="edit-exit1">Saída 1</Label>
+          <Input
+            id="edit-exit1"
+            type="time"
+            value={editFormData.exit1}
+            onChange={(e) =>
+              setEditFormData({ ...editFormData, exit1: e.target.value })
+            }
+          />
+        </div>
 
-              <div>
-                <Label htmlFor="edit-entry2">Entrada 2 (opcional)</Label>
-                <Input
-                  id="edit-entry2"
-                  type="time"
-                  value={editFormData.entry2}
-                  onChange={(e) =>
-                    setEditFormData({ ...editFormData, entry2: e.target.value })
-                  }
-                />
-              </div>
+        <div>
+          <Label htmlFor="edit-entry2">Entrada 2 (opcional)</Label>
+          <Input
+            id="edit-entry2"
+            type="time"
+            value={editFormData.entry2}
+            onChange={(e) =>
+              setEditFormData({ ...editFormData, entry2: e.target.value })
+            }
+          />
+        </div>
 
-              <div>
-                <Label htmlFor="edit-exit2">Saída 2 (opcional)</Label>
-                <Input
-                  id="edit-exit2"
-                  type="time"
-                  value={editFormData.exit2}
-                  onChange={(e) =>
-                    setEditFormData({ ...editFormData, exit2: e.target.value })
-                  }
-                />
-              </div>
+        <div>
+          <Label htmlFor="edit-exit2">Saída 2 (opcional)</Label>
+          <Input
+            id="edit-exit2"
+            type="time"
+            value={editFormData.exit2}
+            onChange={(e) =>
+              setEditFormData({ ...editFormData, exit2: e.target.value })
+            }
+          />
+        </div>
 
-              <div>
-                <Label htmlFor="edit-total-hours">Total Horas</Label>
-                <Input
-                  id="edit-total-hours"
-                  type="time"
-                  value={editFormData.total_hours}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      total_hours: e.target.value,
-                    })
-                  }
-                />
-              </div>
+        <div>
+          <Label htmlFor="edit-total-hours">Total Horas</Label>
+          <Input
+            id="edit-total-hours"
+            type="time"
+            value={editFormData.total_hours}
+            onChange={(e) =>
+              setEditFormData({
+                ...editFormData,
+                total_hours: e.target.value,
+              })
+            }
+          />
+        </div>
 
-              <div>
-                <Label htmlFor="edit-normal-hours">Hora Normal</Label>
-                <Input
-                  id="edit-normal-hours"
-                  type="time"
-                  value={editFormData.normal_hours}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      normal_hours: e.target.value,
-                    })
-                  }
-                />
-              </div>
+        <div>
+          <Label htmlFor="edit-normal-hours">Hora Normal</Label>
+          <Input
+            id="edit-normal-hours"
+            type="time"
+            value={editFormData.normal_hours}
+            onChange={(e) =>
+              setEditFormData({
+                ...editFormData,
+                normal_hours: e.target.value,
+              })
+            }
+          />
+        </div>
 
-              <div>
-                <Label htmlFor="edit-night-additional">Adicional Noturno</Label>
-                <Input
-                  id="edit-night-additional"
-                  type="time"
-                  value={editFormData.night_additional}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      night_additional: e.target.value,
-                    })
-                  }
-                />
-              </div>
+        <div>
+          <Label htmlFor="edit-night-additional">Adicional Noturno</Label>
+          <Input
+            id="edit-night-additional"
+            type="time"
+            value={editFormData.night_additional}
+            onChange={(e) =>
+              setEditFormData({
+                ...editFormData,
+                night_additional: e.target.value,
+              })
+            }
+          />
+        </div>
 
-              <div>
-                <Label htmlFor="edit-extra50-day">50% Diurna</Label>
-                <Input
-                  id="edit-extra50-day"
-                  type="time"
-                  value={editFormData.extra_50_day}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      extra_50_day: e.target.value,
-                    })
-                  }
-                />
-              </div>
+        <div>
+          <Label htmlFor="edit-extra50-day">50% Diurna</Label>
+          <Input
+            id="edit-extra50-day"
+            type="time"
+            value={editFormData.extra_50_day}
+            onChange={(e) =>
+              setEditFormData({
+                ...editFormData,
+                extra_50_day: e.target.value,
+              })
+            }
+          />
+        </div>
 
-              <div>
-                <Label htmlFor="edit-extra50-night">50% Noturna</Label>
-                <Input
-                  id="edit-extra50-night"
-                  type="time"
-                  value={editFormData.extra_50_night}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      extra_50_night: e.target.value,
-                    })
-                  }
-                />
-              </div>
+        <div>
+          <Label htmlFor="edit-extra50-night">50% Noturna</Label>
+          <Input
+            id="edit-extra50-night"
+            type="time"
+            value={editFormData.extra_50_night}
+            onChange={(e) =>
+              setEditFormData({
+                ...editFormData,
+                extra_50_night: e.target.value,
+              })
+            }
+          />
+        </div>
 
-              <div>
-                <Label htmlFor="edit-extra100-day">100% Diurna</Label>
-                <Input
-                  id="edit-extra100-day"
-                  type="time"
-                  value={editFormData.extra_100_day}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      extra_100_day: e.target.value,
-                    })
-                  }
-                />
-              </div>
+        <div>
+          <Label htmlFor="edit-extra100-day">100% Diurna</Label>
+          <Input
+            id="edit-extra100-day"
+            type="time"
+            value={editFormData.extra_100_day}
+            onChange={(e) =>
+              setEditFormData({
+                ...editFormData,
+                extra_100_day: e.target.value,
+              })
+            }
+          />
+        </div>
 
-              <div>
-                <Label htmlFor="edit-extra100-night">100% Noturna</Label>
-                <Input
-                  id="edit-extra100-night"
-                  type="time"
-                  value={editFormData.extra_100_night}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      extra_100_night: e.target.value,
-                    })
-                  }
-                />
-              </div>
+        <div>
+          <Label htmlFor="edit-extra100-night">100% Noturna</Label>
+          <Input
+            id="edit-extra100-night"
+            type="time"
+            value={editFormData.extra_100_night}
+            onChange={(e) =>
+              setEditFormData({
+                ...editFormData,
+                extra_100_night: e.target.value,
+              })
+            }
+          />
+        </div>
 
-              <div className="md:col-span-3">
-                <Label htmlFor="edit-value">Valor (R$)</Label>
-                <Input
-                  id="edit-value"
-                  type="number"
-                  step="0.01"
-                  value={editFormData.value}
-                  onChange={(e) =>
-                    setEditFormData({ ...editFormData, value: e.target.value })
-                  }
-                  placeholder="0.00"
-                />
-              </div>
-            </div>
+        <div className="md:col-span-3">
+          <Label htmlFor="edit-value">Valor (R$)</Label>
+          <Input
+            id="edit-value"
+            type="number"
+            step="0.01"
+            value={editFormData.value}
+            onChange={(e) =>
+              setEditFormData({ ...editFormData, value: e.target.value })
+            }
+            placeholder="0.00"
+          />
+        </div>
+      </div>
 
-            <DialogFooter>
-              <Button variant="outline" onClick={handleCancelEdit}>
-                Cancelar
-              </Button>
-              <Button onClick={handleSaveEdit}>Salvar Alterações</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </SidebarInset>
-    </SidebarProvider>
+      <DialogFooter>
+        <Button variant="outline" onClick={handleCancelEdit}>
+          Cancelar
+        </Button>
+        <Button onClick={handleSaveEdit}>Salvar Alterações</Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+    </>
   );
 }

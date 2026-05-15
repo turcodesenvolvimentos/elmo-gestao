@@ -32,13 +32,6 @@ import {
   TableRow,
   TableCell,
 } from "@/components/ui/table";
-import { AppSidebar } from "@/components/app-sidebar";
-import { Separator } from "@/components/ui/separator";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
@@ -926,651 +919,646 @@ export default function PontoPage() {
   }
 
   return (
-    <SidebarProvider>
-      <AppSidebar collapsible="icon" />
-      <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-          <div className="flex items-center gap-2">
-            <SidebarTrigger />
-            <Separator orientation="vertical" className="mr-2 h-4" />
-            <h1 className="text-xl font-semibold">Ponto</h1>
-          </div>
-        </header>
+    <>
+  <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+    <div className="flex items-center gap-2">
+      <h1 className="text-xl font-semibold">Ponto</h1>
+    </div>
+  </header>
 
-        <div className="flex flex-1 flex-col gap-6 p-6 w-full min-h-0">
-          {hasAnyError && (
-            <Alert variant="destructive">
-              <AlertDescription>
-                Erro ao carregar dados. Tente atualizar os filtros ou recarregar
-                a página.
-              </AlertDescription>
-            </Alert>
-          )}
+  <div className="flex flex-1 flex-col gap-6 p-6 w-full min-h-0">
+    {hasAnyError && (
+      <Alert variant="destructive">
+        <AlertDescription>
+          Erro ao carregar dados. Tente atualizar os filtros ou recarregar
+          a página.
+        </AlertDescription>
+      </Alert>
+    )}
 
-          <Tabs
-            value={activeTab}
-            onValueChange={setActiveTab}
-            className="w-full"
+    <Tabs
+      value={activeTab}
+      onValueChange={setActiveTab}
+      className="w-full"
+    >
+      <div className="flex items-center justify-between mb-6">
+        <TabsList>
+          <TabsTrigger
+            value="visualizar"
+            className="flex items-center gap-2"
           >
-            <div className="flex items-center justify-between mb-6">
-              <TabsList>
-                <TabsTrigger
-                  value="visualizar"
-                  className="flex items-center gap-2"
-                >
-                  <Eye className="h-4 w-4" />
-                  Visualizar
-                </TabsTrigger>
-                <TabsTrigger
-                  value="historico"
-                  className="flex items-center gap-2"
-                >
-                  <History className="h-4 w-4" />
-                  Histórico
-                </TabsTrigger>
-              </TabsList>
+            <Eye className="h-4 w-4" />
+            Visualizar
+          </TabsTrigger>
+          <TabsTrigger
+            value="historico"
+            className="flex items-center gap-2"
+          >
+            <History className="h-4 w-4" />
+            Histórico
+          </TabsTrigger>
+        </TabsList>
 
-              <div className="flex items-center gap-2">
-                {lastSyncData && (
-                  <span className="text-sm text-muted-foreground">
-                    Última sincronização:{" "}
-                    {new Date(lastSyncData.lastSyncAt).toLocaleString("pt-BR")}
-                  </span>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => syncMutation.mutate()}
-                  disabled={syncMutation.isPending}
-                >
-                  {syncMutation.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Sincronizando...
-                      {syncMutation.progress &&
-                        syncMutation.progress.total > 0 && (
-                          <span className="ml-2 font-medium">
-                            {syncMutation.progress.percent}%
-                            <span className="text-muted-foreground font-normal">
-                              {" "}
-                              ({syncMutation.progress.processed}/
-                              {syncMutation.progress.total})
-                            </span>
-                          </span>
-                        )}
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="mr-2 h-4 w-4" />
-                      Sincronizar
-                    </>
+        <div className="flex items-center gap-2">
+          {lastSyncData && (
+            <span className="text-sm text-muted-foreground">
+              Última sincronização:{" "}
+              {new Date(lastSyncData.lastSyncAt).toLocaleString("pt-BR")}
+            </span>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => syncMutation.mutate()}
+            disabled={syncMutation.isPending}
+          >
+            {syncMutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Sincronizando...
+                {syncMutation.progress &&
+                  syncMutation.progress.total > 0 && (
+                    <span className="ml-2 font-medium">
+                      {syncMutation.progress.percent}%
+                      <span className="text-muted-foreground font-normal">
+                        {" "}
+                        ({syncMutation.progress.processed}/
+                        {syncMutation.progress.total})
+                      </span>
+                    </span>
                   )}
-                </Button>
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Sincronizar
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+
+      <TabsContent value="visualizar" className="space-y-6">
+        <Card>
+          <CardContent className="">
+            <div className="flex flex-col gap-4 md:flex-row md:justify-between">
+              <div>
+                <h3 className="text-lg font-semibold">Filtros</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Selecione os filtros para visualizar os pontos
+                </p>
               </div>
             </div>
 
-            <TabsContent value="visualizar" className="space-y-6">
-              <Card>
-                <CardContent className="">
-                  <div className="flex flex-col gap-4 md:flex-row md:justify-between">
-                    <div>
-                      <h3 className="text-lg font-semibold">Filtros</h3>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Selecione os filtros para visualizar os pontos
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-end lg:gap-6">
-                    <div className="flex-1 space-y-4 lg:space-y-0 lg:flex lg:items-center lg:gap-4">
-                      {/* ── Colaborador ── */}
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Label className="whitespace-nowrap text-sm font-medium">
-                          Colaborador:
-                        </Label>
-                        <div className="flex items-center gap-1">
-                          <Popover
-                            open={openEmployee}
-                            onOpenChange={setOpenEmployee}
-                          >
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                role="combobox"
-                                aria-expanded={openEmployee}
-                                className="w-[300px] justify-between font-normal"
-                              >
-                                <span className="truncate">
-                                  {selectedEmployeeName ||
-                                    "Selecione um colaborador..."}
-                                </span>
-                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-[300px] p-0">
-                              <Command
-                                filter={(value, search) => {
-                                  const v = removeAccentsFrom(
-                                    value,
-                                  ).toLowerCase();
-                                  const s = removeAccentsFrom(
-                                    search,
-                                  ).toLowerCase();
-                                  return v.includes(s) ? 1 : 0;
+            <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-end lg:gap-6">
+              <div className="flex-1 space-y-4 lg:space-y-0 lg:flex lg:items-center lg:gap-4">
+                {/* ── Colaborador ── */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Label className="whitespace-nowrap text-sm font-medium">
+                    Colaborador:
+                  </Label>
+                  <div className="flex items-center gap-1">
+                    <Popover
+                      open={openEmployee}
+                      onOpenChange={setOpenEmployee}
+                    >
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={openEmployee}
+                          className="w-[300px] justify-between font-normal"
+                        >
+                          <span className="truncate">
+                            {selectedEmployeeName ||
+                              "Selecione um colaborador..."}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[300px] p-0">
+                        <Command
+                          filter={(value, search) => {
+                            const v = removeAccentsFrom(
+                              value,
+                            ).toLowerCase();
+                            const s = removeAccentsFrom(
+                              search,
+                            ).toLowerCase();
+                            return v.includes(s) ? 1 : 0;
+                          }}
+                        >
+                          <CommandInput placeholder="Pesquisar colaborador..." />
+                          <CommandList>
+                            <CommandEmpty>
+                              Nenhum colaborador encontrado.
+                            </CommandEmpty>
+                            <CommandGroup>
+                              <CommandItem
+                                value="todos"
+                                onSelect={() => {
+                                  setFilter((prev) => ({
+                                    ...prev,
+                                    employeeId: 0,
+                                  }));
+                                  setOpenEmployee(false);
                                 }}
                               >
-                                <CommandInput placeholder="Pesquisar colaborador..." />
-                                <CommandList>
-                                  <CommandEmpty>
-                                    Nenhum colaborador encontrado.
-                                  </CommandEmpty>
-                                  <CommandGroup>
-                                    <CommandItem
-                                      value="todos"
-                                      onSelect={() => {
-                                        setFilter((prev) => ({
-                                          ...prev,
-                                          employeeId: 0,
-                                        }));
-                                        setOpenEmployee(false);
-                                      }}
-                                    >
-                                      <Check
-                                        className={cn(
-                                          "mr-2 h-4 w-4",
-                                          filter.employeeId === 0
-                                            ? "opacity-100"
-                                            : "opacity-0",
-                                        )}
-                                      />
-                                      Todos
-                                    </CommandItem>
-                                    {employeeOptions.map((employee) => {
-                                      return (
-                                        <CommandItem
-                                          key={employee.id}
-                                          value={employee.name}
-                                          onSelect={() => {
-                                            setFilter((prev) => ({
-                                              ...prev,
-                                              employeeId: employee.id,
-                                            }));
-                                            setOpenEmployee(false);
-                                          }}
-                                        >
-                                          <Check
-                                            className={cn(
-                                              "mr-2 h-4 w-4",
-                                              filter.employeeId === employee?.id
-                                                ? "opacity-100"
-                                                : "opacity-0",
-                                            )}
-                                          />
-                                          {employee.name}
-                                        </CommandItem>
-                                      );
-                                    })}
-                                  </CommandGroup>
-                                </CommandList>
-                              </Command>
-                            </PopoverContent>
-                          </Popover>
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    filter.employeeId === 0
+                                      ? "opacity-100"
+                                      : "opacity-0",
+                                  )}
+                                />
+                                Todos
+                              </CommandItem>
+                              {employeeOptions.map((employee) => {
+                                return (
+                                  <CommandItem
+                                    key={employee.id}
+                                    value={employee.name}
+                                    onSelect={() => {
+                                      setFilter((prev) => ({
+                                        ...prev,
+                                        employeeId: employee.id,
+                                      }));
+                                      setOpenEmployee(false);
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        filter.employeeId === employee?.id
+                                          ? "opacity-100"
+                                          : "opacity-0",
+                                      )}
+                                    />
+                                    {employee.name}
+                                  </CommandItem>
+                                );
+                              })}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
 
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-9 w-9"
-                            onClick={() => navigateEmployee("prev")}
-                            disabled={employeeOptions.length === 0}
-                            title="Colaborador anterior"
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-9 w-9"
+                      onClick={() => navigateEmployee("prev")}
+                      disabled={employeeOptions.length === 0}
+                      title="Colaborador anterior"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-9 w-9"
+                      onClick={() => navigateEmployee("next")}
+                      disabled={employeeOptions.length === 0}
+                      title="Próximo colaborador"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+
+                    <label className="flex items-center gap-2 cursor-pointer text-sm text-muted-foreground whitespace-nowrap">
+                      <Checkbox
+                        checked={showInactiveEmployees}
+                        onCheckedChange={(checked) =>
+                          setShowInactiveEmployees(checked === true)
+                        }
+                      />
+                      Exibir inativos
+                    </label>
+                    {filter.employeeId > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() =>
+                          setFilter((prev) => ({
+                            ...prev,
+                            employeeId: 0,
+                          }))
+                        }
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {/* ── Empresa ── */}
+                <div className="flex items-center gap-2">
+                  <Label className="whitespace-nowrap text-sm font-medium">
+                    Empresa:
+                  </Label>
+                  <Select
+                    value={filter.company}
+                    onValueChange={(value) =>
+                      setFilter((prev) => ({ ...prev, company: value }))
+                    }
+                  >
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {companiesList.map((company) => (
+                        <SelectItem key={company} value={company}>
+                          {company}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* ── Data inicial ── */}
+                <div className="flex items-center gap-2">
+                  <Label className="whitespace-nowrap text-sm font-medium">
+                    Data inicial:
+                  </Label>
+                  <Input
+                    type="date"
+                    className="w-[140px]"
+                    value={filter.startDate}
+                    onChange={(e) =>
+                      setFilter((prev) => ({
+                        ...prev,
+                        startDate: e.target.value,
+                      }))
+                    }
+                    max={filter.endDate || undefined}
+                  />
+                </div>
+
+                {/* ── Data final ── */}
+                <div className="flex items-center gap-2">
+                  <Label className="whitespace-nowrap text-sm font-medium">
+                    Data final:
+                  </Label>
+                  <div className="flex flex-col">
+                    <Input
+                      type="date"
+                      className={`w-[140px] ${
+                        shouldSendDates && !isDateRangeValid
+                          ? "border-red-500"
+                          : ""
+                      }`}
+                      value={filter.endDate}
+                      onChange={(e) =>
+                        setFilter((prev) => ({
+                          ...prev,
+                          endDate: e.target.value,
+                        }))
+                      }
+                      min={filter.startDate || undefined}
+                    />
+                    {shouldSendDates && !isDateRangeValid && (
+                      <span className="text-xs text-red-500 mt-1">
+                        Data final deve ser maior ou igual à data inicial
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* ── Exportar PDF ── */}
+                {hasFilters &&
+                  shouldSendDates &&
+                  isDateRangeValid &&
+                  groupedPunches.length > 0 && (
+                    <Button
+                      onClick={handleExportReport}
+                      disabled={
+                        exportPDFMutation.isPending ||
+                        saveToHistoryMutation.isPending
+                      }
+                      className="ml-auto"
+                    >
+                      {exportPDFMutation.isPending ||
+                      saveToHistoryMutation.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Exportando...
+                        </>
+                      ) : (
+                        <>
+                          <Download className="mr-2 h-4 w-4" />
+                          Exportar PDF
+                        </>
+                      )}
+                    </Button>
+                  )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <CardContent className="flex flex-col flex-1 min-h-0 pb-6">
+            <div className="border-b pb-4 mb-4">
+              <h3 className="text-lg font-semibold">Resultado</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Visualização dos pontos registrados
+              </p>
+            </div>
+
+            {!hasFilters ? (
+              <div className="flex flex-1 items-center justify-center min-h-[280px] rounded-lg border border-dashed border-muted-foreground/25 bg-muted/20">
+                <p className="text-muted-foreground text-center text-sm px-4">
+                  Selecione um colaborador para visualizar os pontos
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto min-h-[200px]">
+                <Table className="w-full min-w-[800px]">
+                  <TableHeader>
+                    <tr className="bg-gray-50/50">
+                      {dynamicColumns.map((item, index) => (
+                        <TableHead
+                          key={item}
+                          className={`px-4 py-3 text-left text-sm font-medium text-gray-700 whitespace-nowrap ${
+                            index < dynamicColumns.length - 1
+                              ? "border-r border-gray-200"
+                              : ""
+                          }`}
+                        >
+                          {item}
+                        </TableHead>
+                      ))}
+                    </tr>
+                  </TableHeader>
+                  <TableBody>
+                    {shouldSendDates && !isDateRangeValid ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={dynamicColumns.length}
+                          className="text-center py-8 text-red-500"
+                        >
+                          Data final deve ser maior ou igual à data
+                          inicial
+                        </TableCell>
+                      </TableRow>
+                    ) : punchesLoading ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={dynamicColumns.length}
+                          className="text-center py-8 text-muted-foreground"
+                        >
+                          Carregando pontos...
+                        </TableCell>
+                      </TableRow>
+                    ) : punchesError ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={dynamicColumns.length}
+                          className="text-center py-8 text-red-500"
+                        >
+                          {punchesError
+                            ? String(punchesError)
+                            : "Erro ao carregar pontos"}
+                        </TableCell>
+                      </TableRow>
+                    ) : groupedPunches.length > 0 ? (
+                      <>
+                        {groupedPunches.map((group, index) => (
+                          <TableRow
+                            key={group.key}
+                            className={
+                              index % 2 === 0 ? "bg-white" : "bg-gray-100"
+                            }
                           >
-                            <ChevronLeft className="h-4 w-4" />
-                          </Button>
-
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-9 w-9"
-                            onClick={() => navigateEmployee("next")}
-                            disabled={employeeOptions.length === 0}
-                            title="Próximo colaborador"
-                          >
-                            <ChevronRight className="h-4 w-4" />
-                          </Button>
-
-                          <label className="flex items-center gap-2 cursor-pointer text-sm text-muted-foreground whitespace-nowrap">
-                            <Checkbox
-                              checked={showInactiveEmployees}
-                              onCheckedChange={(checked) =>
-                                setShowInactiveEmployees(checked === true)
-                              }
-                            />
-                            Exibir inativos
-                          </label>
-                          {filter.employeeId > 0 && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() =>
-                                setFilter((prev) => ({
-                                  ...prev,
-                                  employeeId: 0,
-                                }))
+                            <TableCell className="px-4 py-3 border-r border-gray-200">
+                              {group.employeeName}
+                            </TableCell>
+                            <TableCell
+                              className={`px-4 py-3 border-r border-gray-200 ${
+                                isNoCompany(group.company)
+                                  ? "bg-yellow-100 text-yellow-900 font-semibold"
+                                  : ""
+                              }`}
+                            >
+                              {group.company}
+                            </TableCell>
+                            <TableCell
+                              className={`px-4 py-3 border-r border-gray-200 font-medium ${
+                                group.ajusteTipo === "work"
+                                  ? "text-white"
+                                  : group.ajusteTipo === "non_work"
+                                    ? "text-white"
+                                    : group.isHoliday ||
+                                        group.dayOfWeekNumber === 0
+                                      ? "bg-blue-100 text-blue-800"
+                                      : ""
+                              }`}
+                              style={
+                                group.ajusteTipo === "work"
+                                  ? { backgroundColor: "#0070C0" }
+                                  : group.ajusteTipo === "non_work"
+                                    ? { backgroundColor: "#00B0F0" }
+                                    : undefined
                               }
                             >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
+                              {group.formattedDate}
+                            </TableCell>
+                            <TableCell
+                              className={`px-4 py-3 border-r border-gray-200 capitalize font-medium ${
+                                group.ajusteTipo === "work"
+                                  ? "text-white"
+                                  : group.ajusteTipo === "non_work"
+                                    ? "text-white"
+                                    : group.isHoliday ||
+                                        group.dayOfWeekNumber === 0
+                                      ? "bg-blue-100 text-blue-800"
+                                      : ""
+                              }`}
+                              style={
+                                group.ajusteTipo === "work"
+                                  ? { backgroundColor: "#0070C0" }
+                                  : group.ajusteTipo === "non_work"
+                                    ? { backgroundColor: "#00B0F0" }
+                                    : undefined
+                              }
+                            >
+                              {group.dayOfWeek}
+                            </TableCell>
 
-                      {/* ── Empresa ── */}
-                      <div className="flex items-center gap-2">
-                        <Label className="whitespace-nowrap text-sm font-medium">
-                          Empresa:
-                        </Label>
-                        <Select
-                          value={filter.company}
-                          onValueChange={(value) =>
-                            setFilter((prev) => ({ ...prev, company: value }))
-                          }
-                        >
-                          <SelectTrigger className="w-[200px]">
-                            <SelectValue placeholder="Todos" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {companiesList.map((company) => (
-                              <SelectItem key={company} value={company}>
-                                {company}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                            {(() => {
+                              const dayHasIncomplete =
+                                group.punches.length === 0 ||
+                                group.punches.some(
+                                  (p) => !p.dateIn || !p.dateOut,
+                                );
+                              const highlightDay =
+                                dayHasIncomplete &&
+                                !isNoCompany(group.company);
+                              const cellHighlight = highlightDay
+                                ? "bg-red-300 text-red-900 font-semibold"
+                                : "";
 
-                      {/* ── Data inicial ── */}
-                      <div className="flex items-center gap-2">
-                        <Label className="whitespace-nowrap text-sm font-medium">
-                          Data inicial:
-                        </Label>
-                        <Input
-                          type="date"
-                          className="w-[140px]"
-                          value={filter.startDate}
-                          onChange={(e) =>
-                            setFilter((prev) => ({
-                              ...prev,
-                              startDate: e.target.value,
-                            }))
-                          }
-                          max={filter.endDate || undefined}
-                        />
-                      </div>
+                              return Array.from({ length: maxPunchPairs }).map(
+                                (_, index) => {
+                                  const punch = group.punches[index];
+                                  const entryTime = punch?.dateIn
+                                    ? new Date(
+                                        punch.dateIn,
+                                      ).toLocaleTimeString("pt-BR", {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })
+                                    : "-";
+                                  const exitTime = punch?.dateOut
+                                    ? new Date(
+                                        punch.dateOut,
+                                      ).toLocaleTimeString("pt-BR", {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })
+                                    : "-";
 
-                      {/* ── Data final ── */}
-                      <div className="flex items-center gap-2">
-                        <Label className="whitespace-nowrap text-sm font-medium">
-                          Data final:
-                        </Label>
-                        <div className="flex flex-col">
-                          <Input
-                            type="date"
-                            className={`w-[140px] ${
-                              shouldSendDates && !isDateRangeValid
-                                ? "border-red-500"
-                                : ""
-                            }`}
-                            value={filter.endDate}
-                            onChange={(e) =>
-                              setFilter((prev) => ({
-                                ...prev,
-                                endDate: e.target.value,
-                              }))
-                            }
-                            min={filter.startDate || undefined}
-                          />
-                          {shouldSendDates && !isDateRangeValid && (
-                            <span className="text-xs text-red-500 mt-1">
-                              Data final deve ser maior ou igual à data inicial
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                                  return (
+                                    <Fragment
+                                      key={`punch-${group.key}-${index}`}
+                                    >
+                                      <TableCell
+                                        className={`px-4 py-3 border-r border-gray-200 ${cellHighlight}`}
+                                      >
+                                        {entryTime}
+                                      </TableCell>
+                                      <TableCell
+                                        className={`px-4 py-3 border-r border-gray-200 ${cellHighlight}`}
+                                      >
+                                        {exitTime}
+                                      </TableCell>
+                                    </Fragment>
+                                  );
+                                },
+                              );
+                            })()}
 
-                      {/* ── Exportar PDF ── */}
-                      {hasFilters &&
-                        shouldSendDates &&
-                        isDateRangeValid &&
-                        groupedPunches.length > 0 && (
-                          <Button
-                            onClick={handleExportReport}
-                            disabled={
-                              exportPDFMutation.isPending ||
-                              saveToHistoryMutation.isPending
-                            }
-                            className="ml-auto"
+                            <TableCell className="px-4 py-3 border-r border-gray-200">
+                              {group.horasDiurnas}
+                            </TableCell>
+                            <TableCell className="px-4 py-3 border-r border-gray-200">
+                              {group.horasNoturnas}
+                            </TableCell>
+                            <TableCell className="px-4 py-3 border-r border-gray-200">
+                              {group.horasFictas}
+                            </TableCell>
+                            <TableCell className="px-4 py-3 border-r border-gray-200">
+                              {group.totalHoras}
+                            </TableCell>
+                            <TableCell className="px-4 py-3 border-r border-gray-200">
+                              {group.horasNormais}
+                            </TableCell>
+                            <TableCell className="px-4 py-3 border-r border-gray-200">
+                              {group.adicionalNoturno}
+                            </TableCell>
+                            <TableCell className="px-4 py-3 border-r border-gray-200">
+                              {group.extra50Diurno}
+                            </TableCell>
+                            <TableCell className="px-4 py-3 border-r border-gray-200">
+                              {group.extra50Noturno}
+                            </TableCell>
+                            <TableCell className="px-4 py-3 border-r border-gray-200">
+                              {group.extra100Diurno}
+                            </TableCell>
+                            <TableCell className="px-4 py-3">
+                              {group.extra100Noturno}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        <TableRow className="bg-gray-50/50">
+                          {Array.from({
+                            length: 4 + maxPunchPairs * 2,
+                          }).map((_, idx) => (
+                            <TableCell
+                              key={`totals-empty-${idx}`}
+                              className="px-4 py-3 border-r border-gray-200 text-gray-700 font-medium"
+                            >
+                              {idx === 0 ? "Totais" : "-"}
+                            </TableCell>
+                          ))}
+                          <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                            {totals.horasDiurnas}
+                          </TableCell>
+                          <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                            {totals.horasNoturnas}
+                          </TableCell>
+                          <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                            {totals.horasFictas}
+                          </TableCell>
+                          <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                            {totals.totalHoras}
+                          </TableCell>
+                          <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                            {totals.horasNormais}
+                          </TableCell>
+                          <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                            {totals.adicionalNoturno}
+                          </TableCell>
+                          <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                            {totals.extra50Diurno}
+                          </TableCell>
+                          <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                            {totals.extra50Noturno}
+                          </TableCell>
+                          <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                            {totals.extra100Diurno}
+                          </TableCell>
+                          <TableCell className="px-4 py-3 font-semibold">
+                            {totals.extra100Noturno}
+                          </TableCell>
+                        </TableRow>
+                        <TableRow ref={loadMoreRef}>
+                          <TableCell
+                            colSpan={dynamicColumns.length}
+                            className="text-center py-4"
                           >
-                            {exportPDFMutation.isPending ||
-                            saveToHistoryMutation.isPending ? (
-                              <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Exportando...
-                              </>
+                            {isFetchingNextPage ? (
+                              <span className="text-gray-500">
+                                Carregando mais pontos...
+                              </span>
+                            ) : hasNextPage ? (
+                              <span className="text-gray-400 text-sm">
+                                Role para carregar mais
+                              </span>
                             ) : (
-                              <>
-                                <Download className="mr-2 h-4 w-4" />
-                                Exportar PDF
-                              </>
+                              <span className="text-gray-400 text-sm">
+                                Todos os pontos foram carregados
+                              </span>
                             )}
-                          </Button>
-                        )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                          </TableCell>
+                        </TableRow>
+                      </>
+                    ) : (
+                      <TableRow>
+                        <TableCell
+                          colSpan={dynamicColumns.length}
+                          className="text-center py-8"
+                        >
+                          Nenhum ponto encontrado
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </TabsContent>
 
-              <Card className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                <CardContent className="flex flex-col flex-1 min-h-0 pb-6">
-                  <div className="border-b pb-4 mb-4">
-                    <h3 className="text-lg font-semibold">Resultado</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Visualização dos pontos registrados
-                    </p>
-                  </div>
-
-                  {!hasFilters ? (
-                    <div className="flex flex-1 items-center justify-center min-h-[280px] rounded-lg border border-dashed border-muted-foreground/25 bg-muted/20">
-                      <p className="text-muted-foreground text-center text-sm px-4">
-                        Selecione um colaborador para visualizar os pontos
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto min-h-[200px]">
-                      <Table className="w-full min-w-[800px]">
-                        <TableHeader>
-                          <tr className="bg-gray-50/50">
-                            {dynamicColumns.map((item, index) => (
-                              <TableHead
-                                key={item}
-                                className={`px-4 py-3 text-left text-sm font-medium text-gray-700 whitespace-nowrap ${
-                                  index < dynamicColumns.length - 1
-                                    ? "border-r border-gray-200"
-                                    : ""
-                                }`}
-                              >
-                                {item}
-                              </TableHead>
-                            ))}
-                          </tr>
-                        </TableHeader>
-                        <TableBody>
-                          {shouldSendDates && !isDateRangeValid ? (
-                            <TableRow>
-                              <TableCell
-                                colSpan={dynamicColumns.length}
-                                className="text-center py-8 text-red-500"
-                              >
-                                Data final deve ser maior ou igual à data
-                                inicial
-                              </TableCell>
-                            </TableRow>
-                          ) : punchesLoading ? (
-                            <TableRow>
-                              <TableCell
-                                colSpan={dynamicColumns.length}
-                                className="text-center py-8 text-muted-foreground"
-                              >
-                                Carregando pontos...
-                              </TableCell>
-                            </TableRow>
-                          ) : punchesError ? (
-                            <TableRow>
-                              <TableCell
-                                colSpan={dynamicColumns.length}
-                                className="text-center py-8 text-red-500"
-                              >
-                                {punchesError
-                                  ? String(punchesError)
-                                  : "Erro ao carregar pontos"}
-                              </TableCell>
-                            </TableRow>
-                          ) : groupedPunches.length > 0 ? (
-                            <>
-                              {groupedPunches.map((group, index) => (
-                                <TableRow
-                                  key={group.key}
-                                  className={
-                                    index % 2 === 0 ? "bg-white" : "bg-gray-100"
-                                  }
-                                >
-                                  <TableCell className="px-4 py-3 border-r border-gray-200">
-                                    {group.employeeName}
-                                  </TableCell>
-                                  <TableCell
-                                    className={`px-4 py-3 border-r border-gray-200 ${
-                                      isNoCompany(group.company)
-                                        ? "bg-yellow-100 text-yellow-900 font-semibold"
-                                        : ""
-                                    }`}
-                                  >
-                                    {group.company}
-                                  </TableCell>
-                                  <TableCell
-                                    className={`px-4 py-3 border-r border-gray-200 font-medium ${
-                                      group.ajusteTipo === "work"
-                                        ? "text-white"
-                                        : group.ajusteTipo === "non_work"
-                                          ? "text-white"
-                                          : group.isHoliday ||
-                                              group.dayOfWeekNumber === 0
-                                            ? "bg-blue-100 text-blue-800"
-                                            : ""
-                                    }`}
-                                    style={
-                                      group.ajusteTipo === "work"
-                                        ? { backgroundColor: "#0070C0" }
-                                        : group.ajusteTipo === "non_work"
-                                          ? { backgroundColor: "#00B0F0" }
-                                          : undefined
-                                    }
-                                  >
-                                    {group.formattedDate}
-                                  </TableCell>
-                                  <TableCell
-                                    className={`px-4 py-3 border-r border-gray-200 capitalize font-medium ${
-                                      group.ajusteTipo === "work"
-                                        ? "text-white"
-                                        : group.ajusteTipo === "non_work"
-                                          ? "text-white"
-                                          : group.isHoliday ||
-                                              group.dayOfWeekNumber === 0
-                                            ? "bg-blue-100 text-blue-800"
-                                            : ""
-                                    }`}
-                                    style={
-                                      group.ajusteTipo === "work"
-                                        ? { backgroundColor: "#0070C0" }
-                                        : group.ajusteTipo === "non_work"
-                                          ? { backgroundColor: "#00B0F0" }
-                                          : undefined
-                                    }
-                                  >
-                                    {group.dayOfWeek}
-                                  </TableCell>
-
-                                  {(() => {
-                                    const dayHasIncomplete =
-                                      group.punches.length === 0 ||
-                                      group.punches.some(
-                                        (p) => !p.dateIn || !p.dateOut,
-                                      );
-                                    const highlightDay =
-                                      dayHasIncomplete &&
-                                      !isNoCompany(group.company);
-                                    const cellHighlight = highlightDay
-                                      ? "bg-red-300 text-red-900 font-semibold"
-                                      : "";
-
-                                    return Array.from({ length: maxPunchPairs }).map(
-                                      (_, index) => {
-                                        const punch = group.punches[index];
-                                        const entryTime = punch?.dateIn
-                                          ? new Date(
-                                              punch.dateIn,
-                                            ).toLocaleTimeString("pt-BR", {
-                                              hour: "2-digit",
-                                              minute: "2-digit",
-                                            })
-                                          : "-";
-                                        const exitTime = punch?.dateOut
-                                          ? new Date(
-                                              punch.dateOut,
-                                            ).toLocaleTimeString("pt-BR", {
-                                              hour: "2-digit",
-                                              minute: "2-digit",
-                                            })
-                                          : "-";
-
-                                        return (
-                                          <Fragment
-                                            key={`punch-${group.key}-${index}`}
-                                          >
-                                            <TableCell
-                                              className={`px-4 py-3 border-r border-gray-200 ${cellHighlight}`}
-                                            >
-                                              {entryTime}
-                                            </TableCell>
-                                            <TableCell
-                                              className={`px-4 py-3 border-r border-gray-200 ${cellHighlight}`}
-                                            >
-                                              {exitTime}
-                                            </TableCell>
-                                          </Fragment>
-                                        );
-                                      },
-                                    );
-                                  })()}
-
-                                  <TableCell className="px-4 py-3 border-r border-gray-200">
-                                    {group.horasDiurnas}
-                                  </TableCell>
-                                  <TableCell className="px-4 py-3 border-r border-gray-200">
-                                    {group.horasNoturnas}
-                                  </TableCell>
-                                  <TableCell className="px-4 py-3 border-r border-gray-200">
-                                    {group.horasFictas}
-                                  </TableCell>
-                                  <TableCell className="px-4 py-3 border-r border-gray-200">
-                                    {group.totalHoras}
-                                  </TableCell>
-                                  <TableCell className="px-4 py-3 border-r border-gray-200">
-                                    {group.horasNormais}
-                                  </TableCell>
-                                  <TableCell className="px-4 py-3 border-r border-gray-200">
-                                    {group.adicionalNoturno}
-                                  </TableCell>
-                                  <TableCell className="px-4 py-3 border-r border-gray-200">
-                                    {group.extra50Diurno}
-                                  </TableCell>
-                                  <TableCell className="px-4 py-3 border-r border-gray-200">
-                                    {group.extra50Noturno}
-                                  </TableCell>
-                                  <TableCell className="px-4 py-3 border-r border-gray-200">
-                                    {group.extra100Diurno}
-                                  </TableCell>
-                                  <TableCell className="px-4 py-3">
-                                    {group.extra100Noturno}
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                              <TableRow className="bg-gray-50/50">
-                                {Array.from({
-                                  length: 4 + maxPunchPairs * 2,
-                                }).map((_, idx) => (
-                                  <TableCell
-                                    key={`totals-empty-${idx}`}
-                                    className="px-4 py-3 border-r border-gray-200 text-gray-700 font-medium"
-                                  >
-                                    {idx === 0 ? "Totais" : "-"}
-                                  </TableCell>
-                                ))}
-                                <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
-                                  {totals.horasDiurnas}
-                                </TableCell>
-                                <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
-                                  {totals.horasNoturnas}
-                                </TableCell>
-                                <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
-                                  {totals.horasFictas}
-                                </TableCell>
-                                <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
-                                  {totals.totalHoras}
-                                </TableCell>
-                                <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
-                                  {totals.horasNormais}
-                                </TableCell>
-                                <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
-                                  {totals.adicionalNoturno}
-                                </TableCell>
-                                <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
-                                  {totals.extra50Diurno}
-                                </TableCell>
-                                <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
-                                  {totals.extra50Noturno}
-                                </TableCell>
-                                <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
-                                  {totals.extra100Diurno}
-                                </TableCell>
-                                <TableCell className="px-4 py-3 font-semibold">
-                                  {totals.extra100Noturno}
-                                </TableCell>
-                              </TableRow>
-                              <TableRow ref={loadMoreRef}>
-                                <TableCell
-                                  colSpan={dynamicColumns.length}
-                                  className="text-center py-4"
-                                >
-                                  {isFetchingNextPage ? (
-                                    <span className="text-gray-500">
-                                      Carregando mais pontos...
-                                    </span>
-                                  ) : hasNextPage ? (
-                                    <span className="text-gray-400 text-sm">
-                                      Role para carregar mais
-                                    </span>
-                                  ) : (
-                                    <span className="text-gray-400 text-sm">
-                                      Todos os pontos foram carregados
-                                    </span>
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            </>
-                          ) : (
-                            <TableRow>
-                              <TableCell
-                                colSpan={dynamicColumns.length}
-                                className="text-center py-8"
-                              >
-                                Nenhum ponto encontrado
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="historico" className="mt-6">
-              <PontoHistory />
-            </TabsContent>
-          </Tabs>
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+      <TabsContent value="historico" className="mt-6">
+        <PontoHistory />
+      </TabsContent>
+    </Tabs>
+  </div>
+    </>
   );
 }

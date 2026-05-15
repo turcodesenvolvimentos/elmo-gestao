@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { AppSidebar } from "@/components/app-sidebar";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import {
   Card,
   CardContent,
@@ -301,455 +299,451 @@ export default function CriarEscalaPage() {
   };
 
   return (
-    <SidebarProvider>
-      <AppSidebar collapsible="icon" />
-      <div className="min-h-screen w-full p-6">
-        <SidebarTrigger className="-ml-1" />
-        <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h2 className="scroll-m-20 text-3xl font-semibold tracking-tight">
-                Criar Escalas
-              </h2>
-              <p className="text-muted-foreground mt-1">
-                Crie e gerencie escalas para cada empresa
-              </p>
-            </div>
-
-            <Button asChild variant="outline">
-              <Link href="/escala">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Voltar para Aplicar Escala
-              </Link>
-            </Button>
+    <div className="min-h-screen w-full p-6">
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h2 className="scroll-m-20 text-3xl font-semibold tracking-tight">
+              Criar Escalas
+            </h2>
+            <p className="text-muted-foreground mt-1">
+              Crie e gerencie escalas para cada empresa
+            </p>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Empresas</CardTitle>
-              <CardDescription>
-                Selecione uma empresa para criar ou gerenciar escalas
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                  <Input
-                    placeholder="Buscar empresa..."
-                    className="pl-9"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
-
-                {filteredCompanies.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    Nenhuma empresa encontrada
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {filteredCompanies.map((company) => {
-                      // Buscar shifts desta empresa - vamos usar o hook quando a empresa estiver selecionada
-                      // Por enquanto, vamos fazer uma query separada para cada empresa
-                      // Isso não é ideal, mas funciona. Em produção, poderíamos otimizar
-                      const companyShifts = shifts.filter(
-                        (shift) => shift.company_id === company.id
-                      );
-
-                      return (
-                        <Card key={company.id} className="border">
-                          <CardHeader className="pb-3">
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="flex items-center gap-3">
-                                <Building className="h-5 w-5 text-muted-foreground" />
-                                <div>
-                                  <CardTitle className="text-lg">
-                                    {company.name}
-                                  </CardTitle>
-                                  <CardDescription className="text-sm">
-                                    {company.address}
-                                  </CardDescription>
-                                </div>
-                              </div>
-                              <Button
-                                size="sm"
-                                onClick={() =>
-                                  handleOpenCreateDialog(company.id)
-                                }
-                              >
-                                <Plus className="h-4 w-4 mr-2" />
-                                Nova Escala
-                              </Button>
-                            </div>
-                          </CardHeader>
-                          <CardContent>
-                            {companyShifts.length === 0 ? (
-                              <div className="text-center py-8 text-muted-foreground">
-                                Nenhuma escala cadastrada para esta empresa
-                              </div>
-                            ) : (
-                              <div className="rounded-md border">
-                                <Table>
-                                  <TableHeader>
-                                    <TableRow className="bg-muted/50">
-                                      <TableHead>Nome da Escala</TableHead>
-                                      <TableHead>Horários</TableHead>
-                                      <TableHead>Criado em</TableHead>
-                                      <TableHead className="text-right">
-                                        Ações
-                                      </TableHead>
-                                    </TableRow>
-                                  </TableHeader>
-                                  <TableBody>
-                                    {companyShifts.map((shift) => (
-                                      <TableRow key={shift.id}>
-                                        <TableCell className="font-medium">
-                                          <div className="flex items-center gap-2">
-                                            <Clock className="h-4 w-4 text-muted-foreground" />
-                                            {shift.name}
-                                          </div>
-                                        </TableCell>
-                                        <TableCell>
-                                          <div className="flex flex-col text-sm">
-                                            <span>
-                                              {formatTime(shift.entry1)} -{" "}
-                                              {formatTime(shift.exit1)}
-                                            </span>
-                                            {shift.entry2 && shift.exit2 && (
-                                              <span className="text-muted-foreground">
-                                                {formatTime(shift.entry2)} -{" "}
-                                                {formatTime(shift.exit2)}
-                                              </span>
-                                            )}
-                                          </div>
-                                        </TableCell>
-                                        <TableCell className="text-muted-foreground text-sm">
-                                          {formatDate(shift.created_at)}
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                          <div className="flex justify-end gap-2">
-                                            <Button
-                                              variant="ghost"
-                                              size="icon"
-                                              onClick={() =>
-                                                handleOpenEditDialog(shift)
-                                              }
-                                            >
-                                              <Edit className="h-4 w-4" />
-                                            </Button>
-                                            <Button
-                                              variant="ghost"
-                                              size="icon"
-                                              onClick={() =>
-                                                handleOpenDeleteDialog(shift)
-                                              }
-                                            >
-                                              <Trash2 className="h-4 w-4 text-destructive" />
-                                            </Button>
-                                          </div>
-                                        </TableCell>
-                                      </TableRow>
-                                    ))}
-                                  </TableBody>
-                                </Table>
-                              </div>
-                            )}
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+          <Button asChild variant="outline">
+            <Link href="/escala">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Voltar para Aplicar Escala
+            </Link>
+          </Button>
         </div>
 
-        {/* Modal para criar escala */}
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Criar Nova Escala</DialogTitle>
-              <DialogDescription>
-                Defina os horários da nova escala para{" "}
-                {selectedCompany &&
-                  companies.find((c) => c.id === selectedCompany)?.name}
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-4 py-4">
-              <div>
-                <Label htmlFor="name">
-                  Nome da Escala <span className="text-destructive">*</span>
-                </Label>
+        <Card>
+          <CardHeader>
+            <CardTitle>Empresas</CardTitle>
+            <CardDescription>
+              Selecione uma empresa para criar ou gerenciar escalas
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  placeholder="Ex: Turno Matutino"
+                  placeholder="Buscar empresa..."
+                  className="pl-9"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
                 />
-                {formErrors.name && (
-                  <p className="text-sm text-destructive mt-1">
-                    {formErrors.name}
-                  </p>
-                )}
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="entry1">
-                    Entrada 1 <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="entry1"
-                    type="time"
-                    value={formData.entry1}
-                    onChange={(e) =>
-                      setFormData({ ...formData, entry1: e.target.value })
-                    }
-                  />
-                  {formErrors.entry1 && (
-                    <p className="text-sm text-destructive mt-1">
-                      {formErrors.entry1}
-                    </p>
-                  )}
+              {filteredCompanies.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  Nenhuma empresa encontrada
                 </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {filteredCompanies.map((company) => {
+                    // Buscar shifts desta empresa - vamos usar o hook quando a empresa estiver selecionada
+                    // Por enquanto, vamos fazer uma query separada para cada empresa
+                    // Isso não é ideal, mas funciona. Em produção, poderíamos otimizar
+                    const companyShifts = shifts.filter(
+                      (shift) => shift.company_id === company.id
+                    );
 
-                <div>
-                  <Label htmlFor="exit1">
-                    Saída 1 <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="exit1"
-                    type="time"
-                    value={formData.exit1}
-                    onChange={(e) =>
-                      setFormData({ ...formData, exit1: e.target.value })
-                    }
-                  />
-                  {formErrors.exit1 && (
-                    <p className="text-sm text-destructive mt-1">
-                      {formErrors.exit1}
-                    </p>
-                  )}
+                    return (
+                      <Card key={company.id} className="border">
+                        <CardHeader className="pb-3">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                              <Building className="h-5 w-5 text-muted-foreground" />
+                              <div>
+                                <CardTitle className="text-lg">
+                                  {company.name}
+                                </CardTitle>
+                                <CardDescription className="text-sm">
+                                  {company.address}
+                                </CardDescription>
+                              </div>
+                            </div>
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                handleOpenCreateDialog(company.id)
+                              }
+                            >
+                              <Plus className="h-4 w-4 mr-2" />
+                              Nova Escala
+                            </Button>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          {companyShifts.length === 0 ? (
+                            <div className="text-center py-8 text-muted-foreground">
+                              Nenhuma escala cadastrada para esta empresa
+                            </div>
+                          ) : (
+                            <div className="rounded-md border">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow className="bg-muted/50">
+                                    <TableHead>Nome da Escala</TableHead>
+                                    <TableHead>Horários</TableHead>
+                                    <TableHead>Criado em</TableHead>
+                                    <TableHead className="text-right">
+                                      Ações
+                                    </TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {companyShifts.map((shift) => (
+                                    <TableRow key={shift.id}>
+                                      <TableCell className="font-medium">
+                                        <div className="flex items-center gap-2">
+                                          <Clock className="h-4 w-4 text-muted-foreground" />
+                                          {shift.name}
+                                        </div>
+                                      </TableCell>
+                                      <TableCell>
+                                        <div className="flex flex-col text-sm">
+                                          <span>
+                                            {formatTime(shift.entry1)} -{" "}
+                                            {formatTime(shift.exit1)}
+                                          </span>
+                                          {shift.entry2 && shift.exit2 && (
+                                            <span className="text-muted-foreground">
+                                              {formatTime(shift.entry2)} -{" "}
+                                              {formatTime(shift.exit2)}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="text-muted-foreground text-sm">
+                                        {formatDate(shift.created_at)}
+                                      </TableCell>
+                                      <TableCell className="text-right">
+                                        <div className="flex justify-end gap-2">
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() =>
+                                              handleOpenEditDialog(shift)
+                                            }
+                                          >
+                                            <Edit className="h-4 w-4" />
+                                          </Button>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() =>
+                                              handleOpenDeleteDialog(shift)
+                                            }
+                                          >
+                                            <Trash2 className="h-4 w-4 text-destructive" />
+                                          </Button>
+                                        </div>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="entry2">Entrada 2 (opcional)</Label>
-                  <Input
-                    id="entry2"
-                    type="time"
-                    value={formData.entry2}
-                    onChange={(e) =>
-                      setFormData({ ...formData, entry2: e.target.value })
-                    }
-                  />
-                  {formErrors.entry2 && (
-                    <p className="text-sm text-destructive mt-1">
-                      {formErrors.entry2}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <Label htmlFor="exit2">Saída 2 (opcional)</Label>
-                  <Input
-                    id="exit2"
-                    type="time"
-                    value={formData.exit2}
-                    onChange={(e) =>
-                      setFormData({ ...formData, exit2: e.target.value })
-                    }
-                  />
-                  {formErrors.exit2 && (
-                    <p className="text-sm text-destructive mt-1">
-                      {formErrors.exit2}
-                    </p>
-                  )}
-                </div>
-              </div>
+              )}
             </div>
-
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setIsDialogOpen(false)}
-                disabled={createShiftMutation.isPending}
-              >
-                Cancelar
-              </Button>
-              <Button
-                onClick={handleCreateShift}
-                disabled={createShiftMutation.isPending}
-              >
-                {createShiftMutation.isPending ? "Criando..." : "Criar Escala"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Modal para editar escala */}
-        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Editar Escala</DialogTitle>
-              <DialogDescription>
-                Altere os horários da escala
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-4 py-4">
-              <div>
-                <Label htmlFor="edit-name">
-                  Nome da Escala <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="edit-name"
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  placeholder="Ex: Turno Matutino"
-                />
-                {formErrors.name && (
-                  <p className="text-sm text-destructive mt-1">
-                    {formErrors.name}
-                  </p>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="edit-entry1">
-                    Entrada 1 <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="edit-entry1"
-                    type="time"
-                    value={formData.entry1}
-                    onChange={(e) =>
-                      setFormData({ ...formData, entry1: e.target.value })
-                    }
-                  />
-                  {formErrors.entry1 && (
-                    <p className="text-sm text-destructive mt-1">
-                      {formErrors.entry1}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <Label htmlFor="edit-exit1">
-                    Saída 1 <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="edit-exit1"
-                    type="time"
-                    value={formData.exit1}
-                    onChange={(e) =>
-                      setFormData({ ...formData, exit1: e.target.value })
-                    }
-                  />
-                  {formErrors.exit1 && (
-                    <p className="text-sm text-destructive mt-1">
-                      {formErrors.exit1}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="edit-entry2">Entrada 2 (opcional)</Label>
-                  <Input
-                    id="edit-entry2"
-                    type="time"
-                    value={formData.entry2}
-                    onChange={(e) =>
-                      setFormData({ ...formData, entry2: e.target.value })
-                    }
-                  />
-                  {formErrors.entry2 && (
-                    <p className="text-sm text-destructive mt-1">
-                      {formErrors.entry2}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <Label htmlFor="edit-exit2">Saída 2 (opcional)</Label>
-                  <Input
-                    id="edit-exit2"
-                    type="time"
-                    value={formData.exit2}
-                    onChange={(e) =>
-                      setFormData({ ...formData, exit2: e.target.value })
-                    }
-                  />
-                  {formErrors.exit2 && (
-                    <p className="text-sm text-destructive mt-1">
-                      {formErrors.exit2}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setIsEditDialogOpen(false)}
-                disabled={updateShiftMutation.isPending}
-              >
-                Cancelar
-              </Button>
-              <Button
-                onClick={handleUpdateShift}
-                disabled={updateShiftMutation.isPending}
-              >
-                {updateShiftMutation.isPending
-                  ? "Salvando..."
-                  : "Salvar Alterações"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Modal para confirmar exclusão */}
-        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Confirmar Exclusão</DialogTitle>
-              <DialogDescription>
-                Tem certeza que deseja excluir a escala{" "}
-                <strong>{deletingShift?.name}</strong>?
-              </DialogDescription>
-            </DialogHeader>
-
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setIsDeleteDialogOpen(false)}
-                disabled={deleteShiftMutation.isPending}
-              >
-                Cancelar
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={handleDeleteShift}
-                disabled={deleteShiftMutation.isPending}
-              >
-                {deleteShiftMutation.isPending ? "Excluindo..." : "Excluir"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+          </CardContent>
+        </Card>
       </div>
-    </SidebarProvider>
+
+      {/* Modal para criar escala */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Criar Nova Escala</DialogTitle>
+            <DialogDescription>
+              Defina os horários da nova escala para{" "}
+              {selectedCompany &&
+                companies.find((c) => c.id === selectedCompany)?.name}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="name">
+                Nome da Escala <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) =>
+                  setFormData({ ...formData, name: e.target.value })
+                }
+                placeholder="Ex: Turno Matutino"
+              />
+              {formErrors.name && (
+                <p className="text-sm text-destructive mt-1">
+                  {formErrors.name}
+                </p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="entry1">
+                  Entrada 1 <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="entry1"
+                  type="time"
+                  value={formData.entry1}
+                  onChange={(e) =>
+                    setFormData({ ...formData, entry1: e.target.value })
+                  }
+                />
+                {formErrors.entry1 && (
+                  <p className="text-sm text-destructive mt-1">
+                    {formErrors.entry1}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="exit1">
+                  Saída 1 <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="exit1"
+                  type="time"
+                  value={formData.exit1}
+                  onChange={(e) =>
+                    setFormData({ ...formData, exit1: e.target.value })
+                  }
+                />
+                {formErrors.exit1 && (
+                  <p className="text-sm text-destructive mt-1">
+                    {formErrors.exit1}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="entry2">Entrada 2 (opcional)</Label>
+                <Input
+                  id="entry2"
+                  type="time"
+                  value={formData.entry2}
+                  onChange={(e) =>
+                    setFormData({ ...formData, entry2: e.target.value })
+                  }
+                />
+                {formErrors.entry2 && (
+                  <p className="text-sm text-destructive mt-1">
+                    {formErrors.entry2}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="exit2">Saída 2 (opcional)</Label>
+                <Input
+                  id="exit2"
+                  type="time"
+                  value={formData.exit2}
+                  onChange={(e) =>
+                    setFormData({ ...formData, exit2: e.target.value })
+                  }
+                />
+                {formErrors.exit2 && (
+                  <p className="text-sm text-destructive mt-1">
+                    {formErrors.exit2}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsDialogOpen(false)}
+              disabled={createShiftMutation.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleCreateShift}
+              disabled={createShiftMutation.isPending}
+            >
+              {createShiftMutation.isPending ? "Criando..." : "Criar Escala"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal para editar escala */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Escala</DialogTitle>
+            <DialogDescription>
+              Altere os horários da escala
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="edit-name">
+                Nome da Escala <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="edit-name"
+                value={formData.name}
+                onChange={(e) =>
+                  setFormData({ ...formData, name: e.target.value })
+                }
+                placeholder="Ex: Turno Matutino"
+              />
+              {formErrors.name && (
+                <p className="text-sm text-destructive mt-1">
+                  {formErrors.name}
+                </p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="edit-entry1">
+                  Entrada 1 <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="edit-entry1"
+                  type="time"
+                  value={formData.entry1}
+                  onChange={(e) =>
+                    setFormData({ ...formData, entry1: e.target.value })
+                  }
+                />
+                {formErrors.entry1 && (
+                  <p className="text-sm text-destructive mt-1">
+                    {formErrors.entry1}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="edit-exit1">
+                  Saída 1 <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="edit-exit1"
+                  type="time"
+                  value={formData.exit1}
+                  onChange={(e) =>
+                    setFormData({ ...formData, exit1: e.target.value })
+                  }
+                />
+                {formErrors.exit1 && (
+                  <p className="text-sm text-destructive mt-1">
+                    {formErrors.exit1}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="edit-entry2">Entrada 2 (opcional)</Label>
+                <Input
+                  id="edit-entry2"
+                  type="time"
+                  value={formData.entry2}
+                  onChange={(e) =>
+                    setFormData({ ...formData, entry2: e.target.value })
+                  }
+                />
+                {formErrors.entry2 && (
+                  <p className="text-sm text-destructive mt-1">
+                    {formErrors.entry2}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="edit-exit2">Saída 2 (opcional)</Label>
+                <Input
+                  id="edit-exit2"
+                  type="time"
+                  value={formData.exit2}
+                  onChange={(e) =>
+                    setFormData({ ...formData, exit2: e.target.value })
+                  }
+                />
+                {formErrors.exit2 && (
+                  <p className="text-sm text-destructive mt-1">
+                    {formErrors.exit2}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsEditDialogOpen(false)}
+              disabled={updateShiftMutation.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleUpdateShift}
+              disabled={updateShiftMutation.isPending}
+            >
+              {updateShiftMutation.isPending
+                ? "Salvando..."
+                : "Salvar Alterações"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal para confirmar exclusão */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar Exclusão</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja excluir a escala{" "}
+              <strong>{deletingShift?.name}</strong>?
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsDeleteDialogOpen(false)}
+              disabled={deleteShiftMutation.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteShift}
+              disabled={deleteShiftMutation.isPending}
+            >
+              {deleteShiftMutation.isPending ? "Excluindo..." : "Excluir"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
