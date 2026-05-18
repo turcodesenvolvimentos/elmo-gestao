@@ -8,120 +8,152 @@ import {
   StyleSheet,
   Image,
 } from "@react-pdf/renderer";
-import { formatEmployeeName } from "@/utils/employee-name-format";
+
+const NUM_FONT = 7;
+const HEADER_FONT = 7;
+const NAME_FONT = 8;
 
 const styles = StyleSheet.create({
   page: {
-    padding: 30,
+    paddingTop: 18,
+    paddingBottom: 40,
+    paddingHorizontal: 18,
     fontSize: 9,
     fontFamily: "Helvetica",
   },
   header: {
-    marginBottom: 15,
-    borderBottom: "2px solid #333",
-    paddingBottom: 12,
+    marginBottom: 8,
+    borderBottom: "2px solid #065F46", // verde escuro
+    paddingBottom: 6,
   },
   headerTop: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 10,
+    marginBottom: 4,
   },
   logoContainer: {
-    marginRight: 15,
+    marginRight: 10,
   },
   logo: {
-    width: 60,
-    height: 60,
+    width: 40,
+    height: 40,
   },
   headerText: {
     flex: 1,
   },
   title: {
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: "bold",
-    marginBottom: 0,
-    marginTop: 0,
+    color: "#065F46", // verde
+    marginBottom: 1,
   },
   info: {
-    fontSize: 8,
-    color: "#666",
-    marginBottom: 2,
+    fontSize: 7,
+    color: "#4b5563", // cinza
+    marginBottom: 1,
   },
   employeeInfoRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
   },
   table: {
     width: "100%",
-    marginTop: 15,
+    marginTop: 8,
+    border: "1px solid #d1d5db",
+    borderRadius: 2,
   },
   tableHeader: {
     flexDirection: "row",
-    backgroundColor: "#f0f0f0",
-    borderBottom: "1px solid #ddd",
-    paddingVertical: 6,
-    paddingHorizontal: 4,
+    backgroundColor: "#16a34a",
+    color: "#ffffff",
+    paddingVertical: 4,
+    paddingHorizontal: 0,
     fontWeight: "bold",
+    fontSize: HEADER_FONT,
+    alignItems: "center",
   },
   tableRow: {
     flexDirection: "row",
-    borderBottom: "0.5px solid #eee",
-    paddingVertical: 5,
-    paddingHorizontal: 4,
+    borderBottom: "0.5px solid #e5e7eb",
+    paddingVertical: 3,
+    paddingHorizontal: 0,
+    minHeight: 14,
+    alignItems: "center",
+  },
+  tableRowAlt: {
+    backgroundColor: "#f9fafb", // cinza claro
   },
   tableTotalRow: {
     flexDirection: "row",
-    backgroundColor: "#f9f9f9",
-    borderTop: "1.5px solid #333",
+    backgroundColor: "#e5e7eb", // cinza médio
+    borderTop: "1.5px solid #1f2937",
     paddingVertical: 6,
-    paddingHorizontal: 4,
+    paddingHorizontal: 0,
     fontWeight: "bold",
+    fontSize: NUM_FONT,
   },
-  col1: { width: "9%", fontSize: 7 },
-  col2: { width: "7%", fontSize: 7 },
-  col2Content: { width: "7%" },
+  cellLeft: {
+    paddingHorizontal: 4,
+    borderRight: "0.5px solid #e5e7eb",
+    overflow: "hidden",
+  },
+  cellCenter: {
+    paddingHorizontal: 2,
+    textAlign: "center",
+    borderRight: "0.5px solid #e5e7eb",
+  },
+  cellLast: {
+    paddingHorizontal: 2,
+    textAlign: "center",
+  },
+  col2: { width: "9%", fontSize: NUM_FONT },
+  col2Content: { width: "9%", paddingHorizontal: 3 },
   companyBadge: {
     backgroundColor: "#FEF3C7",
-    paddingHorizontal: 2,
+    paddingHorizontal: 1,
     paddingVertical: 1,
     alignSelf: "flex-start",
+    borderRadius: 2,
   },
   companyBadgeText: {
-    fontSize: 6.2,
+    fontSize: 5,
     color: "#92400E",
     fontWeight: "bold",
   },
   companyText: {
-    fontSize: 7,
+    fontSize: NUM_FONT,
   },
-  col3: { width: "5.5%", fontSize: 6 },
-  col4: { width: "4.5%", fontSize: 6 },
-  col5: { width: "4%", fontSize: 6 },
-  col6: { width: "4%", fontSize: 6 },
-  col7: { width: "4%", fontSize: 6 },
-  col8: { width: "4%", fontSize: 6 },
-  col9: { width: "5%", fontSize: 6 },
-  col10: { width: "5%", fontSize: 6 },
-  col11: { width: "5%", fontSize: 6 },
-  col12: { width: "5%", fontSize: 6 },
-  col13: { width: "5%", fontSize: 6 },
-  col14: { width: "5%", fontSize: 6 },
-  col15: { width: "5.5%", fontSize: 6 },
-  col16: { width: "5.5%", fontSize: 6 },
-  col17: { width: "5.5%", fontSize: 6 },
-  col18: { width: "5.5%", fontSize: 6 },
+  col3: { width: "8%", fontSize: NUM_FONT },
+  col4: { width: "9%", fontSize: NUM_FONT },
+  col5: { width: "6.5%", fontSize: NUM_FONT },
+  col6: { width: "6.5%", fontSize: NUM_FONT },
+  col7: { width: "6.5%", fontSize: NUM_FONT },
+  col8: { width: "6.5%", fontSize: NUM_FONT },
+  col12: { width: "7%", fontSize: NUM_FONT },
+  col13: { width: "7%", fontSize: NUM_FONT },
+  col14: { width: "6.5%", fontSize: NUM_FONT },
+  col15: { width: "6.5%", fontSize: NUM_FONT },
+  col16: { width: "6.5%", fontSize: NUM_FONT },
+  col17: { width: "6.5%", fontSize: NUM_FONT },
+  col18: { width: "8%", fontSize: NUM_FONT },
+  missingCell: {
+    backgroundColor: "#ff3f3d",   
+    color: "#991B1B",            
+    fontWeight: "bold",
+  },
   signatureSection: {
-    marginTop: 24,
-    paddingTop: 16,
+    marginTop: 14,
+    paddingTop: 8,
   },
   signatureDeclaration: {
     textAlign: "center",
-    fontSize: 9,
-    marginBottom: 32,
+    fontSize: 8,
+    marginBottom: 18,
   },
   signatureRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    gap: 40,
+    gap: 30,
   },
   signatureBlock: {
     flex: 1,
@@ -129,12 +161,13 @@ const styles = StyleSheet.create({
   },
   signatureLine: {
     borderBottom: "1px solid #333",
-    marginBottom: 12,
-    minHeight: 28,
+    marginBottom: 6,
+    minHeight: 40,
   },
   signatureName: {
-    fontSize: 8,
+    fontSize: 7,
     color: "#333",
+    textAlign: "center",
   },
   notesSection: {
     marginTop: 16,
@@ -210,17 +243,14 @@ const formatAdmissionDate = (date?: string | number | null): string => {
   try {
     let d: Date;
 
-    // Se for um número (timestamp), criar Date diretamente
     if (typeof date === "number") {
       d = new Date(date);
     } else if (typeof date === "string") {
-      // Se for string, verificar se contém "T" (ISO format) ou é apenas data
       d = date.includes("T") ? new Date(date) : new Date(date + "T12:00:00Z");
     } else {
       return "-";
     }
 
-    // Verificar se a data é válida
     if (isNaN(d.getTime())) {
       return "-";
     }
@@ -245,7 +275,7 @@ const formatHours = (hours: number): string => {
 };
 
 const isNoCompany = (value?: string | null): boolean =>
-  (value || "").trim().toLowerCase() === "sem empresa";
+  (value || "").trim().toLowerCase() === "não escalado";
 
 const calculateTotals = (data: PontoData[]) => {
   const totals = data.reduce(
@@ -305,7 +335,7 @@ export const PontoPDF: React.FC<PontoPDFProps> = ({
 
   return (
     <Document>
-      <Page size="A4" orientation="landscape" style={styles.page}>
+      <Page size="A4" orientation="portrait" style={styles.page}>
         <View style={styles.header}>
           <View style={styles.headerTop}>
             {logoBase64 && (
@@ -346,33 +376,39 @@ export const PontoPDF: React.FC<PontoPDFProps> = ({
         </View>
 
         <View style={styles.table}>
-          <View style={styles.tableHeader}>
-            <Text style={styles.col1}>Funcionário</Text>
-            <Text style={styles.col2}>Empresa</Text>
-            <Text style={styles.col3}>Data</Text>
-            <Text style={styles.col4}>Dia Sem.</Text>
-            <Text style={styles.col5}>Ent. 1</Text>
-            <Text style={styles.col6}>Saí. 1</Text>
-            <Text style={styles.col7}>Ent. 2</Text>
-            <Text style={styles.col8}>Saí. 2</Text>
-            <Text style={styles.col9}>H. Diurnas</Text>
-            <Text style={styles.col10}>H. Noturnas</Text>
-            <Text style={styles.col11}>H. Fictas</Text>
-            <Text style={styles.col12}>Total</Text>
-            <Text style={styles.col13}>Normal</Text>
-            <Text style={styles.col14}>Ad. Not.</Text>
-            <Text style={styles.col15}>50% Diurno</Text>
-            <Text style={styles.col16}>50% Noturno</Text>
-            <Text style={styles.col17}>100% Diurno</Text>
-            <Text style={styles.col18}>100% Noturno</Text>
+          <View style={styles.tableHeader} fixed>
+            <Text style={[styles.col2, styles.cellLeft]}>Empresa</Text>
+            <Text style={[styles.col3, styles.cellCenter]}>Data</Text>
+            <Text style={[styles.col4, styles.cellCenter]}>Dia Sem.</Text>
+            <Text style={[styles.col5, styles.cellCenter]}>Ent. 1</Text>
+            <Text style={[styles.col6, styles.cellCenter]}>Saí. 1</Text>
+            <Text style={[styles.col7, styles.cellCenter]}>Ent. 2</Text>
+            <Text style={[styles.col8, styles.cellCenter]}>Saí. 2</Text>
+            <Text style={[styles.col12, styles.cellCenter]}>Total</Text>
+            <Text style={[styles.col13, styles.cellCenter]}>Normal</Text>
+            <Text style={[styles.col14, styles.cellCenter]}>Ad. N.</Text>
+            <Text style={[styles.col15, styles.cellCenter]}>50% D.</Text>
+            <Text style={[styles.col16, styles.cellCenter]}>50% N.</Text>
+            <Text style={[styles.col17, styles.cellCenter]}>100% D.</Text>
+            <Text style={[styles.col18, styles.cellLast]}>100% N.</Text>
           </View>
 
-          {data.map((row, index) => (
-            <View key={index} style={styles.tableRow}>
-              <Text style={styles.col1}>
-                {formatEmployeeName(row.employeeName)}
-              </Text>
-              <View style={styles.col2Content}>
+          {data.map((row, index) => {
+            const isEmptyTime = (t?: string) => !t || t === "-";
+            const hasNoPunch =
+              isEmptyTime(row.entry1) &&
+              isEmptyTime(row.exit1) &&
+              isEmptyTime(row.entry2) &&
+              isEmptyTime(row.exit2);
+            const shouldHighlight =
+              hasNoPunch && !isNoCompany(row.company);
+            const rowStyle =
+              index % 2 === 1
+                ? [styles.tableRow, styles.tableRowAlt]
+                : styles.tableRow;
+            return (
+            <View key={index} style={rowStyle} wrap={false}>
+              <View style={[styles.col2Content, { borderRight: "0.5px solid #e5e7eb" }]}>
                 {isNoCompany(row.company) ? (
                   <View style={styles.companyBadge}>
                     <Text style={styles.companyBadgeText}>{row.company}</Text>
@@ -381,48 +417,50 @@ export const PontoPDF: React.FC<PontoPDFProps> = ({
                   <Text style={styles.companyText}>{row.company}</Text>
                 )}
               </View>
-              <Text style={styles.col3}>{formatDate(row.date)}</Text>
-              <Text style={styles.col4}>{row.dayOfWeek}</Text>
-              <Text style={styles.col5}>{row.entry1 || "-"}</Text>
-              <Text style={styles.col6}>{row.exit1 || "-"}</Text>
-              <Text style={styles.col7}>{row.entry2 || "-"}</Text>
-              <Text style={styles.col8}>{row.exit2 || "-"}</Text>
-              <Text style={styles.col9}>{row.horasDiurnas}</Text>
-              <Text style={styles.col10}>{row.horasNoturnas}</Text>
-              <Text style={styles.col11}>{row.horasFictas}</Text>
-              <Text style={styles.col12}>{row.totalHoras}</Text>
-              <Text style={styles.col13}>{row.horasNormais}</Text>
-              <Text style={styles.col14}>{row.adicionalNoturno}</Text>
-              <Text style={styles.col15}>{row.extra50Diurno}</Text>
-              <Text style={styles.col16}>{row.extra50Noturno}</Text>
-              <Text style={styles.col17}>{row.extra100Diurno}</Text>
-              <Text style={styles.col18}>{row.extra100Noturno}</Text>
+              <Text style={[styles.col3, styles.cellCenter]}>{formatDate(row.date)}</Text>
+              <Text style={[styles.col4, styles.cellCenter]}>{row.dayOfWeek}</Text>
+              <Text style={shouldHighlight ? [styles.col5, styles.cellCenter, styles.missingCell] : [styles.col5, styles.cellCenter]}>
+                {row.entry1 || "-"}
+              </Text>
+              <Text style={shouldHighlight ? [styles.col6, styles.cellCenter, styles.missingCell] : [styles.col6, styles.cellCenter]}>
+                {row.exit1 || "-"}
+              </Text>
+              <Text style={shouldHighlight ? [styles.col7, styles.cellCenter, styles.missingCell] : [styles.col7, styles.cellCenter]}>
+                {row.entry2 || "-"}
+              </Text>
+              <Text style={shouldHighlight ? [styles.col8, styles.cellCenter, styles.missingCell] : [styles.col8, styles.cellCenter]}>
+                {row.exit2 || "-"}
+              </Text>
+              <Text style={[styles.col12, styles.cellCenter]}>{row.totalHoras}</Text>
+              <Text style={[styles.col13, styles.cellCenter]}>{row.horasNormais}</Text>
+              <Text style={[styles.col14, styles.cellCenter]}>{row.adicionalNoturno}</Text>
+              <Text style={[styles.col15, styles.cellCenter]}>{row.extra50Diurno}</Text>
+              <Text style={[styles.col16, styles.cellCenter]}>{row.extra50Noturno}</Text>
+              <Text style={[styles.col17, styles.cellCenter]}>{row.extra100Diurno}</Text>
+              <Text style={[styles.col18, styles.cellLast]}>{row.extra100Noturno}</Text>
             </View>
-          ))}
+            );
+          })}
 
-          <View style={styles.tableTotalRow}>
-            <Text style={styles.col1}>TOTAIS</Text>
-            <Text style={styles.col2}></Text>
-            <Text style={styles.col3}></Text>
-            <Text style={styles.col4}></Text>
-            <Text style={styles.col5}></Text>
-            <Text style={styles.col6}></Text>
-            <Text style={styles.col7}></Text>
-            <Text style={styles.col8}></Text>
-            <Text style={styles.col9}>{totals.horasDiurnas}</Text>
-            <Text style={styles.col10}>{totals.horasNoturnas}</Text>
-            <Text style={styles.col11}>{totals.horasFictas}</Text>
-            <Text style={styles.col12}>{totals.totalHoras}</Text>
-            <Text style={styles.col13}>{totals.horasNormais}</Text>
-            <Text style={styles.col14}>{totals.adicionalNoturno}</Text>
-            <Text style={styles.col15}>{totals.extra50Diurno}</Text>
-            <Text style={styles.col16}>{totals.extra50Noturno}</Text>
-            <Text style={styles.col17}>{totals.extra100Diurno}</Text>
-            <Text style={styles.col18}>{totals.extra100Noturno}</Text>
+          <View style={styles.tableTotalRow} wrap={false}>
+            <Text style={[styles.col2, styles.cellLeft]}>TOTAIS</Text>
+            <Text style={[styles.col3, styles.cellCenter]}></Text>
+            <Text style={[styles.col4, styles.cellCenter]}></Text>
+            <Text style={[styles.col5, styles.cellCenter]}></Text>
+            <Text style={[styles.col6, styles.cellCenter]}></Text>
+            <Text style={[styles.col7, styles.cellCenter]}></Text>
+            <Text style={[styles.col8, styles.cellCenter]}></Text>
+            <Text style={[styles.col12, styles.cellCenter]}>{totals.totalHoras}</Text>
+            <Text style={[styles.col13, styles.cellCenter]}>{totals.horasNormais}</Text>
+            <Text style={[styles.col14, styles.cellCenter]}>{totals.adicionalNoturno}</Text>
+            <Text style={[styles.col15, styles.cellCenter]}>{totals.extra50Diurno}</Text>
+            <Text style={[styles.col16, styles.cellCenter]}>{totals.extra50Noturno}</Text>
+            <Text style={[styles.col17, styles.cellCenter]}>{totals.extra100Diurno}</Text>
+            <Text style={[styles.col18, styles.cellLast]}>{totals.extra100Noturno}</Text>
           </View>
         </View>
 
-        <View style={styles.signatureSection}>
+        <View style={styles.signatureSection} wrap={false}>
           <Text style={styles.signatureDeclaration}>
             Reconheço a exatidão e confirmo a frequência constante deste cartão.
           </Text>
@@ -440,24 +478,18 @@ export const PontoPDF: React.FC<PontoPDFProps> = ({
               </Text>
             </View>
           </View>
-          <View style={styles.notesSection}>
-            <Text style={styles.noteLine}>
-              * (m) significa que o ponto foi alterado manualmente.
-            </Text>
-            <Text style={styles.noteLine}>
-              * Atrasos/Faltas reprovados(as) serão descontados(as) em folha.
-            </Text>
-            <Text style={styles.noteLine}>
-              * Ad. Noturna: Horas com adicional noturno.
-            </Text>
-          </View>
         </View>
 
-        <View style={styles.footer}>
+        <View style={styles.footer} fixed>
           <Text>
             Relatório gerado pelo Sistema Elmo Gestão - {data.length}{" "}
             registro(s)
           </Text>
+          <Text
+            render={({ pageNumber, totalPages }) =>
+              `Página ${pageNumber} de ${totalPages}`
+            }
+          />
         </View>
       </Page>
     </Document>

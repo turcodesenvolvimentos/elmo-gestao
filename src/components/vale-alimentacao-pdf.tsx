@@ -79,6 +79,7 @@ const styles = StyleSheet.create({
   col1: { width: "15%", fontSize: 8 },
   col2: { width: "12%", fontSize: 7 },
   col3: { width: "8%", fontSize: 7 },
+  col3Content: { width: "8%" },
   col4: { width: "8%", fontSize: 7 },
   col5: { width: "8%", fontSize: 7 },
   col6: { width: "8%", fontSize: 7 },
@@ -86,6 +87,25 @@ const styles = StyleSheet.create({
   col8: { width: "11%", fontSize: 7, textAlign: "right" },
   col9: { width: "11%", fontSize: 7, textAlign: "right" },
   col10: { width: "11%", fontSize: 7, textAlign: "right" },
+  companyBadge: {
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 2,
+    paddingVertical: 1,
+    alignSelf: "flex-start",
+  },
+  companyBadgeText: {
+    fontSize: 6.5,
+    color: "#92400E",
+    fontWeight: "bold",
+  },
+  companyText: {
+    fontSize: 7,
+  },
+  missingCell: {
+    backgroundColor: "#FCA5A5",
+    color: "#7F1D1D",
+    fontWeight: "bold",
+  },
   footer: {
     position: "absolute",
     bottom: 30,
@@ -137,6 +157,9 @@ const formatCurrency = (value: number) => {
     currency: "BRL",
   }).format(value);
 };
+
+const isNoCompany = (value?: string | null): boolean =>
+  (value || "").trim().toLowerCase() === "não escalado";
 
 const formatCPF = (cpf?: string | null): string => {
   if (!cpf) return "-";
@@ -266,17 +289,43 @@ export const ValeAlimentacaoPDF: React.FC<ValeAlimentacaoPDFProps> = ({
             <Text style={styles.col10}>Ajuda de Custo</Text>
           </View>
 
-          {data.map((row, index) => (
+          {data.map((row, index) => {
+            const isEmptyTime = (t?: string) =>
+              !t || t === "-" || t === "00:00";
+            const hasNoPunch =
+              isEmptyTime(row.entry1) &&
+              isEmptyTime(row.exit1) &&
+              isEmptyTime(row.entry2) &&
+              isEmptyTime(row.exit2);
+            const shouldHighlight =
+              hasNoPunch && !isNoCompany(row.company);
+            return (
             <View key={index} style={styles.tableRow}>
               <Text style={styles.col1}>
                 {formatEmployeeName(row.employeeName)}
               </Text>
               <Text style={styles.col2}>{formatDate(row.date)}</Text>
-              <Text style={styles.col3}>{row.company}</Text>
-              <Text style={styles.col4}>{row.entry1 || "-"}</Text>
-              <Text style={styles.col5}>{row.exit1 || "-"}</Text>
-              <Text style={styles.col6}>{row.entry2 || "-"}</Text>
-              <Text style={styles.col7}>{row.exit2 || "-"}</Text>
+              <View style={styles.col3Content}>
+                {isNoCompany(row.company) ? (
+                  <View style={styles.companyBadge}>
+                    <Text style={styles.companyBadgeText}>{row.company}</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.companyText}>{row.company}</Text>
+                )}
+              </View>
+              <Text style={shouldHighlight ? [styles.col4, styles.missingCell] : styles.col4}>
+                {row.entry1 || "-"}
+              </Text>
+              <Text style={shouldHighlight ? [styles.col5, styles.missingCell] : styles.col5}>
+                {row.exit1 || "-"}
+              </Text>
+              <Text style={shouldHighlight ? [styles.col6, styles.missingCell] : styles.col6}>
+                {row.entry2 || "-"}
+              </Text>
+              <Text style={shouldHighlight ? [styles.col7, styles.missingCell] : styles.col7}>
+                {row.exit2 || "-"}
+              </Text>
               <Text style={styles.col8}>{row.totalHours}</Text>
               <Text style={styles.col9}>
                 {row.valeAlimentacao ? formatCurrency(row.vrValue) : "-"}
@@ -285,7 +334,8 @@ export const ValeAlimentacaoPDF: React.FC<ValeAlimentacaoPDFProps> = ({
                 {row.ajudaCusto ? formatCurrency(row.costHelpValue) : "-"}
               </Text>
             </View>
-          ))}
+            );
+          })}
 
           <View style={styles.tableTotalRow}>
             <Text style={{ width: "70%" }}>TOTAIS</Text>

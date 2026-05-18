@@ -10,152 +10,236 @@ import {
 } from "@react-pdf/renderer";
 import { formatEmployeeName } from "@/utils/employee-name-format";
 
+// Mesma paleta usada no PDF do Ponto, adaptada para o layout horizontal do
+// boletim. Ver `ponto-pdf.tsx` para a referência de cores.
+const NUM_FONT = 7;
+const HEADER_FONT = 7;
+const NAME_FONT = 8;
+
 const styles = StyleSheet.create({
   page: {
-    padding: 30,
+    paddingTop: 18,
+    paddingBottom: 40,
+    paddingHorizontal: 18,
     fontSize: 9,
     fontFamily: "Helvetica",
   },
   header: {
-    marginBottom: 15,
-    borderBottom: "2px solid #333",
-    paddingBottom: 12,
+    marginBottom: 8,
+    borderBottom: "2px solid #065F46",
+    paddingBottom: 6,
   },
   headerTop: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 10,
+    marginBottom: 4,
   },
   logoContainer: {
-    marginRight: 15,
+    marginRight: 10,
   },
   logo: {
-    width: 60,
-    height: 60,
+    width: 40,
+    height: 40,
   },
   headerText: {
     flex: 1,
   },
   title: {
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: "bold",
-    marginBottom: 0,
-    marginTop: 0,
+    color: "#065F46",
+    marginBottom: 1,
   },
   subtitle: {
-    fontSize: 10,
-    marginBottom: 6,
-  },
-  info: {
-    fontSize: 8,
-    color: "#666",
+    fontSize: 9,
+    color: "#065F46",
     marginBottom: 2,
   },
-  table: {
-    width: "100%",
-    marginTop: 15,
+  info: {
+    fontSize: 7,
+    color: "#4b5563",
+    marginBottom: 1,
   },
-  tableHeader: {
-    flexDirection: "row",
-    backgroundColor: "#f0f0f0",
-    borderBottom: "1px solid #ddd",
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    fontWeight: "bold",
-  },
-  tableRow: {
-    flexDirection: "row",
-    borderBottom: "0.5px solid #eee",
-    paddingVertical: 5,
-    paddingHorizontal: 4,
-  },
-  tableTotalRow: {
-    flexDirection: "row",
-    backgroundColor: "#f9f9f9",
-    borderTop: "1.5px solid #333",
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    fontWeight: "bold",
-  },
-  // Colunas
-  col1: { width: "9%", fontSize: 8 }, // Nome
-  col2: { width: "7%", fontSize: 7 }, // Função
-  col3: { width: "6%", fontSize: 7 }, // Setor
-  colLocal: { width: "7%", fontSize: 6 }, // Empresa no dia
-  colLocalContent: { width: "7%" }, // Empresa no dia (conteúdo)
-  companyBadge: {
-    backgroundColor: "#FEF3C7",
-    paddingHorizontal: 2,
-    paddingVertical: 1,
-    alignSelf: "flex-start",
-  },
-  companyBadgeText: {
-    fontSize: 6.2,
-    color: "#92400E",
-    fontWeight: "bold",
-  },
-  companyText: { fontSize: 6 },
-  col4: { width: "5%", fontSize: 7 }, // Dia
-  col5: { width: "6%", fontSize: 7 }, // Dia Semana
-  col6: { width: "4%", fontSize: 7 }, // Entrada 1
-  col7: { width: "4%", fontSize: 7 }, // Saída 1
-  col8: { width: "4%", fontSize: 7 }, // Entrada 2
-  col9: { width: "4%", fontSize: 7 }, // Saída 2
-  missingCell: {
-    backgroundColor: "#FCA5A5",
-    color: "#7F1D1D",
-    fontWeight: "bold",
-  },
-  col10: { width: "4%", fontSize: 7 }, // Total
-  col11: { width: "4%", fontSize: 7 }, // Normal
-  col12: { width: "4%", fontSize: 7 }, // Adicional Noturno
-  col13: { width: "4%", fontSize: 7 }, // 50% Dia
-  col14: { width: "4%", fontSize: 7 }, // 50% Noite
-  col15: { width: "4%", fontSize: 7 }, // 100% Dia
-  col16: { width: "4%", fontSize: 7 }, // 100% Noite
-  col17: { width: "7.5%", fontSize: 7, textAlign: "right" }, // Valor
-  footer: {
-    position: "absolute",
-    bottom: 30,
-    left: 30,
-    right: 30,
-    textAlign: "center",
-    fontSize: 8,
-    color: "#666",
-    borderTop: "1px solid #ddd",
-    paddingTop: 10,
-  },
+  // ---------------------------------------------------------------------
+  // Resumo do período (cards no topo)
+  // ---------------------------------------------------------------------
   summarySection: {
-    marginTop: 15,
-    padding: 10,
-    backgroundColor: "#f5f5f5",
-    borderRadius: 4,
-  },
-  summaryTitle: {
-    fontSize: 11,
-    fontWeight: "bold",
+    marginTop: 4,
     marginBottom: 8,
   },
   summaryGrid: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 10,
+    gap: 6,
   },
   summaryItem: {
     flex: 1,
-    padding: 8,
-    backgroundColor: "#fff",
-    borderRadius: 3,
-    border: "1px solid #ddd",
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    border: "1px solid #d1d5db",
+    borderRadius: 2,
+    backgroundColor: "#f9fafb",
   },
   summaryLabel: {
-    fontSize: 8,
-    color: "#666",
-    marginBottom: 3,
+    fontSize: 6.5,
+    color: "#4b5563",
+    marginBottom: 2,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
   },
   summaryValue: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "bold",
+    color: "#065F46",
+  },
+  // ---------------------------------------------------------------------
+  // Tabela
+  // ---------------------------------------------------------------------
+  table: {
+    width: "100%",
+    marginTop: 4,
+    border: "1px solid #d1d5db",
+    borderRadius: 2,
+  },
+  tableHeader: {
+    flexDirection: "row",
+    backgroundColor: "#065F46",
+    color: "#ffffff",
+    paddingVertical: 4,
+    paddingHorizontal: 0,
+    fontWeight: "bold",
+    fontSize: HEADER_FONT,
+    alignItems: "center",
+  },
+  // Barra que separa os dias dentro da tabela — funciona como um cabeçalho
+  // por dia: o lado esquerdo (Colaborador/Função/Setor/Empresa) é fundido
+  // num único rótulo com a data, e à direita repetimos os títulos das
+  // colunas de horas e valor pra ficar claro o que cada coluna representa.
+  dayBar: {
+    flexDirection: "row",
+    backgroundColor: "#16a34a",
+    color: "#ffffff",
+    paddingVertical: 2,
+    paddingHorizontal: 0,
+    alignItems: "center",
+    fontSize: HEADER_FONT,
+    fontWeight: "bold",
+  },
+  // Largura combinada de col_emp(13) + col_fn(8) + col_setor(7) + col_emp_dia(10).
+  dayBarLabel: {
+    width: "42%",
+    paddingHorizontal: 6,
+    fontSize: 7.5,
+    fontWeight: "bold",
+    color: "#ffffff",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  dayBarCell: {
+    paddingHorizontal: 2,
+    textAlign: "center",
+    color: "#ffffff",
+  },
+  tableRow: {
+    flexDirection: "row",
+    borderBottom: "0.5px solid #e5e7eb",
+    paddingVertical: 3,
+    paddingHorizontal: 0,
+    minHeight: 14,
+    alignItems: "center",
+  },
+  tableRowAlt: {
+    backgroundColor: "#f9fafb",
+  },
+  tableTotalRow: {
+    flexDirection: "row",
+    backgroundColor: "#e5e7eb",
+    borderTop: "1.5px solid #1f2937",
+    paddingVertical: 6,
+    paddingHorizontal: 0,
+    fontWeight: "bold",
+    fontSize: NUM_FONT,
+  },
+  cellLeft: {
+    paddingHorizontal: 4,
+    borderRight: "0.5px solid #e5e7eb",
+    overflow: "hidden",
+  },
+  cellCenter: {
+    paddingHorizontal: 2,
+    textAlign: "center",
+    borderRight: "0.5px solid #e5e7eb",
+  },
+  cellLast: {
+    paddingHorizontal: 2,
+    textAlign: "center",
+  },
+  // ---------------------------------------------------------------------
+  // Larguras das colunas (soma = 100%)
+  // ---------------------------------------------------------------------
+  // Colaborador, Função, Setor, Empresa (dia) -- bloco de identificação
+  col_emp: { width: "13%", fontSize: NAME_FONT, textOverflow: "ellipsis" },
+  col_fn: { width: "8%", fontSize: NUM_FONT },
+  col_setor: { width: "7%", fontSize: NUM_FONT },
+  col_emp_dia: { width: "8%", fontSize: NUM_FONT },
+  col_emp_dia_content: { width: "8%", paddingHorizontal: 3, alignItems: "center", justifyContent: "center" },
+  // Dia (numérico) — sem coluna de dia da semana porque "Segunda-feira"
+  // quebrava a linha. O dia da semana segue aparecendo na barra do dia.
+  col_data: { width: "6%", fontSize: NUM_FONT },
+  // Marcações — col_e1 e col_s2 ganham padding extra + borda mais visível
+  // pra criar um respiro entre o bloco de Ent./Saí. e as colunas vizinhas.
+  col_e1: { width: "4.5%", fontSize: NUM_FONT },
+  col_s1: { width: "4.5%", fontSize: NUM_FONT },
+  col_e2: { width: "4.5%", fontSize: NUM_FONT },
+  col_s2: { width: "4.5%", fontSize: NUM_FONT },
+  punchEdgeLeft: {
+    paddingLeft: 8,
+    borderLeft: "1px solid #94a3b8",
+  },
+  punchEdgeRight: {
+    paddingRight: 8,
+    borderRight: "1px solid #94a3b8",
+  },
+  // Horas
+  col_total: { width: "4.5%", fontSize: NUM_FONT },
+  col_normal: { width: "4.5%", fontSize: NUM_FONT },
+  col_adn: { width: "4%", fontSize: NUM_FONT },
+  col_50d: { width: "4%", fontSize: NUM_FONT },
+  col_50n: { width: "4%", fontSize: NUM_FONT },
+  col_100d: { width: "4%", fontSize: NUM_FONT },
+  col_100n: { width: "4%", fontSize: NUM_FONT },
+  // Valor
+  col_valor: { width: "13%", fontSize: NUM_FONT, textAlign: "right" },
+  missingCell: {
+    backgroundColor: "#ff3f3d",
+    color: "#991B1B",
+    fontWeight: "bold",
+  },
+  companyBadge: {
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 2,
+    paddingVertical: 1,
+    alignSelf: "center",
+    borderRadius: 2,
+  },
+  companyBadgeText: {
+    fontSize: 5.5,
+    color: "#92400E",
+    fontWeight: "bold",
+  },
+  companyText: {
+    fontSize: NUM_FONT,
+    textAlign: "center",
+  },
+  footer: {
+    position: "absolute",
+    bottom: 18,
+    left: 18,
+    right: 18,
+    textAlign: "center",
+    fontSize: 7,
+    color: "#666",
+    borderTop: "1px solid #ddd",
+    paddingTop: 6,
   },
 });
 
@@ -201,7 +285,82 @@ const formatCurrency = (value: number) => {
 };
 
 const isNoCompany = (value?: string | null): boolean =>
-  (value || "").trim().toLowerCase() === "sem empresa";
+  (value || "").trim().toLowerCase() === "não escalado";
+
+/**
+ * Trunca o nome do colaborador para caber em uma linha na coluna.
+ * Em ~32 caracteres já não cabe na largura de 13% da página landscape com
+ * fonte 8 — o `maxLines: 1` + `textOverflow: "ellipsis"` cuidam do corte
+ * visual, mas este corte por JS é fallback caso o ellipsis falhe.
+ */
+const truncateName = (name: string, max = 32): string => {
+  if (!name) return "";
+  return name.length > max ? `${name.slice(0, max - 1).trimEnd()}…` : name;
+};
+
+/** Pega os primeiros `count` nomes de uma string já formatada. */
+const takeFirstNames = (formatted: string, count: number): string => {
+  if (!formatted) return "";
+  return formatted.trim().split(/\s+/).filter(Boolean).slice(0, count).join(" ");
+};
+
+/**
+ * Constrói um mapa `nomeOriginal -> nomeExibido` para a tabela.
+ *
+ * Regra:
+ *  1. Por padrão exibe os 2 primeiros nomes.
+ *  2. Se 2+ funcionários compartilham a mesma versão de 2 nomes, todos
+ *     ganham o 3º nome para diferenciar.
+ *  3. Se ainda assim houver empate (mesma versão de 3 nomes), caímos para
+ *     o nome completo formatado — fica longo mas pelo menos correto.
+ */
+const buildDisplayNameMap = (
+  rows: { employee_name: string }[],
+): Map<string, string> => {
+  const map = new Map<string, string>();
+  if (rows.length === 0) return map;
+
+  const uniqueFormatted = new Map<string, string>(); // original -> formatted
+  for (const r of rows) {
+    const formatted = formatEmployeeName(r.employee_name);
+    if (!uniqueFormatted.has(r.employee_name)) {
+      uniqueFormatted.set(r.employee_name, formatted);
+    }
+  }
+
+  const twoNameCounts = new Map<string, number>();
+  for (const formatted of uniqueFormatted.values()) {
+    const two = takeFirstNames(formatted, 2);
+    twoNameCounts.set(two, (twoNameCounts.get(two) ?? 0) + 1);
+  }
+
+  // Apenas para os nomes em colisão, conta quantos compartilham a versão
+  // de 3 nomes — se mais de um, cai para o nome completo.
+  const threeNameCounts = new Map<string, number>();
+  for (const formatted of uniqueFormatted.values()) {
+    const two = takeFirstNames(formatted, 2);
+    if ((twoNameCounts.get(two) ?? 0) > 1) {
+      const three = takeFirstNames(formatted, 3);
+      threeNameCounts.set(three, (threeNameCounts.get(three) ?? 0) + 1);
+    }
+  }
+
+  for (const [original, formatted] of uniqueFormatted) {
+    const two = takeFirstNames(formatted, 2);
+    if ((twoNameCounts.get(two) ?? 0) <= 1) {
+      map.set(original, two);
+      continue;
+    }
+    const three = takeFirstNames(formatted, 3);
+    if ((threeNameCounts.get(three) ?? 0) <= 1) {
+      map.set(original, three);
+      continue;
+    }
+    map.set(original, formatted);
+  }
+
+  return map;
+};
 
 const calculateTotals = (data: BoletimData[]) => {
   const parseTime = (time: string): number => {
@@ -265,23 +424,166 @@ export const BoletimPDF: React.FC<BoletimPDFProps> = ({
   logoBase64,
 }) => {
   const totals = calculateTotals(data);
+  const displayNameByEmployee = buildDisplayNameMap(data);
+
+  // Render flat list of rows, inserting a "day bar" each time the date
+  // changes. Index parity is tracked separately so alternating row stripes
+  // restart on each day group.
+  const renderedRows: React.ReactNode[] = [];
+  let currentDate: string | null = null;
+  let rowParity = 0;
+
+  data.forEach((row, index) => {
+    if (row.date !== currentDate) {
+      currentDate = row.date;
+      rowParity = 0;
+      renderedRows.push(
+        <View
+          key={`day-${row.date}-${index}`}
+          style={styles.dayBar}
+          wrap={false}
+        >
+          <Text style={styles.dayBarLabel}>
+            {formatDate(row.date)} — {row.day_of_week}
+          </Text>
+          <Text style={[styles.col_e1, styles.dayBarCell, styles.punchEdgeLeft]}>Ent. 1</Text>
+          <Text style={[styles.col_s1, styles.dayBarCell]}>Saí. 1</Text>
+          <Text style={[styles.col_e2, styles.dayBarCell]}>Ent. 2</Text>
+          <Text style={[styles.col_s2, styles.dayBarCell, styles.punchEdgeRight]}>Saí. 2</Text>
+          <Text style={[styles.col_total, styles.dayBarCell]}>Total</Text>
+          <Text style={[styles.col_normal, styles.dayBarCell]}>Normal</Text>
+          <Text style={[styles.col_adn, styles.dayBarCell]}>Ad. N.</Text>
+          <Text style={[styles.col_50d, styles.dayBarCell]}>50% D.</Text>
+          <Text style={[styles.col_50n, styles.dayBarCell]}>50% N.</Text>
+          <Text style={[styles.col_100d, styles.dayBarCell]}>100% D.</Text>
+          <Text style={[styles.col_100n, styles.dayBarCell]}>100% N.</Text>
+          <Text style={[styles.col_valor, styles.dayBarCell]}>Valor</Text>
+        </View>,
+      );
+    }
+
+    const hasNoPunch =
+      !row.entry1 && !row.exit1 && !row.entry2 && !row.exit2;
+    const shouldHighlight = hasNoPunch && !isNoCompany(row.work_company);
+    const rowStyle =
+      rowParity % 2 === 1
+        ? [styles.tableRow, styles.tableRowAlt]
+        : styles.tableRow;
+    rowParity++;
+
+    renderedRows.push(
+      <View key={`row-${index}`} style={rowStyle} wrap={false}>
+        <Text
+          style={[styles.col_emp, styles.cellLeft]}
+          wrap={false}
+        >
+          {truncateName(
+            displayNameByEmployee.get(row.employee_name) ??
+              formatEmployeeName(row.employee_name),
+          )}
+        </Text>
+        <Text style={[styles.col_fn, styles.cellCenter]}>{row.position}</Text>
+        <Text style={[styles.col_setor, styles.cellCenter]}>
+          {row.department}
+        </Text>
+        <View
+          style={[
+            styles.col_emp_dia_content,
+            { borderRight: "0.5px solid #e5e7eb" },
+          ]}
+        >
+          {isNoCompany(row.work_company) ? (
+            <View style={styles.companyBadge}>
+              <Text style={styles.companyBadgeText}>
+                {row.work_company ?? "—"}
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.companyText}>{row.work_company ?? "—"}</Text>
+          )}
+        </View>
+        <Text style={[styles.col_data, styles.cellCenter]}>
+          {formatDate(row.date)}
+        </Text>
+        <Text
+          style={
+            shouldHighlight
+              ? [styles.col_e1, styles.cellCenter, styles.punchEdgeLeft, styles.missingCell]
+              : [styles.col_e1, styles.cellCenter, styles.punchEdgeLeft]
+          }
+        >
+          {row.entry1 || "-"}
+        </Text>
+        <Text
+          style={
+            shouldHighlight
+              ? [styles.col_s1, styles.cellCenter, styles.missingCell]
+              : [styles.col_s1, styles.cellCenter]
+          }
+        >
+          {row.exit1 || "-"}
+        </Text>
+        <Text
+          style={
+            shouldHighlight
+              ? [styles.col_e2, styles.cellCenter, styles.missingCell]
+              : [styles.col_e2, styles.cellCenter]
+          }
+        >
+          {row.entry2 || "-"}
+        </Text>
+        <Text
+          style={
+            shouldHighlight
+              ? [styles.col_s2, styles.cellCenter, styles.punchEdgeRight, styles.missingCell]
+              : [styles.col_s2, styles.cellCenter, styles.punchEdgeRight]
+          }
+        >
+          {row.exit2 || "-"}
+        </Text>
+        <Text style={[styles.col_total, styles.cellCenter]}>
+          {row.total_hours}
+        </Text>
+        <Text style={[styles.col_normal, styles.cellCenter]}>
+          {row.normal_hours}
+        </Text>
+        <Text style={[styles.col_adn, styles.cellCenter]}>
+          {row.night_additional || "00:00"}
+        </Text>
+        <Text style={[styles.col_50d, styles.cellCenter]}>
+          {row.extra_50_day}
+        </Text>
+        <Text style={[styles.col_50n, styles.cellCenter]}>
+          {row.extra_50_night}
+        </Text>
+        <Text style={[styles.col_100d, styles.cellCenter]}>
+          {row.extra_100_day}
+        </Text>
+        <Text style={[styles.col_100n, styles.cellCenter]}>
+          {row.extra_100_night}
+        </Text>
+        <Text style={[styles.col_valor, styles.cellLast]}>
+          {formatCurrency(row.value)}
+        </Text>
+      </View>,
+    );
+  });
 
   return (
     <Document>
       <Page size="A4" orientation="landscape" style={styles.page}>
-        {/* Header */}
+        {/* Cabeçalho */}
         <View style={styles.header}>
           <View style={styles.headerTop}>
-            {/* Logo no canto superior esquerdo */}
             {logoBase64 && (
               <View style={styles.logoContainer}>
                 <Image style={styles.logo} src={logoBase64} />
               </View>
             )}
-
-            {/* Texto do header */}
             <View style={styles.headerText}>
-              <Text style={styles.title}>Elmo Gestão - Boletim de Ponto</Text>
+              <Text style={styles.title}>
+                Elmo Gestão - Boletim de Ponto
+              </Text>
               <Text style={styles.subtitle}>{companyName}</Text>
               <Text style={styles.info}>
                 Período: {formatDate(startDate)} até {formatDate(endDate)}
@@ -293,9 +595,8 @@ export const BoletimPDF: React.FC<BoletimPDFProps> = ({
           </View>
         </View>
 
-        {/* Summary Section */}
+        {/* Resumo do período */}
         <View style={styles.summarySection}>
-          <Text style={styles.summaryTitle}>Resumo do Período</Text>
           <View style={styles.summaryGrid}>
             <View style={styles.summaryItem}>
               <Text style={styles.summaryLabel}>Total de Horas</Text>
@@ -322,105 +623,79 @@ export const BoletimPDF: React.FC<BoletimPDFProps> = ({
           </View>
         </View>
 
-        {/* Table */}
+        {/* Tabela */}
         <View style={styles.table}>
-          {/* Header */}
-          <View style={styles.tableHeader}>
-            <Text style={styles.col1}>Colaborador</Text>
-            <Text style={styles.col2}>Função</Text>
-            <Text style={styles.col3}>Setor</Text>
-            <Text style={styles.colLocal}>Empresa (dia)</Text>
-            <Text style={styles.col4}>Dia</Text>
-            <Text style={styles.col5}>Dia Sem.</Text>
-            <Text style={styles.col6}>Ent. 1</Text>
-            <Text style={styles.col7}>Saí. 1</Text>
-            <Text style={styles.col8}>Ent. 2</Text>
-            <Text style={styles.col9}>Saí. 2</Text>
-            <Text style={styles.col10}>Total</Text>
-            <Text style={styles.col11}>Normal</Text>
-            <Text style={styles.col12}>Ad. Not.</Text>
-            <Text style={styles.col13}>50%D</Text>
-            <Text style={styles.col14}>50%N</Text>
-            <Text style={styles.col15}>100%D</Text>
-            <Text style={styles.col16}>100%N</Text>
-            <Text style={styles.col17}>Valor</Text>
+          <View style={styles.tableHeader} fixed>
+            <Text style={[styles.col_emp, styles.cellLeft]}>Colaborador</Text>
+            <Text style={[styles.col_fn, styles.cellCenter]}>Função</Text>
+            <Text style={[styles.col_setor, styles.cellCenter]}>Setor</Text>
+            <Text style={[styles.col_emp_dia, styles.cellCenter]}>
+              Empresa
+            </Text>
+            <Text style={[styles.col_data, styles.cellCenter]}>Dia</Text>
+            <Text style={[styles.col_e1, styles.cellCenter, styles.punchEdgeLeft]}>Ent. 1</Text>
+            <Text style={[styles.col_s1, styles.cellCenter]}>Saí. 1</Text>
+            <Text style={[styles.col_e2, styles.cellCenter]}>Ent. 2</Text>
+            <Text style={[styles.col_s2, styles.cellCenter, styles.punchEdgeRight]}>Saí. 2</Text>
+            <Text style={[styles.col_total, styles.cellCenter]}>Total</Text>
+            <Text style={[styles.col_normal, styles.cellCenter]}>Normal</Text>
+            <Text style={[styles.col_adn, styles.cellCenter]}>Ad. N.</Text>
+            <Text style={[styles.col_50d, styles.cellCenter]}>50% D.</Text>
+            <Text style={[styles.col_50n, styles.cellCenter]}>50% N.</Text>
+            <Text style={[styles.col_100d, styles.cellCenter]}>100% D.</Text>
+            <Text style={[styles.col_100n, styles.cellCenter]}>100% N.</Text>
+            <Text style={[styles.col_valor, styles.cellLast]}>Valor</Text>
           </View>
 
-          {/* Rows */}
-          {data.map((row, index) => {
-            const hasNoPunch =
-              !row.entry1 && !row.exit1 && !row.entry2 && !row.exit2;
-            const shouldHighlight =
-              hasNoPunch && !isNoCompany(row.work_company);
-            return (
-            <View key={index} style={styles.tableRow}>
-              <Text style={styles.col1}>
-                {formatEmployeeName(row.employee_name)}
-              </Text>
-              <Text style={styles.col2}>{row.position}</Text>
-              <Text style={styles.col3}>{row.department}</Text>
-              <View style={styles.colLocalContent}>
-                {isNoCompany(row.work_company) ? (
-                  <View style={styles.companyBadge}>
-                    <Text style={styles.companyBadgeText}>
-                      {row.work_company ?? "—"}
-                    </Text>
-                  </View>
-                ) : (
-                  <Text style={styles.companyText}>
-                    {row.work_company ?? "—"}
-                  </Text>
-                )}
-              </View>
-              <Text style={styles.col4}>{formatDate(row.date)}</Text>
-              <Text style={styles.col5}>{row.day_of_week}</Text>
-              <Text style={shouldHighlight ? [styles.col6, styles.missingCell] : styles.col6}>
-                {row.entry1 || "-"}
-              </Text>
-              <Text style={shouldHighlight ? [styles.col7, styles.missingCell] : styles.col7}>
-                {row.exit1 || "-"}
-              </Text>
-              <Text style={shouldHighlight ? [styles.col8, styles.missingCell] : styles.col8}>
-                {row.entry2 || "-"}
-              </Text>
-              <Text style={shouldHighlight ? [styles.col9, styles.missingCell] : styles.col9}>
-                {row.exit2 || "-"}
-              </Text>
-              <Text style={styles.col10}>{row.total_hours}</Text>
-              <Text style={styles.col11}>{row.normal_hours}</Text>
-              <Text style={styles.col12}>
-                {row.night_additional || "00:00"}
-              </Text>
-              <Text style={styles.col13}>{row.extra_50_day}</Text>
-              <Text style={styles.col14}>{row.extra_50_night}</Text>
-              <Text style={styles.col15}>{row.extra_100_day}</Text>
-              <Text style={styles.col16}>{row.extra_100_night}</Text>
-              <Text style={styles.col17}>{formatCurrency(row.value)}</Text>
-            </View>
-            );
-          })}
+          {renderedRows}
 
-          {/* Total Row */}
-          <View style={styles.tableTotalRow}>
-            <Text style={{ width: "54%" }}>TOTAIS</Text>
-            <Text style={styles.col10}>{totals.totalHours}</Text>
-            <Text style={styles.col11}>{totals.normalHours}</Text>
-            <Text style={styles.col12}>{totals.nightAdditional}</Text>
-            <Text style={styles.col13}>{totals.extra50Day}</Text>
-            <Text style={styles.col14}>{totals.extra50Night}</Text>
-            <Text style={styles.col15}>{totals.extra100Day}</Text>
-            <Text style={styles.col16}>{totals.extra100Night}</Text>
-            <Text style={styles.col17}>
+          <View style={styles.tableTotalRow} wrap={false}>
+            <Text style={[styles.col_emp, styles.cellLeft]}>TOTAIS</Text>
+            <Text style={[styles.col_fn, styles.cellCenter]}></Text>
+            <Text style={[styles.col_setor, styles.cellCenter]}></Text>
+            <Text style={[styles.col_emp_dia, styles.cellCenter]}></Text>
+            <Text style={[styles.col_data, styles.cellCenter]}></Text>
+            <Text style={[styles.col_e1, styles.cellCenter, styles.punchEdgeLeft]}></Text>
+            <Text style={[styles.col_s1, styles.cellCenter]}></Text>
+            <Text style={[styles.col_e2, styles.cellCenter]}></Text>
+            <Text style={[styles.col_s2, styles.cellCenter, styles.punchEdgeRight]}></Text>
+            <Text style={[styles.col_total, styles.cellCenter]}>
+              {totals.totalHours}
+            </Text>
+            <Text style={[styles.col_normal, styles.cellCenter]}>
+              {totals.normalHours}
+            </Text>
+            <Text style={[styles.col_adn, styles.cellCenter]}>
+              {totals.nightAdditional}
+            </Text>
+            <Text style={[styles.col_50d, styles.cellCenter]}>
+              {totals.extra50Day}
+            </Text>
+            <Text style={[styles.col_50n, styles.cellCenter]}>
+              {totals.extra50Night}
+            </Text>
+            <Text style={[styles.col_100d, styles.cellCenter]}>
+              {totals.extra100Day}
+            </Text>
+            <Text style={[styles.col_100n, styles.cellCenter]}>
+              {totals.extra100Night}
+            </Text>
+            <Text style={[styles.col_valor, styles.cellLast]}>
               {formatCurrency(totals.totalValue)}
             </Text>
           </View>
         </View>
 
-        {/* Footer */}
-        <View style={styles.footer}>
+        {/* Rodapé */}
+        <View style={styles.footer} fixed>
           <Text>
             Boletim gerado pelo Sistema Elmo Gestão - {data.length} registro(s)
           </Text>
+          <Text
+            render={({ pageNumber, totalPages }) =>
+              `Página ${pageNumber} de ${totalPages}`
+            }
+          />
         </View>
       </Page>
     </Document>

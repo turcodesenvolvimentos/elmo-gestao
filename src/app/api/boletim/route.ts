@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { supabaseAdmin } from "@/lib/db/client";
+import { solidesApiClient } from "@/lib/axios/solides.client";
 import { calcularHorasPorPeriodo, formatarHoras } from "@/lib/ponto-calculator";
 import { Permission } from "@/types/permissions";
 import { checkPermission } from "@/lib/auth/permissions";
@@ -65,6 +66,93 @@ interface Punch {
   date_out: string;
   location_in_address?: string | null;
   location_out_address?: string | null;
+}
+
+/** Converte um YYYY-MM-DD em timestamp (ms) — meio-dia local, igual ao sync. */
+function dateToTimestamp(dateStr: string): number {
+  const d = new Date(dateStr);
+  d.setHours(12, 0, 0, 0);
+  return d.getTime();
+}
+
+/** Normaliza qualquer valor de data (string ISO, ms ou s) para ISO 8601. */
+function toIso(value: string | number | null | undefined): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "string") return value;
+  if (typeof value === "number") {
+    const ms = value > 1e12 ? value : value * 1000;
+    const d = new Date(ms);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  return null;
+}
+
+interface SolidesPunchRaw {
+  id?: number;
+  date?: string | number | null;
+  dateIn?: string | number | null;
+  dateOut?: string | number | null;
+  locationIn?: { address?: string | null } | null;
+  locationOut?: { address?: string | null } | null;
+  employee?: { id?: number; name?: string } | null;
+  status?: string;
+}
+
+/**
+ * Busca todos os pontos APROVADOS do período direto da API do Solides
+ * (mesma fonte usada pela página de Ponto). Pagina até esgotar.
+ *
+ * IMPORTANTE: vai buscar pontos de toda a Solides nesse período; a filtragem
+ * por empresa acontece downstream via `punchesByEmployee` cruzando com a
+ * lista de funcionários da empresa selecionada.
+ */
+async function fetchPunchesFromSolides(
+  startDate: string,
+  endDate: string,
+): Promise<SolidesPunchRaw[]> {
+  const startTs = dateToTimestamp(startDate);
+  const endTs = dateToTimestamp(endDate);
+  const PAGE_SIZE = 1000;
+  const collected: SolidesPunchRaw[] = [];
+
+  let page = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    try {
+      const response = await solidesApiClient.get("punch", {
+        params: {
+          page,
+          size: PAGE_SIZE,
+          startDate: startTs.toString(),
+          endDate: endTs.toString(),
+          status: "APPROVED",
+          showFired: true,
+        },
+      });
+      const data = response.data;
+      const content: SolidesPunchRaw[] = data?.content || [];
+      collected.push(...content);
+      page++;
+      hasMore =
+        content.length > 0 &&
+        !data?.last &&
+        page < (data?.totalPages ?? Infinity);
+    } catch (err: unknown) {
+      const status =
+        typeof err === "object" && err !== null && "status" in err
+          ? (err as { status?: number }).status
+          : undefined;
+      // 404 = sem registros, encerra paginação silenciosamente.
+      if (status === 404) {
+        hasMore = false;
+        break;
+      }
+      throw err;
+    }
+  }
+
+  return collected;
 }
 
 export async function GET(request: NextRequest) {
@@ -148,7 +236,8 @@ export async function GET(request: NextRequest) {
           id,
           name,
           solides_id,
-          fired
+          fired,
+          synced_at
         )
       `
             )
@@ -158,14 +247,18 @@ export async function GET(request: NextRequest) {
 
     if (escalasError) throw escalasError;
 
+    type EmpJoin = {
+      id: string;
+      name: string;
+      solides_id: number;
+      fired: boolean;
+      synced_at: string | null;
+    };
     type EscalaRowJoined = {
       employee_id: string;
       start_date: string;
       end_date: string | null;
-      employees:
-        | { id: string; name: string; solides_id: number; fired: boolean }
-        | { id: string; name: string; solides_id: number; fired: boolean }[]
-        | null;
+      employees: EmpJoin | EmpJoin[] | null;
     };
 
     const normalizeEmployee = (row: EscalaRowJoined) => {
@@ -175,10 +268,7 @@ export async function GET(request: NextRequest) {
     };
 
     const validEscalas = ((escalasRows || []) as EscalaRowJoined[]).filter(
-      (row) => {
-        const emp = normalizeEmployee(row);
-        return emp && !emp.fired;
-      }
+      (row) => !!normalizeEmployee(row),
     );
 
     const employeeUuids = Array.from(
@@ -262,20 +352,17 @@ export async function GET(request: NextRequest) {
 
     const contextStartDate = getPreviousDate(startDate);
     const contextEndDate = getNextDate(endDate);
-    const { data: punches, error: punchesError } = await supabaseAdmin
-      .from("punches")
-      .select(
-        "employee_id, employee_name, date, date_in, date_out, location_in_address, location_out_address"
-      )
-      .gte("date", contextStartDate)
-      .lte("date", contextEndDate)
-      .eq("status", "APPROVED")
-      .order("date", { ascending: true })
-      .order("date_in", { ascending: true });
 
-    if (punchesError) {
-      throw punchesError;
-    }
+    // ---------------------------------------------------------------------
+    // Busca pontos LIVE do Solides em vez de ler da tabela local — assim o
+    // boletim reflete exatamente o que aparece na página de Ponto (que
+    // também consulta a API), incluindo apagamentos feitos no Solides
+    // depois do último sync.
+    // ---------------------------------------------------------------------
+    const solidesPunches = await fetchPunchesFromSolides(
+      contextStartDate,
+      contextEndDate,
+    );
 
     const { data: customHolidayRows } = await supabaseAdmin
       .from("custom_holidays")
@@ -289,28 +376,49 @@ export async function GET(request: NextRequest) {
 
     const punchesByEmployee = new Map<number, Punch[]>();
 
-    if (punches) {
-      punches.forEach(
-        (punch: {
-          employee_id: number;
-          date: string;
-          date_in: string;
-          date_out: string;
-          location_in_address?: string | null;
-          location_out_address?: string | null;
-        }) => {
-          if (!punchesByEmployee.has(punch.employee_id)) {
-            punchesByEmployee.set(punch.employee_id, []);
+    for (const raw of solidesPunches) {
+      const employeeId = raw.employee?.id;
+      if (typeof employeeId !== "number") continue;
+
+      const dateIn = toIso(raw.dateIn);
+      const dateOut = toIso(raw.dateOut);
+      // Sem entrada nem saída → ponto inutilizável, pula.
+      if (!dateIn && !dateOut) continue;
+
+      // Data canônica do ponto (mesmo fallback usado no sync).
+      let dateStr: string | null = null;
+      if (raw.date) {
+        if (typeof raw.date === "string") {
+          dateStr = raw.date.includes("T")
+            ? raw.date.split("T")[0]
+            : raw.date.substring(0, 10);
+        } else if (typeof raw.date === "number") {
+          const ms = raw.date > 1e12 ? raw.date : raw.date * 1000;
+          const d = new Date(ms);
+          if (!Number.isNaN(d.getTime())) {
+            dateStr =
+              `${d.getFullYear()}-` +
+              `${String(d.getMonth() + 1).padStart(2, "0")}-` +
+              `${String(d.getDate()).padStart(2, "0")}`;
           }
-          punchesByEmployee.get(punch.employee_id)!.push({
-            date: punch.date,
-            date_in: punch.date_in,
-            date_out: punch.date_out,
-            location_in_address: punch.location_in_address,
-            location_out_address: punch.location_out_address,
-          });
         }
-      );
+      }
+      if (!dateStr) {
+        const fallback = dateIn ?? dateOut;
+        if (fallback) dateStr = fallback.split("T")[0];
+      }
+      if (!dateStr) continue;
+
+      if (!punchesByEmployee.has(employeeId)) {
+        punchesByEmployee.set(employeeId, []);
+      }
+      punchesByEmployee.get(employeeId)!.push({
+        date: dateStr,
+        date_in: dateIn ?? "",
+        date_out: dateOut ?? "",
+        location_in_address: raw.locationIn?.address ?? null,
+        location_out_address: raw.locationOut?.address ?? null,
+      });
     }
 
     const solidesIdsWithPunches = Array.from(punchesByEmployee.keys());
@@ -330,7 +438,7 @@ export async function GET(request: NextRequest) {
 
       const { data: employeesWithPunches } = await supabaseAdmin
         .from("employees")
-        .select("id, name, solides_id, fired")
+        .select("id, name, solides_id, fired, synced_at")
         .in("solides_id", solidesIdsWithPunches);
 
       type EmpInfo = {
@@ -338,10 +446,11 @@ export async function GET(request: NextRequest) {
         name: string;
         solides_id: number;
         fired: boolean;
+        synced_at: string | null;
       };
 
       const orphanEmployees = ((employeesWithPunches || []) as EmpInfo[]).filter(
-        (emp) => !emp.fired && !scheduledEmployeeUuids.has(emp.id)
+        (emp) => !scheduledEmployeeUuids.has(emp.id)
       );
 
       for (const orphan of orphanEmployees) {
@@ -531,7 +640,7 @@ export async function GET(request: NextRequest) {
         boletimData.push({
           employee_id: employee.id,
           employee_name: employee.name,
-          work_company: employee.isOrphan ? "Sem empresa" : companyName,
+          work_company: employee.isOrphan ? "Não escalado" : companyName,
           position: position?.name || "Sem cargo",
           department: department || "Sem setor",
           date,

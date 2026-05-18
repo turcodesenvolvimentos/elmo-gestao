@@ -3,7 +3,6 @@ import axios from "axios";
 export interface BoletimData {
   employee_id: string;
   employee_name: string;
-  /** Empresa inferida pela escala do dia, mapa de endereço ou "Sem empresa". */
   work_company: string;
   position: string;
   department: string;

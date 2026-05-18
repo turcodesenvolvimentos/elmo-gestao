@@ -52,6 +52,8 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useCompanies } from "@/hooks/use-companies";
+import { useQueryClient } from "@tanstack/react-query";
+import { fetchBoletim } from "@/services/boletim.service";
 import {
   useBoletim,
   useExportBoletimPDF,
@@ -160,11 +162,15 @@ export default function BoletimPage() {
     [companiesResponse]
   );
 
-  // Buscar boletim
+  const queryClient = useQueryClient();
+
+  // useBoletim is wired to the current selectedCompany so the rest of the page
+  // can read boletimData from the cache. Fetching is triggered manually via
+  // queryClient.fetchQuery in handleGenerateBulletin so the fetch always uses
+  // the just-clicked companyId rather than a stale closure of state.
   const {
     data: boletimData,
     isLoading: isLoadingBoletim,
-    refetch: refetchBoletim,
   } = useBoletim(
     {
       company_id: selectedCompany || "",
@@ -173,6 +179,10 @@ export default function BoletimPage() {
     },
     false // Não buscar automaticamente
   );
+
+  // Loading state owned by the manual fetch (since useBoletim's loading would
+  // only flip after selectedCompany state propagates).
+  const [isGeneratingBoletim, setIsGeneratingBoletim] = useState(false);
 
   // Mutation para exportar PDF
   const { mutate: exportPDF, isPending: isExportingPDF } =
@@ -385,25 +395,39 @@ export default function BoletimPage() {
 
     setSelectedCompany(companyId);
     setSelectedCompanyName(company.name);
-
-    // Limpar edições anteriores
     setEditedData({});
+    setIsGeneratingBoletim(true);
 
-    // Buscar dados do boletim
-    const result = await refetchBoletim();
+    try {
+      const params = {
+        company_id: companyId,
+        start_date: startDate,
+        end_date: endDate,
+      };
+      // Fetch directly with the clicked companyId. Using refetchBoletim was
+      // closing over the previous selectedCompany state, which is why the
+      // first click did nothing — the fetch ran with the stale params and the
+      // second click finally saw the updated state.
+      const data = await queryClient.fetchQuery({
+        queryKey: ["boletim", params],
+        queryFn: () => fetchBoletim(params),
+        staleTime: 0,
+      });
 
-    if (result.isSuccess && result.data) {
-      if (result.data.length === 0) {
+      if (data.length === 0) {
         toast.warning(
           "Nenhum registro de ponto encontrado para o período selecionado"
         );
       } else {
-        toast.success(`Boletim gerado com ${result.data.length} registro(s)`);
+        toast.success(`Boletim gerado com ${data.length} registro(s)`);
       }
       setIsBulletinDialogOpen(true);
       setShowPDFPreview(false);
-    } else if (result.isError) {
+    } catch (error) {
+      console.error(error);
       toast.error("Erro ao gerar boletim");
+    } finally {
+      setIsGeneratingBoletim(false);
     }
   };
 
@@ -723,10 +747,11 @@ export default function BoletimPage() {
                             !startDate ||
                             !endDate ||
                             !isDateRangeValid ||
+                            isGeneratingBoletim ||
                             isLoadingBoletim
                           }
                         >
-                          {isLoadingBoletim &&
+                          {(isGeneratingBoletim || isLoadingBoletim) &&
                           selectedCompany === company.id ? (
                             <>
                               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
