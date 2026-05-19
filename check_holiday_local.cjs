@@ -1,0 +1,10 @@
+const Holidays = require("date-holidays");
+const hd = new Holidays("BR");
+const d = new Date("2026-05-10T12:00:00Z");
+d.setHours(12, 0, 0, 0);
+console.log("Data testada:", d.toString());
+console.log("isHoliday(10/05/2026):", JSON.stringify(hd.isHoliday(d), null, 2));
+const d2 = new Date("2026-05-17T12:00:00Z");
+d2.setHours(12, 0, 0, 0);
+console.log("\nData 17/05:", d2.toString());
+console.log("isHoliday(17/05/2026):", hd.isHoliday(d2));

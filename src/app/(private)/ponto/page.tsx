@@ -395,8 +395,12 @@ export default function PontoPage() {
         dateStr: string;
         hadNightShift: boolean;
         lastNightShiftOpen: boolean;
+        lastShiftEndAt: Date | null;
+        lastShiftEndedAfterMidnight: boolean;
       }
     >();
+
+    const CONTINUACAO_NOTURNA_MAX_HORAS = 2;
 
     allPunchesRaw.forEach((punch: Punch) => {
       const employeeName =
@@ -408,16 +412,23 @@ export default function PontoPage() {
       if (!punchDateStr) return;
 
       const entryDate = punch.dateIn ? new Date(punch.dateIn) : undefined;
+      const exitDate = punch.dateOut ? new Date(punch.dateOut) : undefined;
       const entryHour = entryDate ? entryDate.getHours() : undefined;
       const isEarlyMorning = entryHour !== undefined ? entryHour < 12 : false;
       const isNightShiftEntry =
         entryHour !== undefined ? entryHour >= 18 : false;
+      const shiftCrossedMidnight = !!(
+        entryDate &&
+        exitDate &&
+        (entryDate.getFullYear() !== exitDate.getFullYear() ||
+          entryDate.getMonth() !== exitDate.getMonth() ||
+          entryDate.getDate() !== exitDate.getDate())
+      );
 
       const lastGroup = lastGroupByEmployee.get(employeeName);
       const shouldAttachToPreviousDay =
         !!lastGroup &&
         isEarlyMorning &&
-        lastGroup.lastNightShiftOpen &&
         (() => {
           const [y, m, d] = lastGroup.dateStr.split("-").map(Number);
           const lastDate = new Date(Date.UTC(y, m - 1, d));
@@ -426,7 +437,31 @@ export default function PontoPage() {
           const diffDays =
             (currentDate.getTime() - lastDate.getTime()) /
             (1000 * 60 * 60 * 24);
-          return Math.round(diffDays) === 1 && lastGroup.hadNightShift;
+          if (Math.round(diffDays) !== 1) return false;
+          if (!lastGroup.hadNightShift) return false;
+
+          // Caso 1: turno anterior ficou aberto (esqueceu de bater saida)
+          if (lastGroup.lastNightShiftOpen) return true;
+
+          // Caso 2: turno anterior fechou de madrugada (saida cruzou meia-noite)
+          // e o retorno foi em ate CONTINUACAO_NOTURNA_MAX_HORAS horas.
+          if (
+            lastGroup.lastShiftEndedAfterMidnight &&
+            lastGroup.lastShiftEndAt &&
+            entryDate
+          ) {
+            const diffHoras =
+              (entryDate.getTime() - lastGroup.lastShiftEndAt.getTime()) /
+              (1000 * 60 * 60);
+            if (
+              diffHoras >= 0 &&
+              diffHoras <= CONTINUACAO_NOTURNA_MAX_HORAS
+            ) {
+              return true;
+            }
+          }
+
+          return false;
         })();
 
       const baseDateStr = shouldAttachToPreviousDay
@@ -488,18 +523,36 @@ export default function PontoPage() {
 
       const prev = lastGroupByEmployee.get(employeeName);
       const currentPunchIsNightShiftWithoutOut =
-        isNightShiftEntry && !punch.dateOut;
+        (isNightShiftEntry || shiftCrossedMidnight) && !punch.dateOut;
+
+      // Se este punch tem saida e ela cruzou meia-noite, registramos o horario
+      // da saida para que um eventual retorno em ate 2h da proxima madrugada
+      // seja anexado a este dia. Caso contrario, herda do prev (mesmo key).
+      let lastShiftEndAt: Date | null = null;
+      let lastShiftEndedAfterMidnight = false;
+      if (exitDate && shiftCrossedMidnight) {
+        lastShiftEndAt = exitDate;
+        lastShiftEndedAfterMidnight = true;
+      } else if (prev && prev.key === key) {
+        lastShiftEndAt = prev.lastShiftEndAt;
+        lastShiftEndedAfterMidnight = prev.lastShiftEndedAfterMidnight;
+      }
+
       lastGroupByEmployee.set(employeeName, {
         key,
         dateStr: baseDateStr,
         hadNightShift:
-          (prev?.hadNightShift && prev.key === key) || isNightShiftEntry,
+          (prev?.hadNightShift && prev.key === key) ||
+          isNightShiftEntry ||
+          shiftCrossedMidnight,
         lastNightShiftOpen:
           currentPunchIsNightShiftWithoutOut ||
           (!!prev &&
             prev.key === key &&
             prev.lastNightShiftOpen &&
             !isNightShiftEntry),
+        lastShiftEndAt,
+        lastShiftEndedAfterMidnight,
       });
     });
 
@@ -518,22 +571,66 @@ export default function PontoPage() {
         const previousGroup = groups[i - 1];
         const currentGroup = groups[i];
 
+        // "Ultimo turno noturno" do dia anterior pode ser identificado por:
+        //  (a) entrada >= 18h, OU
+        //  (b) saida em dia diferente da entrada (cruzou meia-noite).
         const lastNightPunch = previousGroup.punches
           .slice()
           .reverse()
           .find((p) => {
             const entryHour = getHourFromDateValue(p.dateIn);
-            return entryHour !== null && entryHour >= 18;
+            if (entryHour !== null && entryHour >= 18) return true;
+            const inD = p.dateIn ? new Date(p.dateIn) : null;
+            const outD = p.dateOut ? new Date(p.dateOut) : null;
+            if (
+              inD &&
+              outD &&
+              (inD.getFullYear() !== outD.getFullYear() ||
+                inD.getMonth() !== outD.getMonth() ||
+                inD.getDate() !== outD.getDate())
+            ) {
+              return true;
+            }
+            return false;
           });
 
-        // Só realocar se o último turno noturno está aberto (sem dateOut)
-        if (!lastNightPunch || lastNightPunch.dateOut) continue;
+        if (!lastNightPunch) continue;
+
+        const lastPunchOut = lastNightPunch.dateOut
+          ? new Date(lastNightPunch.dateOut)
+          : null;
+        const lastPunchIn = lastNightPunch.dateIn
+          ? new Date(lastNightPunch.dateIn)
+          : null;
+        const lastShiftCrossedMidnight = !!(
+          lastPunchIn &&
+          lastPunchOut &&
+          (lastPunchIn.getFullYear() !== lastPunchOut.getFullYear() ||
+            lastPunchIn.getMonth() !== lastPunchOut.getMonth() ||
+            lastPunchIn.getDate() !== lastPunchOut.getDate())
+        );
 
         const punchesToMove = currentGroup.punches.filter((p) => {
           const punchDate = toDateKey(p.dateIn) ?? toDateKey(p.dateOut);
           if (punchDate !== currentGroup.date) return false;
           const entryHour = getHourFromDateValue(p.dateIn);
-          return entryHour !== null && entryHour < 12;
+          if (entryHour === null || entryHour >= 12) return false;
+
+          // Caso 1: turno anterior ficou aberto (sem saida) -> realocar.
+          if (!lastPunchOut) return true;
+
+          // Caso 2: turno anterior fechou de madrugada e o retorno aconteceu
+          // em ate 2h da saida -> continuacao da mesma jornada.
+          if (lastShiftCrossedMidnight) {
+            const newEntry = p.dateIn ? new Date(p.dateIn) : null;
+            if (newEntry) {
+              const diffHoras =
+                (newEntry.getTime() - lastPunchOut.getTime()) /
+                (1000 * 60 * 60);
+              if (diffHoras >= 0 && diffHoras <= 2) return true;
+            }
+          }
+          return false;
         });
 
         if (punchesToMove.length === 0) continue;

@@ -147,24 +147,18 @@ export function calcularHorasPorPeriodo(
     ? 4 * MINUTOS_POR_HORA
     : 8 * MINUTOS_POR_HORA;
 
+
+  const diaReferencia = dataPonto.getDay();
+  const diaProximo = (diaReferencia + 1) % 7;
+  const ehDia100 = ehDomingo || ehFeriado;
+
   for (const minuto of minutosMarcados) {
     const hora = minuto.getHours();
     const tipo = isNoturno(hora) ? "noturna" : "diurna";
     const diaRealMinuto = minuto.getDay();
 
-    if (ehFeriado) {
-      if (tipo === "diurna") {
-        extra100Diurno += 1;
-        horasDiurnasReais += 1;
-      } else {
-        extra100Noturno += 1;
-        horasNoturnasReais += 1;
-      }
-      continue;
-    }
-
-    if (ehDomingo) {
-      if (diaRealMinuto === 0) {
+    if (ehDia100) {
+      if (diaRealMinuto === diaReferencia) {
         if (tipo === "diurna") {
           extra100Diurno += 1;
           horasDiurnasReais += 1;
@@ -174,7 +168,7 @@ export function calcularHorasPorPeriodo(
         }
         duracaoDentroDomingo += 1;
         continue;
-      } else if (diaRealMinuto === 1) {
+      } else if (diaRealMinuto === diaProximo) {
         if (duracaoDentroDomingo < 8 * MINUTOS_POR_HORA) {
           horasNormais += 1;
           if (tipo === "diurna") {
@@ -276,8 +270,10 @@ export function calcularHorasPorPeriodo(
       extra50NoturnoReaisHoras * FATOR_NOTURNO +
       horasAdicionalHoras * ADICIONAL_NOTURNO_FATOR;
 
-    if (horasReaisTrabalhadas <= cargaHorariaDiaria) {
+    if (jornadaTotal <= cargaHorariaDiaria) {
       extra50Noturno = 0;
+    } else if (horasReaisTrabalhadas <= cargaHorariaDiaria) {
+      extra50Noturno = jornadaTotal - cargaHorariaDiaria;
     } else {
       extra50Noturno = extra50NoturnoCalculado;
     }
