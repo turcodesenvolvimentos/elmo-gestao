@@ -1,10 +1,11 @@
 -- Criação da tabela de aplicação de escalas aos funcionários
 -- Registra quando uma escala foi aplicada a um funcionário
 
--- Remover tabela se existir (para garantir estrutura limpa)
-DROP TABLE IF EXISTS escalas CASCADE;
+-- ATENCAO: NUNCA usar DROP TABLE aqui. As migrations reexecutam toda vez
+-- que `yarn migrations` roda, e DROP destruiria dados de producao.
+-- Use CREATE TABLE IF NOT EXISTS para que seja idempotente sem perder dados.
 
-CREATE TABLE escalas (
+CREATE TABLE IF NOT EXISTS escalas (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   
   -- Referência ao funcionário (UUID do employees)

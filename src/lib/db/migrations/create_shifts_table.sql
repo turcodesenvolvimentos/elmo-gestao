@@ -1,10 +1,11 @@
 -- Criação da tabela de escalas/turnos
 -- Escalas definem os horários de trabalho para uma empresa
 
--- Remover tabela se existir (para garantir estrutura limpa)
-DROP TABLE IF EXISTS shifts CASCADE;
+-- ATENCAO: NUNCA usar DROP TABLE aqui. As migrations reexecutam toda vez
+-- que `yarn migrations` roda, e DROP destruiria dados de producao.
+-- Use CREATE TABLE IF NOT EXISTS para que seja idempotente sem perder dados.
 
-CREATE TABLE shifts (
+CREATE TABLE IF NOT EXISTS shifts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   
   -- Nome da escala/turno
