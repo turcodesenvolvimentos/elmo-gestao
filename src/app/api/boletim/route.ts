@@ -626,12 +626,25 @@ export async function GET(request: NextRequest) {
       const hourValue = position?.hour_value || 0;
       const ADICIONAL_NOTURNO_FATOR = 0.142857;
 
-      const sortedDays = Array.from(scheduledDays).sort((a, b) =>
+      // Inclui na iteracao tanto os dias da escala quanto dias com punches
+      // (mesmo fora da escala). Dias com punches mas fora da escala viram
+      // "Nao escalado" naquele dia especifico. Util para casos de hora extra
+      // em dias que nao estavam previstos na escala do funcionario.
+      const allDaysSet = new Set<string>(scheduledDays);
+      for (const workDate of punchesByWorkDate.keys()) {
+        if (workDate >= startDate && workDate <= endDate) {
+          allDaysSet.add(workDate);
+        }
+      }
+      const sortedDays = Array.from(allDaysSet).sort((a, b) =>
         a.localeCompare(b)
       );
 
       for (const date of sortedDays) {
         if (date < startDate || date > endDate) continue;
+
+        // Funcionario esta escalado neste dia especifico?
+        const isScheduledThisDay = scheduledDays.has(date);
 
         const dayPunches = punchesByWorkDate.get(date) || [];
         const sortedPunches = [...dayPunches].sort(
@@ -712,7 +725,10 @@ export async function GET(request: NextRequest) {
         boletimData.push({
           employee_id: employee.id,
           employee_name: employee.name,
-          work_company: employee.isOrphan ? "Não escalado" : companyName,
+          work_company:
+            employee.isOrphan || !isScheduledThisDay
+              ? "Não escalado"
+              : companyName,
           position: position?.name || "Sem cargo",
           department: department || "Sem setor",
           date,
