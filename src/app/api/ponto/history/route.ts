@@ -7,6 +7,17 @@ import path from "path";
 import { supabaseAdmin } from "@/lib/db/client";
 import { auth } from "@/auth";
 
+
+function sanitizeForStoragePath(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase();
+}
+
 interface PontoData {
   employeeName: string;
   company: string;
@@ -125,9 +136,7 @@ export async function POST(request: NextRequest) {
     // Criar nome do arquivo
     const timestamp = new Date().getTime();
     const fileName = `relatorio-ponto-${
-      employeeName
-        ? employeeName.replace(/\s+/g, "-").toLowerCase()
-        : "geral"
+      employeeName ? sanitizeForStoragePath(employeeName) : "geral"
     }-${startDate}-${endDate}-${timestamp}.pdf`;
     const storagePath = employeeId ? `${employeeId}/${fileName}` : `geral/${fileName}`;
 

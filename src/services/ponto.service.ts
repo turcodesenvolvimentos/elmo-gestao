@@ -100,6 +100,33 @@ export const exportPontoPDF = async (
   return data;
 };
 
+// Linha do PDF resumo (totais por funcionario no periodo)
+export interface PontoResumoRow {
+  employeeName: string;
+  adicionalNoturno: string;
+  extra50Diurno: string;
+  extra100Diurno: string;
+  extra50Noturno: string;
+  extra100Noturno: string;
+  horasNormais: string;
+}
+
+export interface ExportPontoResumoParams {
+  startDate: string;
+  endDate: string;
+  data: PontoResumoRow[];
+}
+
+// Exportar PDF de resumo (uma linha por funcionario ativo com punches no periodo)
+export const exportPontoResumoPDF = async (
+  params: ExportPontoResumoParams,
+): Promise<Blob> => {
+  const { data } = await axios.post("/api/ponto/resumo/export", params, {
+    responseType: "blob",
+  });
+  return data;
+};
+
 // Salvar relatório de ponto no histórico
 export const savePontoToHistory = async (
   params: SavePontoToHistoryParams

@@ -48,7 +48,11 @@ import { usePontoEscalaCompanies } from "@/hooks/use-ponto-escala-companies";
 import { useSyncPunches, useLastSyncDate } from "@/hooks/use-sync";
 import { RefreshCw, Download, Loader2, X } from "lucide-react";
 import { PontoHistory } from "./components/ponto-history";
-import { useExportPontoPDF, useSavePontoToHistory } from "@/hooks/use-ponto";
+import {
+  useExportPontoPDF,
+  useExportPontoResumoPDF,
+  useSavePontoToHistory,
+} from "@/hooks/use-ponto";
 import type { PontoData } from "@/services/ponto.service";
 import {
   Popover,
@@ -216,7 +220,7 @@ export default function PontoPage() {
   }>({
     startDate: "",
     endDate: "",
-    employeeId: 0,
+    employeeId: -1,
     company: "Todos",
     status: "APPROVED",
   });
@@ -265,7 +269,10 @@ export default function PontoPage() {
     }
   };
 
-  const hasFilters = filter.employeeId > 0;
+  // employeeId: -1 = nada selecionado, 0 = "Todos", N > 0 = funcionario especifico.
+  // hasFilters permite o fetch tanto para um funcionario quanto para Todos,
+  // para que o botao "Resumo PDF" funcione tambem com Todos.
+  const hasFilters = filter.employeeId >= 0;
   const shouldSendDates = !!(filter.startDate && filter.endDate);
 
   const isDateRangeValid =
@@ -318,6 +325,7 @@ export default function PontoPage() {
   const { data: lastSyncData } = useLastSyncDate();
 
   const exportPDFMutation = useExportPontoPDF();
+  const exportResumoMutation = useExportPontoResumoPDF();
   const saveToHistoryMutation = useSavePontoToHistory();
 
   const loadMoreRef = useRef<HTMLTableRowElement>(null);
@@ -949,6 +957,76 @@ export default function PontoPage() {
     );
   };
 
+  // Agrega groupedPunches por funcionario e gera o PDF de resumo
+  // (uma linha por funcionario com totais somados no periodo).
+  const handleExportResumo = () => {
+    if (!filter.startDate || !filter.endDate || groupedPunches.length === 0) {
+      return;
+    }
+
+    // Converte "HH:mm" em decimal de horas (tolerante a vazio/-)
+    const parseHm = (t?: string): number => {
+      if (!t || t === "-" || t.trim() === "") return 0;
+      const [h, m] = t.split(":").map(Number);
+      if (isNaN(h) || isNaN(m)) return 0;
+      return h + m / 60;
+    };
+    const fmtHm = (hours: number): string => {
+      const totalMin = Math.round(hours * 60);
+      const h = Math.floor(totalMin / 60);
+      const m = totalMin % 60;
+      return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+    };
+
+    type Acc = {
+      employeeName: string;
+      adn: number;
+      e50d: number;
+      e100d: number;
+      e50n: number;
+      e100n: number;
+      normal: number;
+    };
+    const byEmp = new Map<string, Acc>();
+    for (const g of groupedPunches) {
+      const key = g.employeeName || "—";
+      const prev = byEmp.get(key) ?? {
+        employeeName: key,
+        adn: 0,
+        e50d: 0,
+        e100d: 0,
+        e50n: 0,
+        e100n: 0,
+        normal: 0,
+      };
+      prev.adn += parseHm(g.adicionalNoturno);
+      prev.e50d += parseHm(g.extra50Diurno);
+      prev.e100d += parseHm(g.extra100Diurno);
+      prev.e50n += parseHm(g.extra50Noturno);
+      prev.e100n += parseHm(g.extra100Noturno);
+      prev.normal += parseHm(g.horasNormais);
+      byEmp.set(key, prev);
+    }
+
+    const data = Array.from(byEmp.values())
+      .sort((a, b) => a.employeeName.localeCompare(b.employeeName))
+      .map((r) => ({
+        employeeName: r.employeeName,
+        adicionalNoturno: fmtHm(r.adn),
+        extra50Diurno: fmtHm(r.e50d),
+        extra100Diurno: fmtHm(r.e100d),
+        extra50Noturno: fmtHm(r.e50n),
+        extra100Noturno: fmtHm(r.e100n),
+        horasNormais: fmtHm(r.normal),
+      }));
+
+    exportResumoMutation.mutate({
+      startDate: filter.startDate,
+      endDate: filter.endDate,
+      data,
+    });
+  };
+
   useEffect(() => {
     if (!canFetch || !hasNextPage || isFetchingNextPage) return;
 
@@ -1233,7 +1311,7 @@ export default function PontoPage() {
                       />
                       Exibir inativos
                     </label>
-                    {filter.employeeId > 0 && (
+                    {filter.employeeId >= 0 && (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -1241,7 +1319,7 @@ export default function PontoPage() {
                         onClick={() =>
                           setFilter((prev) => ({
                             ...prev,
-                            employeeId: 0,
+                            employeeId: -1,
                           }))
                         }
                       >
@@ -1324,32 +1402,56 @@ export default function PontoPage() {
                   </div>
                 </div>
 
-                {/* ── Exportar PDF ── */}
+                {/* ── Botoes de exportacao ── */}
                 {hasFilters &&
                   shouldSendDates &&
                   isDateRangeValid &&
                   groupedPunches.length > 0 && (
-                    <Button
-                      onClick={handleExportReport}
-                      disabled={
-                        exportPDFMutation.isPending ||
-                        saveToHistoryMutation.isPending
-                      }
-                      className="ml-auto"
-                    >
-                      {exportPDFMutation.isPending ||
-                      saveToHistoryMutation.isPending ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Exportando...
-                        </>
-                      ) : (
-                        <>
-                          <Download className="mr-2 h-4 w-4" />
-                          Exportar PDF
-                        </>
+                    <div className="ml-auto flex gap-2">
+                      {/* Resumo PDF: apenas no modo Todos (employeeId === 0) */}
+                      {filter.employeeId === 0 && (
+                        <Button
+                          variant="outline"
+                          onClick={handleExportResumo}
+                          disabled={exportResumoMutation.isPending}
+                        >
+                          {exportResumoMutation.isPending ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Gerando...
+                            </>
+                          ) : (
+                            <>
+                              <Download className="mr-2 h-4 w-4" />
+                              Resumo PDF
+                            </>
+                          )}
+                        </Button>
                       )}
-                    </Button>
+                      {/* Exportar PDF detalhado: somente para funcionario unico */}
+                      {filter.employeeId > 0 && (
+                        <Button
+                          onClick={handleExportReport}
+                          disabled={
+                            exportPDFMutation.isPending ||
+                            saveToHistoryMutation.isPending
+                          }
+                        >
+                          {exportPDFMutation.isPending ||
+                          saveToHistoryMutation.isPending ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Exportando...
+                            </>
+                          ) : (
+                            <>
+                              <Download className="mr-2 h-4 w-4" />
+                              Exportar PDF
+                            </>
+                          )}
+                        </Button>
+                      )}
+                    </div>
                   )}
               </div>
             </div>
@@ -1365,7 +1467,7 @@ export default function PontoPage() {
               </p>
             </div>
 
-            {!hasFilters ? (
+            {filter.employeeId <= 0 ? (
               <div className="flex flex-1 items-center justify-center min-h-[280px] rounded-lg border border-dashed border-muted-foreground/25 bg-muted/20">
                 <p className="text-muted-foreground text-center text-sm px-4">
                   Selecione um colaborador para visualizar os pontos
@@ -1634,7 +1736,7 @@ export default function PontoPage() {
                         </TableRow>
                       </>
                     ) : (
-                      <TableRow>
+                                            <TableRow>
                         <TableCell
                           colSpan={dynamicColumns.length}
                           className="text-center py-8"

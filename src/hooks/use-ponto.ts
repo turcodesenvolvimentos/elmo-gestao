@@ -2,6 +2,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   exportPontoPDF,
   ExportPontoParams,
+  exportPontoResumoPDF,
+  ExportPontoResumoParams,
   savePontoToHistory,
   fetchPontoHistory,
   downloadPontoFromHistory,
@@ -38,6 +40,29 @@ export const useExportPontoPDF = () => {
     onError: (error) => {
       console.error("Erro ao exportar PDF:", error);
       toast.error("Erro ao exportar PDF");
+    },
+  });
+};
+
+// Hook para exportar PDF de resumo (totais por funcionario no periodo)
+export const useExportPontoResumoPDF = () => {
+  return useMutation<Blob, Error, ExportPontoResumoParams>({
+    mutationFn: exportPontoResumoPDF,
+    onSuccess: (blob, variables) => {
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `resumo-ponto-${variables.startDate}-${variables.endDate}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast.success("Resumo exportado com sucesso!");
+    },
+    onError: (error) => {
+      console.error("Erro ao exportar resumo:", error);
+      toast.error("Erro ao exportar resumo");
     },
   });
 };

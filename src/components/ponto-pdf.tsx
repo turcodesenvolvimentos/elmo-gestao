@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
   },
   tableHeader: {
     flexDirection: "row",
-    backgroundColor: "#16a34a",
+    backgroundColor: "#065F46",
     color: "#ffffff",
     paddingVertical: 4,
     paddingHorizontal: 0,
