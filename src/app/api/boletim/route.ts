@@ -68,14 +68,11 @@ interface Punch {
   location_out_address?: string | null;
 }
 
-/** Converte um YYYY-MM-DD em timestamp (ms) — meio-dia local, igual ao sync. */
 function dateToTimestamp(dateStr: string): number {
-  const d = new Date(dateStr);
-  d.setHours(12, 0, 0, 0);
-  return d.getTime();
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d, 12, 0, 0, 0).getTime();
 }
 
-/** Normaliza qualquer valor de data (string ISO, ms ou s) para ISO 8601. */
 function toIso(value: string | number | null | undefined): string | null {
   if (value === null || value === undefined || value === "") return null;
   if (typeof value === "string") return value;
@@ -332,6 +329,18 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Busca a position padrao "Aj. Carga e Desc." da empresa do boletim,
+    // usada como fallback quando um funcionario nao tem cargo vinculado
+    // (ex.: alguem removeu o vinculo). Assim o boletim sempre mostra
+    // "Aj. Carga e Desc." + o valor da empresa em vez de "Sem cargo" + R$ 0.
+    const { data: defaultPositionRow } = await supabaseAdmin
+      .from("positions")
+      .select("id, name, hour_value")
+      .eq("company_id", companyId)
+      .eq("name", "Aj. Carga e Desc.")
+      .maybeSingle();
+    const defaultPosition: PositionRow | null = defaultPositionRow ?? null;
+
     const scheduledDaysByEmployee = new Map<string, Set<string>>();
     for (const row of validEscalas) {
       const employeeUuid = row.employee_id;
@@ -488,7 +497,9 @@ export async function GET(request: NextRequest) {
       if (!scheduledDays || scheduledDays.size === 0) continue;
 
       const positionInfo = positionByEmployee.get(employeeUuid);
-      const position = positionInfo?.position ?? null;
+      // Se o funcionario nao tem cargo vinculado nesta empresa, usa a
+      // position padrao "Aj. Carga e Desc." da empresa como fallback.
+      const position = positionInfo?.position ?? defaultPosition;
       const department = positionInfo?.department ?? null;
 
       const employeePunches = punchesByEmployee.get(employee.solidesId) || [];
@@ -499,8 +510,16 @@ export async function GET(request: NextRequest) {
           new Date(a.date_in).getTime() - new Date(b.date_in).getTime()
       );
 
+      const CONTINUACAO_NOTURNA_MAX_HORAS = 2;
+
       let lastGroupByEmployee:
-        | { dateStr: string; hadNightShift: boolean }
+        | {
+            dateStr: string;
+            hadNightShift: boolean;
+            lastNightShiftOpen: boolean;
+            lastShiftEndAt: Date | null;
+            lastShiftEndedAfterMidnight: boolean;
+          }
         | undefined;
 
       sortedEmployeePunches.forEach((punch) => {
@@ -510,10 +529,18 @@ export async function GET(request: NextRequest) {
           toLocalDateKey(punch.date);
         if (!punchDateStr) return;
         const entryDate = punch.date_in ? new Date(punch.date_in) : undefined;
+        const exitDate = punch.date_out ? new Date(punch.date_out) : undefined;
         const entryHour = entryDate ? entryDate.getHours() : undefined;
         const isEarlyMorning = entryHour !== undefined ? entryHour < 12 : false;
         const isNightShiftEntry =
           entryHour !== undefined ? entryHour >= 18 : false;
+        const shiftCrossedMidnight = !!(
+          entryDate &&
+          exitDate &&
+          (entryDate.getFullYear() !== exitDate.getFullYear() ||
+            entryDate.getMonth() !== exitDate.getMonth() ||
+            entryDate.getDate() !== exitDate.getDate())
+        );
 
         const shouldAttachToPreviousDay =
           !!lastGroupByEmployee &&
@@ -528,9 +555,32 @@ export async function GET(request: NextRequest) {
             const diffDays =
               (currentDate.getTime() - lastDate.getTime()) /
               (1000 * 60 * 60 * 24);
-            return (
-              Math.round(diffDays) === 1 && lastGroupByEmployee!.hadNightShift
-            );
+            if (Math.round(diffDays) !== 1) return false;
+            if (!lastGroupByEmployee!.hadNightShift) return false;
+
+            // Caso 1: turno anterior ficou aberto (esqueceu de bater saida)
+            if (lastGroupByEmployee!.lastNightShiftOpen) return true;
+
+            // Caso 2: turno anterior fechou de madrugada (saida cruzou meia-noite)
+            // e o retorno foi em ate CONTINUACAO_NOTURNA_MAX_HORAS horas.
+            if (
+              lastGroupByEmployee!.lastShiftEndedAfterMidnight &&
+              lastGroupByEmployee!.lastShiftEndAt &&
+              entryDate
+            ) {
+              const diffHoras =
+                (entryDate.getTime() -
+                  lastGroupByEmployee!.lastShiftEndAt.getTime()) /
+                (1000 * 60 * 60);
+              if (
+                diffHoras >= 0 &&
+                diffHoras <= CONTINUACAO_NOTURNA_MAX_HORAS
+              ) {
+                return true;
+              }
+            }
+
+            return false;
           })();
 
         const workDate = shouldAttachToPreviousDay
@@ -542,12 +592,34 @@ export async function GET(request: NextRequest) {
         }
         punchesByWorkDate.get(workDate)!.push(punch);
 
+        const prev = lastGroupByEmployee;
+        const currentPunchIsNightShiftWithoutOut =
+          (isNightShiftEntry || shiftCrossedMidnight) && !punch.date_out;
+
+        let lastShiftEndAt: Date | null = null;
+        let lastShiftEndedAfterMidnight = false;
+        if (exitDate && shiftCrossedMidnight) {
+          lastShiftEndAt = exitDate;
+          lastShiftEndedAfterMidnight = true;
+        } else if (prev && prev.dateStr === workDate) {
+          lastShiftEndAt = prev.lastShiftEndAt;
+          lastShiftEndedAfterMidnight = prev.lastShiftEndedAfterMidnight;
+        }
+
         lastGroupByEmployee = {
           dateStr: workDate,
           hadNightShift:
-            (lastGroupByEmployee?.hadNightShift &&
-              lastGroupByEmployee.dateStr === workDate) ||
-            isNightShiftEntry,
+            (prev?.hadNightShift && prev.dateStr === workDate) ||
+            isNightShiftEntry ||
+            shiftCrossedMidnight,
+          lastNightShiftOpen:
+            currentPunchIsNightShiftWithoutOut ||
+            (!!prev &&
+              prev.dateStr === workDate &&
+              prev.lastNightShiftOpen &&
+              !isNightShiftEntry),
+          lastShiftEndAt,
+          lastShiftEndedAfterMidnight,
         };
       });
 

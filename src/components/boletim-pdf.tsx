@@ -363,9 +363,15 @@ const buildDisplayNameMap = (
 };
 
 const calculateTotals = (data: BoletimData[]) => {
-  const parseTime = (time: string): number => {
-    const [hours, minutes] = time.split(":").map(Number);
-    return hours + minutes / 60;
+  const parseTime = (time?: string | null): number => {
+    if (!time || time === "-" || time.trim() === "") return 0;
+    try {
+      const [hours, minutes] = time.split(":").map(Number);
+      if (isNaN(hours) || isNaN(minutes)) return 0;
+      return hours + minutes / 60;
+    } catch {
+      return 0;
+    }
   };
 
   const formatHours = (hours: number): string => {

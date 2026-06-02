@@ -7,6 +7,17 @@ import fs from "fs";
 import path from "path";
 import { supabaseAdmin } from "@/lib/db/client";
 
+
+function sanitizeForStoragePath(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase();
+}
+
 interface ValeAlimentacaoData {
   employeeName: string;
   date: string;
@@ -120,7 +131,7 @@ export async function POST(request: NextRequest) {
     const reportTypeLabel = reportType === "summary" ? "resumo" : "detalhado";
     const fileName = `relatorio-vale-alimentacao-${reportTypeLabel}-${
       employeeName
-        ? employeeName.replace(/\s+/g, "-").toLowerCase()
+        ? sanitizeForStoragePath(employeeName)
         : "geral"
     }-${startDate}-${endDate}-${timestamp}.pdf`;
     const storagePath = employeeId

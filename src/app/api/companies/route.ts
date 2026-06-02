@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { supabaseAdmin } from "@/lib/db/client";
 import { Permission } from "@/types/permissions";
 import { checkPermission } from "@/lib/auth/permissions";
+import { ensureDefaultPositionForCompany } from "@/lib/default-position";
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -81,6 +82,10 @@ export async function POST(request: NextRequest) {
 
       throw createError;
     }
+
+    // Cria automaticamente a função padrão "Aj. Carga e Desc." na empresa.
+    // Falha aqui nao quebra o cadastro da empresa — apenas loga.
+    await ensureDefaultPositionForCompany(supabaseAdmin, company.id);
 
     // Retornar empresa criada com contagem de funcionários (0 inicialmente)
     return NextResponse.json(

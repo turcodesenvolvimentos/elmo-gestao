@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/db/client";
+import { ensureDefaultPositionForCompany } from "@/lib/default-position";
 
 /**
  * POST /api/employees/[solidesId]/companies
@@ -94,13 +95,17 @@ export async function POST(
       );
     }
 
+    const resolvedPositionId =
+      positionId ||
+      (await ensureDefaultPositionForCompany(supabaseAdmin, companyId));
+
     // Criar vínculo
     const { data: newLink, error: insertError } = await supabaseAdmin
       .from("employee_companies")
       .insert({
         employee_id: localEmployee.id,
         company_id: companyId,
-        position_id: positionId || null,
+        position_id: resolvedPositionId || null,
       })
       .select()
       .single();

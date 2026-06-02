@@ -18,7 +18,7 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: 15,
-    borderBottom: "2px solid #333",
+    borderBottom: "2px solid #065F46",
     paddingBottom: 12,
   },
   headerTop: {
@@ -39,12 +39,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 16,
     fontWeight: "bold",
+    color: "#065F46",
     marginBottom: 0,
     marginTop: 0,
   },
   info: {
     fontSize: 8,
-    color: "#666",
+    color: "#4b5563",
     marginBottom: 2,
   },
   employeeInfoRow: {
@@ -53,25 +54,27 @@ const styles = StyleSheet.create({
   table: {
     width: "100%",
     marginTop: 15,
+    border: "1px solid #d1d5db",
+    borderRadius: 2,
   },
   tableHeader: {
     flexDirection: "row",
-    backgroundColor: "#f0f0f0",
-    borderBottom: "1px solid #ddd",
+    backgroundColor: "#065F46",
+    color: "#ffffff",
     paddingVertical: 6,
     paddingHorizontal: 4,
     fontWeight: "bold",
   },
   tableRow: {
     flexDirection: "row",
-    borderBottom: "0.5px solid #eee",
+    borderBottom: "0.5px solid #e5e7eb",
     paddingVertical: 5,
     paddingHorizontal: 4,
   },
   tableTotalRow: {
     flexDirection: "row",
-    backgroundColor: "#f9f9f9",
-    borderTop: "1.5px solid #333",
+    backgroundColor: "#e5e7eb",
+    borderTop: "1.5px solid #1f2937",
     paddingVertical: 6,
     paddingHorizontal: 4,
     fontWeight: "bold",

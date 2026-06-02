@@ -6,6 +6,16 @@ import fs from "fs";
 import path from "path";
 import { supabaseAdmin } from "@/lib/db/client";
 
+function sanitizeForStoragePath(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase();
+}
+
 interface BoletimData {
   employee_id: string;
   employee_name: string;
@@ -100,11 +110,11 @@ export async function POST(request: NextRequest) {
       pdfDocument as React.ReactElement<DocumentProps>
     );
 
-    // Criar nome do arquivo
+    // Criar nome do arquivo (sanitizado: sem acentos/cedilha)
     const timestamp = new Date().getTime();
-    const fileName = `boletim-${companyName
-      .replace(/\s+/g, "-")
-      .toLowerCase()}-${startDate}-${endDate}-${timestamp}.pdf`;
+    const fileName = `boletim-${sanitizeForStoragePath(
+      companyName,
+    )}-${startDate}-${endDate}-${timestamp}.pdf`;
     const storagePath = `${companyId}/${fileName}`;
 
     // Upload para Supabase Storage
@@ -130,17 +140,26 @@ export async function POST(request: NextRequest) {
       throw new Error("Erro ao gerar URL do PDF");
     }
 
-    // Calcular metadados
-    const parseTime = (time: string): number => {
-      const [hours, minutes] = time.split(":").map(Number);
-      return hours + minutes / 60;
+    // Calcular metadados — parseTime tolerante a strings vazias / "-"
+    const parseTime = (time?: string | null): number => {
+      if (!time || time === "-" || time.trim() === "") return 0;
+      try {
+        const [hours, minutes] = time.split(":").map(Number);
+        if (isNaN(hours) || isNaN(minutes)) return 0;
+        return hours + minutes / 60;
+      } catch {
+        return 0;
+      }
     };
 
     const totalHours = data.reduce(
       (sum, item) => sum + parseTime(item.total_hours),
       0
     );
-    const totalValue = data.reduce((sum, item) => sum + item.value, 0);
+    const totalValue = data.reduce(
+      (sum, item) => sum + (typeof item.value === "number" ? item.value : 0),
+      0,
+    );
     const uniqueEmployees = new Set(data.map((item) => item.employee_id));
 
     // Salvar registro no banco de dados
