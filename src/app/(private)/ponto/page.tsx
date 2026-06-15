@@ -405,10 +405,14 @@ export default function PontoPage() {
         lastNightShiftOpen: boolean;
         lastShiftEndAt: Date | null;
         lastShiftEndedAfterMidnight: boolean;
+        lastShiftEndedLateNight: boolean;
       }
     >();
 
     const CONTINUACAO_NOTURNA_MAX_HORAS = 2;
+    // Saida a partir desta hora (mesmo dia, antes da meia-noite) e considerada
+    // "tarde da noite": suficiente para colar o retorno da madrugada seguinte.
+    const HORA_SAIDA_NOTURNA_TARDE = 22;
 
     allPunchesRaw.forEach((punch: Punch) => {
       const employeeName =
@@ -452,9 +456,11 @@ export default function PontoPage() {
           if (lastGroup.lastNightShiftOpen) return true;
 
           // Caso 2: turno anterior fechou de madrugada (saida cruzou meia-noite)
-          // e o retorno foi em ate CONTINUACAO_NOTURNA_MAX_HORAS horas.
+          // OU fechou tarde da noite (>= HORA_SAIDA_NOTURNA_TARDE, antes da
+          // meia-noite) e o retorno foi em ate CONTINUACAO_NOTURNA_MAX_HORAS horas.
           if (
-            lastGroup.lastShiftEndedAfterMidnight &&
+            (lastGroup.lastShiftEndedAfterMidnight ||
+              lastGroup.lastShiftEndedLateNight) &&
             lastGroup.lastShiftEndAt &&
             entryDate
           ) {
@@ -538,12 +544,18 @@ export default function PontoPage() {
       // seja anexado a este dia. Caso contrario, herda do prev (mesmo key).
       let lastShiftEndAt: Date | null = null;
       let lastShiftEndedAfterMidnight = false;
+      let lastShiftEndedLateNight = false;
       if (exitDate && shiftCrossedMidnight) {
         lastShiftEndAt = exitDate;
         lastShiftEndedAfterMidnight = true;
+      } else if (exitDate && exitDate.getHours() >= HORA_SAIDA_NOTURNA_TARDE) {
+        // Saiu tarde da noite, mas antes da meia-noite (ex.: 23:30).
+        lastShiftEndAt = exitDate;
+        lastShiftEndedLateNight = true;
       } else if (prev && prev.key === key) {
         lastShiftEndAt = prev.lastShiftEndAt;
         lastShiftEndedAfterMidnight = prev.lastShiftEndedAfterMidnight;
+        lastShiftEndedLateNight = prev.lastShiftEndedLateNight;
       }
 
       lastGroupByEmployee.set(employeeName, {
@@ -561,6 +573,7 @@ export default function PontoPage() {
             !isNightShiftEntry),
         lastShiftEndAt,
         lastShiftEndedAfterMidnight,
+        lastShiftEndedLateNight,
       });
     });
 
