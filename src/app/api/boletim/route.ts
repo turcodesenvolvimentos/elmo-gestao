@@ -6,6 +6,10 @@ import { calcularHorasPorPeriodo, formatarHoras } from "@/lib/ponto-calculator";
 import { Permission } from "@/types/permissions";
 import { checkPermission } from "@/lib/auth/permissions";
 import type { BoletimData } from "@/services/boletim.service";
+import {
+  getCompanyNameFromRawAddresses,
+  NO_MAPPED_COMPANY_LABEL,
+} from "@/utils/company-mapping";
 
 const DAYS_OF_WEEK = [
   "Domingo",
@@ -630,9 +634,43 @@ export async function GET(request: NextRequest) {
       // (mesmo fora da escala). Dias com punches mas fora da escala viram
       // "Nao escalado" naquele dia especifico. Util para casos de hora extra
       // em dias que nao estavam previstos na escala do funcionario.
+      //
+      // POREM: se as batidas de um dia NAO escalado foram feitas em OUTRA
+      // empresa conhecida (pelo endereco GPS), esse dia pertence ao boletim
+      // daquela empresa e nao deve aparecer aqui. Sem isso, um funcionario
+      // que trabalha em outra empresa no periodo (ex.: Ourofertil 2) e tem
+      // apenas alguns dias de escala neste boletim apareceria como "Nao
+      // escalado" nos dias da outra empresa.
       const allDaysSet = new Set<string>(scheduledDays);
-      for (const workDate of punchesByWorkDate.keys()) {
-        if (workDate >= startDate && workDate <= endDate) {
+      for (const [workDate, dayPunches] of punchesByWorkDate.entries()) {
+        if (workDate < startDate || workDate > endDate) continue;
+
+        // Dias escalados nesta empresa sempre entram.
+        if (scheduledDays.has(workDate)) {
+          allDaysSet.add(workDate);
+          continue;
+        }
+
+        // Dia NAO escalado: decide pelo local das batidas.
+        let pertenceAEstaEmpresa = false;
+        let pertenceAOutraEmpresa = false;
+        for (const p of dayPunches) {
+          const empresaDoPunch = getCompanyNameFromRawAddresses(
+            p.location_in_address,
+            p.location_out_address,
+          );
+          if (empresaDoPunch === NO_MAPPED_COMPANY_LABEL) continue;
+          if (empresaDoPunch === companyName) {
+            pertenceAEstaEmpresa = true;
+          } else {
+            pertenceAOutraEmpresa = true;
+          }
+        }
+
+        // Inclui se as batidas sao desta empresa OU se nenhum endereco foi
+        // mapeado (hora extra nao planejada no proprio local / local
+        // desconhecido). Pula apenas quando pertencem a outra empresa.
+        if (pertenceAEstaEmpresa || !pertenceAOutraEmpresa) {
           allDaysSet.add(workDate);
         }
       }
