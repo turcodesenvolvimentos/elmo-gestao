@@ -2,6 +2,18 @@ import Holidays from "date-holidays";
 
 const hd = new Holidays("BR");
 
+// Tipos da lib date-holidays que representam folga de verdade. "observance"
+// (ex.: Dia dos Namorados, Dia das Maes) sao apenas datas comemorativas e
+// NAO devem contar como feriado.
+const TIPOS_FERIADO_VALIDOS = new Set(["public", "bank", "optional"]);
+
+function isRealLibHoliday(d: Date): boolean {
+  const res = hd.isHoliday(d);
+  if (!res) return false;
+  const arr = Array.isArray(res) ? res : [res];
+  return arr.some((h) => TIPOS_FERIADO_VALIDOS.has(h.type));
+}
+
 const INICIO_NOTURNO = 22;
 const FIM_NOTURNO = 5;
 
@@ -54,7 +66,7 @@ function isLibOrCustomHoliday(
   d: Date,
   customHolidayDates?: ReadonlySet<string>,
 ): boolean {
-  const fromLib = !!hd.isHoliday(d);
+  const fromLib = isRealLibHoliday(d);
   if (!customHolidayDates || customHolidayDates.size === 0) return fromLib;
   return fromLib || customHolidayDates.has(dateToYyyyMmDdLocal(d));
 }
