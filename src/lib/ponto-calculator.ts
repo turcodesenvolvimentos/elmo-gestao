@@ -164,6 +164,24 @@ export function calcularHorasPorPeriodo(
   const diaProximo = (diaReferencia + 1) % 7;
   const ehDia100 = ehDomingo || ehFeriado;
 
+  // PERFORMANCE: a checagem de feriado (lib date-holidays) e cara, entao nao
+  // pode rodar por minuto. Pre-computamos o inicio do dia de referencia e
+  // cacheamos por data se aquele dia e "100%" (feriado ou domingo).
+  const inicioDiaReferencia = new Date(
+    dataPonto.getFullYear(),
+    dataPonto.getMonth(),
+    dataPonto.getDate(),
+  ).getTime();
+  const dia100Cache = new Map<string, boolean>();
+  const minutoEhDia100 = (m: Date): boolean => {
+    const key = dateToYyyyMmDdLocal(m);
+    const cached = dia100Cache.get(key);
+    if (cached !== undefined) return cached;
+    const v = m.getDay() === 0 || isLibOrCustomHoliday(m, customHolidayDates);
+    dia100Cache.set(key, v);
+    return v;
+  };
+
   for (const minuto of minutosMarcados) {
     const hora = minuto.getHours();
     const tipo = isNoturno(hora) ? "noturna" : "diurna";
@@ -202,18 +220,21 @@ export function calcularHorasPorPeriodo(
       }
     }
 
-    if (ehSabado) {
-      const dataMinuto = new Date(
+    // Turno que comeca em dia util ou sabado e cruza a meia-noite entrando em
+    // um dia que e feriado ou domingo: tudo que cai nesse dia 100% e 100%.
+    // (Antes isso so tratava sabado->domingo; agora cobre dia util->feriado.)
+    {
+      const inicioDiaMinuto = new Date(
         minuto.getFullYear(),
         minuto.getMonth(),
         minuto.getDate(),
-      );
-      const dataPontoDate = new Date(
-        dataPonto.getFullYear(),
-        dataPonto.getMonth(),
-        dataPonto.getDate(),
-      );
-      if (dataMinuto.getTime() > dataPontoDate.getTime()) {
+      ).getTime();
+      // So checa feriado/domingo (e so chama a lib, via cache) quando o minuto
+      // ja passou para um dia posterior ao de referencia.
+      if (
+        inicioDiaMinuto > inicioDiaReferencia &&
+        minutoEhDia100(minuto)
+      ) {
         if (tipo === "diurna") {
           extra100Diurno += 1;
           horasDiurnasReais += 1;
@@ -262,11 +283,17 @@ export function calcularHorasPorPeriodo(
 
   if (diaSemana >= 1 && diaSemana <= 5 && !ehFeriado) {
     horasNoturnas = horasNoturnasReaisHoras * FATOR_NOTURNO;
-    const jornadaTotal = horasDiurnasReaisHoras + horasNoturnas;
+
+    // Exclui do calculo da jornada do dia util as horas que cruzaram para um
+    // dia 100% (feriado/domingo): elas sao 100% e nao contam para as 8h nem
+    // viram 50%. O horasTotal abaixo continua somando tudo (inclusive o 100%).
+    const diurnasUteis = horasDiurnasReaisHoras - extra100DiurnoHoras;
+    const noturnasUteisReais =
+      horasNoturnasReaisHoras - extra100Noturno / MINUTOS_POR_HORA;
+    const jornadaTotal = diurnasUteis + noturnasUteisReais * FATOR_NOTURNO;
     const cargaHorariaDiaria = 8;
 
-    const horasReaisTrabalhadas =
-      horasDiurnasReaisHoras + horasNoturnasReaisHoras;
+    const horasReaisTrabalhadas = diurnasUteis + noturnasUteisReais;
 
     if (jornadaTotal <= cargaHorariaDiaria) {
       horasNormaisHoras = jornadaTotal;
@@ -315,7 +342,10 @@ export function calcularHorasPorPeriodo(
     const cargaHorariaDiaria = 8;
 
     if (jornadaTotal < cargaHorariaDiaria) {
-      horasNormaisHoras = jornadaTotal;
+      // Em feriado/domingo, tudo trabalhado dentro do dia e 100% e NAO entra em
+      // Normal. Aqui mantemos apenas a parte normal apurada no loop (o trecho
+      // pos-meia-noite, ja em dia util, que ainda nao fechou as 8h).
+      horasNormaisHoras = horasNormais / MINUTOS_POR_HORA;
     } else {
       horasNormaisHoras = Math.max(
         0,
@@ -330,10 +360,21 @@ export function calcularHorasPorPeriodo(
     horasTotal = horasDiurnasReaisHoras + horasNoturnas;
   }
 
+  // Adicional noturno incide apenas sobre a hora NORMAL noturna: das horas
+  // noturnas reais descontamos as que ja sao extra 50% e as que sao 100%
+  // (feriado/domingo). A hora noturna 100% NAO recebe adicional noturno.
   let adicionalNoturno =
-    horasNoturnasReaisHoras +
-    horasFictas -
-    (extra50NoturnoReaisHoras + horasFictas);
+    horasNoturnasReaisHoras -
+    extra50NoturnoReaisHoras -
+    extra100Noturno / MINUTOS_POR_HORA;
+
+  // Em feriado/domingo que cruza a meia-noite e passa de 8h, parte do trecho
+  // pos-meia-noite vira extra 50% (apurada em horas com fator noturno). Como o
+  // adicional noturno cobre SO a hora normal noturna, ele nao pode ser maior
+  // que as horas normais apuradas (que, nesse cenario, sao todas noturnas).
+  if ((ehDomingo || ehFeriado) && adicionalNoturno > horasNormaisHoras) {
+    adicionalNoturno = horasNormaisHoras;
+  }
 
   if (ehDomingo || ehFeriado) {
     if (extra100NoturnoHoras + extra100DiurnoHoras >= 8) {
@@ -358,7 +399,8 @@ export function calcularHorasPorPeriodo(
     diaSemanaSaida >= 1 && diaSemanaSaida <= 5 && !ehFeriadoSaida;
 
   if (entradaEhDomingoOuFeriado && saidaEhDiaUtil) {
-    const extra50Total = horasTotal - 8;
+    // Protege contra jornada abaixo de 8h: nao pode existir extra negativa.
+    const extra50Total = Math.max(0, horasTotal - 8);
 
     const horaSaidaFinal = saidaFinal.getHours();
 
