@@ -52,6 +52,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useCompanies } from "@/hooks/use-companies";
+import { usePositions } from "@/hooks/use-positions";
 import { useQueryClient } from "@tanstack/react-query";
 import { fetchBoletim } from "@/services/boletim.service";
 import {
@@ -160,6 +161,14 @@ export default function BoletimPage() {
   const companies = useMemo(
     () => companiesResponse?.companies || [],
     [companiesResponse]
+  );
+
+  // Cargos (funções) da empresa selecionada, cada um com seu valor-hora.
+  // Usado no modal de edição para trocar a função de um dia e recalcular o valor.
+  const { data: positionsResponse } = usePositions(selectedCompany || "");
+  const companyPositions = useMemo(
+    () => positionsResponse?.positions || [],
+    [positionsResponse]
   );
 
   const queryClient = useQueryClient();
@@ -468,6 +477,71 @@ export default function BoletimPage() {
         },
       }
     );
+  };
+
+  // Recalcula o valor de um dia a partir das horas do formulário e do
+  // valor-hora da função selecionada. Espelha exatamente o cálculo feito no
+  // backend em /api/boletim (valorNormal + adicional noturno + 50% + 100%).
+  const ADICIONAL_NOTURNO_FATOR = 0.142857;
+  // Adicional noturno de 20% aplicado apenas nas horas extras noturnas, de
+  // forma multiplicativa sobre a hora extra (50% -> 1,5×1,20=1,80;
+  // 100% -> 2,0×1,20=2,40).
+  const ADICIONAL_NOTURNO_EXTRA = 0.2;
+
+  const parseHoursToDecimal = (time?: string): number => {
+    if (!time || time === "-") return 0;
+    const [h, m] = time.split(":").map(Number);
+    if (Number.isNaN(h)) return 0;
+    return h + (Number.isNaN(m) ? 0 : m) / 60;
+  };
+
+  const computeDayValue = (
+    form: typeof editFormData,
+    hourValue: number
+  ): number => {
+    const normal = parseHoursToDecimal(form.normal_hours);
+    const noturno = parseHoursToDecimal(form.night_additional);
+    const extra50Diurno = parseHoursToDecimal(form.extra_50_day);
+    const extra50Noturno = parseHoursToDecimal(form.extra_50_night);
+    const extra100Diurno = parseHoursToDecimal(form.extra_100_day);
+    const extra100Noturno = parseHoursToDecimal(form.extra_100_night);
+    return (
+      normal * hourValue +
+      noturno * hourValue * ADICIONAL_NOTURNO_FATOR +
+      extra50Diurno * hourValue * 1.5 +
+      extra50Noturno * hourValue * 1.5 * (1 + ADICIONAL_NOTURNO_EXTRA) +
+      extra100Diurno * hourValue * 2 +
+      extra100Noturno * hourValue * 2 * (1 + ADICIONAL_NOTURNO_EXTRA)
+    );
+  };
+
+  // Campos que afetam o valor do dia: ao alterá-los, recalcula o valor usando
+  // o valor-hora da função selecionada (se ela existir na lista de cargos).
+  const VALUE_AFFECTING_FIELDS = new Set<keyof typeof editFormData>([
+    "position",
+    "normal_hours",
+    "night_additional",
+    "extra_50_day",
+    "extra_50_night",
+    "extra_100_day",
+    "extra_100_night",
+  ]);
+
+  const handleEditFieldChange = (
+    field: keyof typeof editFormData,
+    value: string
+  ) => {
+    setEditFormData((prev) => {
+      const updated = { ...prev, [field]: value };
+      if (VALUE_AFFECTING_FIELDS.has(field)) {
+        const posName = field === "position" ? value : updated.position;
+        const pos = companyPositions.find((p) => p.name === posName);
+        if (pos) {
+          updated.value = computeDayValue(updated, pos.hour_value).toFixed(2);
+        }
+      }
+      return updated;
+    });
   };
 
   // Funções de edição
@@ -1301,18 +1375,37 @@ export default function BoletimPage() {
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4 py-4">
         <div>
           <Label htmlFor="edit-employee-position">Função</Label>
-          <Input
-            id="edit-employee-position"
-            type="text"
+          <Select
             value={editFormData.position}
-            onChange={(e) =>
-              setEditFormData({
-                ...editFormData,
-                position: e.target.value,
-              })
+            onValueChange={(value) =>
+              handleEditFieldChange("position", value)
             }
-            placeholder="Digite a função"
-          />
+          >
+            <SelectTrigger id="edit-employee-position">
+              <SelectValue placeholder="Selecione a função" />
+            </SelectTrigger>
+            <SelectContent>
+              {companyPositions.map((p) => (
+                <SelectItem key={p.id} value={p.name}>
+                  {p.name}
+                  {typeof p.hour_value === "number"
+                    ? ` — ${formatCurrency(p.hour_value)}/h`
+                    : ""}
+                </SelectItem>
+              ))}
+              {editFormData.position &&
+                !companyPositions.some(
+                  (p) => p.name === editFormData.position
+                ) && (
+                  <SelectItem value={editFormData.position}>
+                    {editFormData.position}
+                  </SelectItem>
+                )}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground mt-1">
+            Trocar a função recalcula o valor do dia automaticamente.
+          </p>
         </div>
 
         <div>
@@ -1401,10 +1494,7 @@ export default function BoletimPage() {
             type="time"
             value={editFormData.normal_hours}
             onChange={(e) =>
-              setEditFormData({
-                ...editFormData,
-                normal_hours: e.target.value,
-              })
+              handleEditFieldChange("normal_hours", e.target.value)
             }
           />
         </div>
@@ -1416,10 +1506,7 @@ export default function BoletimPage() {
             type="time"
             value={editFormData.night_additional}
             onChange={(e) =>
-              setEditFormData({
-                ...editFormData,
-                night_additional: e.target.value,
-              })
+              handleEditFieldChange("night_additional", e.target.value)
             }
           />
         </div>
@@ -1431,10 +1518,7 @@ export default function BoletimPage() {
             type="time"
             value={editFormData.extra_50_day}
             onChange={(e) =>
-              setEditFormData({
-                ...editFormData,
-                extra_50_day: e.target.value,
-              })
+              handleEditFieldChange("extra_50_day", e.target.value)
             }
           />
         </div>
@@ -1446,10 +1530,7 @@ export default function BoletimPage() {
             type="time"
             value={editFormData.extra_50_night}
             onChange={(e) =>
-              setEditFormData({
-                ...editFormData,
-                extra_50_night: e.target.value,
-              })
+              handleEditFieldChange("extra_50_night", e.target.value)
             }
           />
         </div>
@@ -1461,10 +1542,7 @@ export default function BoletimPage() {
             type="time"
             value={editFormData.extra_100_day}
             onChange={(e) =>
-              setEditFormData({
-                ...editFormData,
-                extra_100_day: e.target.value,
-              })
+              handleEditFieldChange("extra_100_day", e.target.value)
             }
           />
         </div>
@@ -1476,14 +1554,10 @@ export default function BoletimPage() {
             type="time"
             value={editFormData.extra_100_night}
             onChange={(e) =>
-              setEditFormData({
-                ...editFormData,
-                extra_100_night: e.target.value,
-              })
+              handleEditFieldChange("extra_100_night", e.target.value)
             }
           />
         </div>
-
         <div className="md:col-span-3">
           <Label htmlFor="edit-value">Valor (R$)</Label>
           <Input

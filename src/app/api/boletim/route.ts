@@ -740,19 +740,31 @@ export async function GET(request: NextRequest) {
                 extra100Noturno: 0,
               };
 
+        // Adicional noturno de 20% aplicado SOMENTE nas horas extras noturnas,
+        // de forma multiplicativa: primeiro a hora extra, depois +20% sobre o
+        // resultado (ordem indiferente, é comutativo):
+        //   extra 50% noturna  -> 1,5 × 1,20 = 1,80
+        //   extra 100% noturna -> 2,0 × 1,20 = 2,40
+        // As horas extras diurnas mantêm 1,5 e 2,0 normalmente.
+        const ADICIONAL_NOTURNO_EXTRA = 0.2;
+
         const valorNormal = horasCalculadas.horasNormais * hourValue;
         const valorAdicionalNoturno =
           horasCalculadas.adicionalNoturno *
           hourValue *
           ADICIONAL_NOTURNO_FATOR;
         const valorExtra50 =
-          (horasCalculadas.extra50Diurno + horasCalculadas.extra50Noturno) *
-          hourValue *
-          1.5;
+          horasCalculadas.extra50Diurno * hourValue * 1.5 +
+          horasCalculadas.extra50Noturno *
+            hourValue *
+            1.5 *
+            (1 + ADICIONAL_NOTURNO_EXTRA);
         const valorExtra100 =
-          (horasCalculadas.extra100Diurno + horasCalculadas.extra100Noturno) *
-          hourValue *
-          2;
+          horasCalculadas.extra100Diurno * hourValue * 2 +
+          horasCalculadas.extra100Noturno *
+            hourValue *
+            2 *
+            (1 + ADICIONAL_NOTURNO_EXTRA);
 
         const valorTotal =
           valorNormal + valorAdicionalNoturno + valorExtra50 + valorExtra100;
