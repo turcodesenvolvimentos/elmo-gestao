@@ -628,7 +628,9 @@ export async function GET(request: NextRequest) {
       });
 
       const hourValue = position?.hour_value || 0;
-      const ADICIONAL_NOTURNO_FATOR = 0.142857;
+      // Adicional noturno de 20% sobre as horas NORMAIS noturnas (a hora normal
+      // ja foi paga em "Normal"; aqui entra so o acrescimo de 20%).
+      const ADICIONAL_NOTURNO_NORMAL = 0.2;
 
       // Inclui na iteracao tanto os dias da escala quanto dias com punches
       // (mesmo fora da escala). Dias com punches mas fora da escala viram
@@ -752,7 +754,7 @@ export async function GET(request: NextRequest) {
         const valorAdicionalNoturno =
           horasCalculadas.adicionalNoturno *
           hourValue *
-          ADICIONAL_NOTURNO_FATOR;
+          ADICIONAL_NOTURNO_NORMAL;
         const valorExtra50 =
           horasCalculadas.extra50Diurno * hourValue * 1.5 +
           horasCalculadas.extra50Noturno *

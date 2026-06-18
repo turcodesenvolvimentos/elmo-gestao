@@ -482,9 +482,11 @@ export default function BoletimPage() {
   // Recalcula o valor de um dia a partir das horas do formulário e do
   // valor-hora da função selecionada. Espelha exatamente o cálculo feito no
   // backend em /api/boletim (valorNormal + adicional noturno + 50% + 100%).
-  const ADICIONAL_NOTURNO_FATOR = 0.142857;
-  // Adicional noturno de 20% aplicado apenas nas horas extras noturnas, de
-  // forma multiplicativa sobre a hora extra (50% -> 1,5×1,20=1,80;
+  // Adicional noturno de 20% sobre as horas NORMAIS noturnas (a hora normal
+  // ja foi paga em "Normal"; aqui entra so o acrescimo de 20%).
+  const ADICIONAL_NOTURNO_NORMAL = 0.2;
+  // Adicional noturno de 20% aplicado nas horas extras noturnas, de forma
+  // multiplicativa sobre a hora extra (50% -> 1,5×1,20=1,80;
   // 100% -> 2,0×1,20=2,40).
   const ADICIONAL_NOTURNO_EXTRA = 0.2;
 
@@ -507,7 +509,7 @@ export default function BoletimPage() {
     const extra100Noturno = parseHoursToDecimal(form.extra_100_night);
     return (
       normal * hourValue +
-      noturno * hourValue * ADICIONAL_NOTURNO_FATOR +
+      noturno * hourValue * ADICIONAL_NOTURNO_NORMAL +
       extra50Diurno * hourValue * 1.5 +
       extra50Noturno * hourValue * 1.5 * (1 + ADICIONAL_NOTURNO_EXTRA) +
       extra100Diurno * hourValue * 2 +
@@ -1373,7 +1375,7 @@ export default function BoletimPage() {
       </DialogHeader>
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4 py-4">
-        <div>
+        <div className="col-span-2 md:col-span-3 min-w-0">
           <Label htmlFor="edit-employee-position">Função</Label>
           <Select
             value={editFormData.position}
@@ -1381,7 +1383,7 @@ export default function BoletimPage() {
               handleEditFieldChange("position", value)
             }
           >
-            <SelectTrigger id="edit-employee-position">
+            <SelectTrigger id="edit-employee-position" className="w-full">
               <SelectValue placeholder="Selecione a função" />
             </SelectTrigger>
             <SelectContent>
