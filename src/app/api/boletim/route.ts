@@ -116,7 +116,11 @@ async function fetchPunchesFromSolides(
   const PAGE_SIZE = 1000;
   const collected: SolidesPunchRaw[] = [];
 
-  let page = 0;
+  // A API do Solides e 1-indexada (mesma convencao do employees/route.ts).
+  // Comecar em 0 fazia a pagina 1 ser buscada duas vezes (duplicando batidas)
+  // e a ultima pagina nunca ser buscada (perdendo as batidas mais antigas do
+  // periodo, que apareciam como "falta").
+  let page = 1;
   let hasMore = true;
 
   while (hasMore) {
@@ -138,7 +142,7 @@ async function fetchPunchesFromSolides(
       hasMore =
         content.length > 0 &&
         !data?.last &&
-        page < (data?.totalPages ?? Infinity);
+        page <= (data?.totalPages ?? Infinity);
     } catch (err: unknown) {
       const status =
         typeof err === "object" && err !== null && "status" in err
@@ -153,7 +157,24 @@ async function fetchPunchesFromSolides(
     }
   }
 
-  return collected;
+  // Deduplica registros repetidos. A paginacao da API do Solides pode devolver
+  // o mesmo ponto em mais de uma pagina quando o resultado passa de uma pagina
+  // (ex.: periodos longos, que buscam o Solides inteiro). Sem isso, cada batida
+  // entraria mais de uma vez e os totais do boletim ficariam multiplicados.
+  // Chave: o `id` do ponto quando existe; senao, uma chave composta estavel.
+  const seen = new Set<string>();
+  const deduped: SolidesPunchRaw[] = [];
+  for (const raw of collected) {
+    const key =
+      raw.id != null
+        ? `id:${raw.id}`
+        : `c:${raw.employee?.id ?? ""}|${raw.dateIn ?? ""}|${raw.dateOut ?? ""}|${raw.date ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(raw);
+  }
+
+  return deduped;
 }
 
 export async function GET(request: NextRequest) {
