@@ -222,6 +222,7 @@ export async function GET(request: NextRequest) {
       .eq("company_id", companyId);
 
     const shiftIds = (companyShifts || []).map((s: { id: string }) => s.id);
+    const shiftIdSet = new Set<string>(shiftIds);
 
     const { data: escalasRows, error: escalasError } =
       shiftIds.length === 0
@@ -436,18 +437,53 @@ export async function GET(request: NextRequest) {
 
     const solidesIdsWithPunches = Array.from(punchesByEmployee.keys());
 
+    // Dias em que cada funcionario esta escalado em OUTRA empresa (shift que
+    // NAO pertence a esta empresa). Usado para excluir do boletim os dias nao
+    // escalados aqui que, na verdade, pertencem a escala de outra empresa —
+    // sem depender do endereco GPS (que so funciona se o endereco estiver
+    // mapeado e identico em company-mapping.ts).
+    const otherCompanyScheduledDaysByEmployee = new Map<string, Set<string>>();
+
     if (solidesIdsWithPunches.length > 0) {
       const { data: allEscalasInPeriod } = await supabaseAdmin
         .from("escalas")
-        .select("employee_id")
+        .select("employee_id, start_date, end_date, shift_id")
         .lte("start_date", endDate)
         .or(`end_date.is.null,end_date.gte.${startDate}`);
 
+      type AllEscalaRow = {
+        employee_id: string;
+        start_date: string;
+        end_date: string | null;
+        shift_id: string;
+      };
+
       const scheduledEmployeeUuids = new Set<string>(
-        (allEscalasInPeriod || []).map(
-          (e: { employee_id: string }) => e.employee_id
+        ((allEscalasInPeriod || []) as AllEscalaRow[]).map(
+          (e) => e.employee_id
         )
       );
+
+      for (const row of (allEscalasInPeriod || []) as AllEscalaRow[]) {
+        // So interessam escalas de OUTRAS empresas (shift fora desta empresa).
+        if (shiftIdSet.has(row.shift_id)) continue;
+
+        let cursor = row.start_date > startDate ? row.start_date : startDate;
+        const escalaEnd = row.end_date ?? endDate;
+        const limit = escalaEnd < endDate ? escalaEnd : endDate;
+
+        if (!otherCompanyScheduledDaysByEmployee.has(row.employee_id)) {
+          otherCompanyScheduledDaysByEmployee.set(
+            row.employee_id,
+            new Set<string>()
+          );
+        }
+        const set = otherCompanyScheduledDaysByEmployee.get(row.employee_id)!;
+        while (cursor <= limit) {
+          set.add(cursor);
+          cursor = getNextDate(cursor);
+        }
+      }
 
       const { data: employeesWithPunches } = await supabaseAdmin
         .from("employees")
@@ -515,6 +551,10 @@ export async function GET(request: NextRequest) {
       );
 
       const CONTINUACAO_NOTURNA_MAX_HORAS = 2;
+      // Saida a partir desta hora (mesmo dia, antes da meia-noite) e considerada
+      // "tarde da noite": suficiente para colar o retorno da madrugada seguinte
+      // (mesma regra da pagina de Ponto).
+      const HORA_SAIDA_NOTURNA_TARDE = 22;
 
       let lastGroupByEmployee:
         | {
@@ -523,6 +563,7 @@ export async function GET(request: NextRequest) {
             lastNightShiftOpen: boolean;
             lastShiftEndAt: Date | null;
             lastShiftEndedAfterMidnight: boolean;
+            lastShiftEndedLateNight: boolean;
           }
         | undefined;
 
@@ -566,9 +607,12 @@ export async function GET(request: NextRequest) {
             if (lastGroupByEmployee!.lastNightShiftOpen) return true;
 
             // Caso 2: turno anterior fechou de madrugada (saida cruzou meia-noite)
-            // e o retorno foi em ate CONTINUACAO_NOTURNA_MAX_HORAS horas.
+            // OU fechou tarde da noite (>= HORA_SAIDA_NOTURNA_TARDE, antes da
+            // meia-noite) e o retorno foi em ate CONTINUACAO_NOTURNA_MAX_HORAS
+            // horas (mesma regra da pagina de Ponto).
             if (
-              lastGroupByEmployee!.lastShiftEndedAfterMidnight &&
+              (lastGroupByEmployee!.lastShiftEndedAfterMidnight ||
+                lastGroupByEmployee!.lastShiftEndedLateNight) &&
               lastGroupByEmployee!.lastShiftEndAt &&
               entryDate
             ) {
@@ -602,12 +646,18 @@ export async function GET(request: NextRequest) {
 
         let lastShiftEndAt: Date | null = null;
         let lastShiftEndedAfterMidnight = false;
+        let lastShiftEndedLateNight = false;
         if (exitDate && shiftCrossedMidnight) {
           lastShiftEndAt = exitDate;
           lastShiftEndedAfterMidnight = true;
+        } else if (exitDate && exitDate.getHours() >= HORA_SAIDA_NOTURNA_TARDE) {
+          // Saiu tarde da noite, mas antes da meia-noite (ex.: 23:30).
+          lastShiftEndAt = exitDate;
+          lastShiftEndedLateNight = true;
         } else if (prev && prev.dateStr === workDate) {
           lastShiftEndAt = prev.lastShiftEndAt;
           lastShiftEndedAfterMidnight = prev.lastShiftEndedAfterMidnight;
+          lastShiftEndedLateNight = prev.lastShiftEndedLateNight;
         }
 
         lastGroupByEmployee = {
@@ -624,8 +674,88 @@ export async function GET(request: NextRequest) {
               !isNightShiftEntry),
           lastShiftEndAt,
           lastShiftEndedAfterMidnight,
+          lastShiftEndedLateNight,
         };
       });
+
+      // Segundo passe (mesma logica da pagina de Ponto): realoca batidas de
+      // madrugada para o turno noturno do dia anterior, cobrindo casos que o
+      // agrupamento sequencial acima nao pegou.
+      const sortedWorkDates = Array.from(punchesByWorkDate.keys()).sort((a, b) =>
+        a.localeCompare(b)
+      );
+      for (let i = 1; i < sortedWorkDates.length; i += 1) {
+        const prevDate = sortedWorkDates[i - 1];
+        const currDate = sortedWorkDates[i];
+        const prevPunches = punchesByWorkDate.get(prevDate);
+        const currPunches = punchesByWorkDate.get(currDate);
+        if (!prevPunches || !currPunches) continue;
+
+        // "Ultimo turno noturno" do dia anterior: entrada >= 18h OU cruzou
+        // a meia-noite.
+        const lastNightPunch = [...prevPunches].reverse().find((p) => {
+          const inD = p.date_in ? new Date(p.date_in) : null;
+          if (inD && inD.getHours() >= 18) return true;
+          const outD = p.date_out ? new Date(p.date_out) : null;
+          if (
+            inD &&
+            outD &&
+            (inD.getFullYear() !== outD.getFullYear() ||
+              inD.getMonth() !== outD.getMonth() ||
+              inD.getDate() !== outD.getDate())
+          ) {
+            return true;
+          }
+          return false;
+        });
+        if (!lastNightPunch) continue;
+
+        const lastPunchIn = lastNightPunch.date_in
+          ? new Date(lastNightPunch.date_in)
+          : null;
+        const lastPunchOut = lastNightPunch.date_out
+          ? new Date(lastNightPunch.date_out)
+          : null;
+        const lastShiftCrossedMidnight = !!(
+          lastPunchIn &&
+          lastPunchOut &&
+          (lastPunchIn.getFullYear() !== lastPunchOut.getFullYear() ||
+            lastPunchIn.getMonth() !== lastPunchOut.getMonth() ||
+            lastPunchIn.getDate() !== lastPunchOut.getDate())
+        );
+
+        const punchesToMove = currPunches.filter((p) => {
+          const punchDate =
+            toLocalDateKey(p.date_in) ?? toLocalDateKey(p.date_out);
+          if (punchDate !== currDate) return false;
+          const inD = p.date_in ? new Date(p.date_in) : null;
+          if (!inD || inD.getHours() >= 12) return false;
+
+          // Caso 1: turno anterior ficou aberto (sem saida) -> realocar.
+          if (!lastPunchOut) return true;
+
+          // Caso 2: turno anterior fechou de madrugada e o retorno aconteceu
+          // em ate 2h da saida -> continuacao da mesma jornada.
+          if (lastShiftCrossedMidnight) {
+            const diffHoras =
+              (inD.getTime() - lastPunchOut.getTime()) / (1000 * 60 * 60);
+            if (diffHoras >= 0 && diffHoras <= 2) return true;
+          }
+          return false;
+        });
+
+        if (punchesToMove.length === 0) continue;
+
+        prevPunches.push(...punchesToMove);
+        const remaining = currPunches.filter(
+          (p) => !punchesToMove.includes(p)
+        );
+        if (remaining.length === 0) {
+          punchesByWorkDate.delete(currDate);
+        } else {
+          punchesByWorkDate.set(currDate, remaining);
+        }
+      }
 
       const hourValue = position?.hour_value || 0;
       // Adicional noturno de 20% sobre as horas NORMAIS noturnas (a hora normal
@@ -669,10 +799,23 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        // Inclui se as batidas sao desta empresa OU se nenhum endereco foi
-        // mapeado (hora extra nao planejada no proprio local / local
-        // desconhecido). Pula apenas quando pertencem a outra empresa.
-        if (pertenceAEstaEmpresa || !pertenceAOutraEmpresa) {
+        // O funcionario esta escalado em OUTRA empresa neste dia? Se sim, o dia
+        // pertence aquela empresa, mesmo que o endereco GPS nao tenha sido
+        // mapeado. Isso evita que dias trabalhados em outra empresa vazem aqui
+        // como "Nao escalado" (caso Fecoagro/Natrio).
+        const scheduledElsewhereThisDay =
+          otherCompanyScheduledDaysByEmployee
+            .get(employeeUuid)
+            ?.has(workDate) ?? false;
+
+        // Inclui o dia quando:
+        //  - as batidas sao comprovadamente desta empresa (hora extra aqui), OU
+        //  - nao ha indicio de que pertenca a outra empresa: nem GPS de outra
+        //    empresa, nem escala vigente em outra empresa nesse dia.
+        if (
+          pertenceAEstaEmpresa ||
+          (!pertenceAOutraEmpresa && !scheduledElsewhereThisDay)
+        ) {
           allDaysSet.add(workDate);
         }
       }
@@ -742,12 +885,6 @@ export async function GET(request: NextRequest) {
                 extra100Noturno: 0,
               };
 
-        // Adicional noturno de 20% aplicado SOMENTE nas horas extras noturnas,
-        // de forma multiplicativa: primeiro a hora extra, depois +20% sobre o
-        // resultado (ordem indiferente, é comutativo):
-        //   extra 50% noturna  -> 1,5 × 1,20 = 1,80
-        //   extra 100% noturna -> 2,0 × 1,20 = 2,40
-        // As horas extras diurnas mantêm 1,5 e 2,0 normalmente.
         const ADICIONAL_NOTURNO_EXTRA = 0.2;
 
         const valorNormal = horasCalculadas.horasNormais * hourValue;
