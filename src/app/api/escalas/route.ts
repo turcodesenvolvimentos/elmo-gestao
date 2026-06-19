@@ -78,6 +78,33 @@ export async function GET(request: NextRequest) {
     }
 
     const list = escalas || [];
+
+    // Enriquecer com cargo (position) de cada funcionário na empresa do shift
+    if (list.length > 0) {
+      const employeeIds = [...new Set(list.filter((e: any) => e.employee_id).map((e: any) => e.employee_id))];
+      const companyIds = [...new Set(list.filter((e: any) => e.shift?.company_id).map((e: any) => e.shift.company_id))];
+
+      if (employeeIds.length > 0 && companyIds.length > 0) {
+        const { data: empCompanies } = await supabaseAdmin
+          .from("employee_companies")
+          .select("employee_id, company_id, position:positions(id, name)")
+          .in("employee_id", employeeIds)
+          .in("company_id", companyIds);
+
+        // Mapa: "employee_id|company_id" -> position_name
+        const positionMap = new Map<string, string | null>();
+        (empCompanies || []).forEach((ec: any) => {
+          positionMap.set(`${ec.employee_id}|${ec.company_id}`, ec.position?.name ?? null);
+        });
+
+        list.forEach((e: any) => {
+          if (e.employee && e.shift?.company_id) {
+            e.employee.position_name = positionMap.get(`${e.employee_id}|${e.shift.company_id}`) ?? null;
+          }
+        });
+      }
+    }
+
     return NextResponse.json({
       escalas: list,
       total: list.length,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -31,7 +31,23 @@ import {
   Copy,
   ChevronDown,
   Pencil,
+  Check,
+  ChevronsUpDown,
 } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -52,6 +68,7 @@ import {
 import { toast } from "sonner";
 import Link from "next/link";
 import { useCompanies, useCompanyEmployees } from "@/hooks/use-companies";
+import { useEmployees } from "@/hooks/use-employees";
 import { useShifts } from "@/hooks/use-shifts";
 import {
   useBatchCreateEscalas,
@@ -81,6 +98,7 @@ interface EscalaAgrupada {
     nome: string;
     escalaId: string;
     employeeId: string;
+    cargo: string | null;
   }[];
 }
 
@@ -90,6 +108,20 @@ function formatDateLocal(dateString: string): string {
   return `${day}/${month}/${year}`;
 }
 
+// Converte nome para Title Case (ex: "SAMUEL MERCI" → "Samuel Merci")
+function toTitleCase(name: string): string {
+  const minusculas = new Set(["de", "da", "do", "das", "dos", "e"]);
+  return name
+    .toLowerCase()
+    .split(" ")
+    .map((word, i) =>
+      i === 0 || !minusculas.has(word)
+        ? word.charAt(0).toUpperCase() + word.slice(1)
+        : word
+    )
+    .join(" ");
+}
+
 // Função para formatar hora (hh:mm)
 function formatTime(time: string): string {
   return time.slice(0, 5);
@@ -97,7 +129,10 @@ function formatTime(time: string): string {
 
 export default function EscalaPage() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [filterEmployeeCompany, setFilterEmployeeCompany] = useState(""); // filtro de empresas por funcionário
+  const [openCompanyEmployeeFilter, setOpenCompanyEmployeeFilter] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
+  const [isAvailableDialogOpen, setIsAvailableDialogOpen] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<string>>(
     new Set()
@@ -112,7 +147,10 @@ export default function EscalaPage() {
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [viewCompanyId, setViewCompanyId] = useState<string | null>(null);
   const [filterDate, setFilterDate] = useState(""); // filtro único
+  const [filterEmployeeName, setFilterEmployeeName] = useState(""); // filtro por nome
+  const [openEmployeeFilter, setOpenEmployeeFilter] = useState(false);
   const [editingGroup, setEditingGroup] = useState<EscalaAgrupada | null>(null);
+  const viewDialogContentRef = useRef<HTMLDivElement>(null);
 
   // Hooks
   const { data: companiesData } = useCompanies();
@@ -126,6 +164,8 @@ export default function EscalaPage() {
   const batchCreateEscalasMutation = useBatchCreateEscalas();
   const deleteEscalaMutation = useDeleteEscala();
   const { data: escalasData, isLoading: escalasLoading } = useEscalas();
+  const { data: allEmployeesData, isLoading: allEmployeesLoading } =
+    useEmployees({ page: 1, size: 1000, includeFired: false });
 
   const companies = useMemo(
     () => companiesData?.companies || [],
@@ -135,6 +175,18 @@ export default function EscalaPage() {
   const companyShifts = shiftsData?.shifts || [];
   const allShifts = allShiftsData?.shifts || [];
   const escalas = escalasData?.escalas || [];
+
+  // Nomes únicos dos funcionários da empresa sendo visualizada (para o filtro)
+  const employeeNamesForFilter = useMemo(() => {
+    if (!viewCompanyId) return [];
+    const names = new Set<string>();
+    escalas.forEach((e: any) => {
+      if (e.shift?.company_id === viewCompanyId && e.employee?.name) {
+        names.add(toTitleCase(e.employee.name));
+      }
+    });
+    return [...names].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [escalas, viewCompanyId]);
 
  
   const escalasBadgeByCompanyId = useMemo(() => {
@@ -161,12 +213,64 @@ export default function EscalaPage() {
     }, {} as Record<string, { escalas: number; funcionarios: number }>);
   }, [escalas]);
 
-  // Filtrar empresas por termo de busca
+  // Funcionários ativos que hoje NÃO estão escalados em nenhuma empresa (ordem alfabética)
+  const funcionariosDisponiveis = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    // solides_id de todos que têm escala vigente hoje (em qualquer empresa)
+    const escaladosHoje = new Set<number>();
+    escalas.forEach((e: any) => {
+      const starts = e.start_date <= today;
+      const open = !e.end_date || e.end_date >= today;
+      if (starts && open && e.employee?.solides_id != null) {
+        escaladosHoje.add(e.employee.solides_id);
+      }
+    });
+
+    const ativos = allEmployeesData?.content ?? [];
+    return ativos
+      .filter((emp: any) => !emp.fired && !escaladosHoje.has(emp.id))
+      .map((emp: any) => formatEmployeeName(emp.name))
+      .sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [escalas, allEmployeesData]);
+
+  // Nomes únicos de todos os funcionários já escalados (para o filtro global de empresas)
+  const allEmployeeNamesForFilter = useMemo(() => {
+    const names = new Set<string>();
+    escalas.forEach((e: any) => {
+      if (e.employee?.name) names.add(toTitleCase(e.employee.name));
+    });
+    return [...names].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [escalas]);
+
+  // Mapa: nome normalizado do funcionário -> conjunto de empresas onde já foi escalado (histórico completo)
+  const companyIdsByEmployeeName = useMemo(() => {
+    const normalize = (s: string) =>
+      s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+    const map = new Map<string, Set<string>>();
+    escalas.forEach((e: any) => {
+      const cid = e.shift?.company_id;
+      const name = e.employee?.name;
+      if (!cid || !name) return;
+      const key = normalize(toTitleCase(name));
+      if (!map.has(key)) map.set(key, new Set());
+      map.get(key)!.add(cid);
+    });
+    return map;
+  }, [escalas]);
+
+  // Filtrar empresas por termo de busca e por funcionário (AND)
   const filteredCompanies = useMemo(() => {
-    return companies.filter((company: any) =>
+    const normalize = (s: string) =>
+      s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+    let result = companies.filter((company: any) =>
       company.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [companies, searchTerm]);
+    if (filterEmployeeCompany) {
+      const cids = companyIdsByEmployeeName.get(normalize(filterEmployeeCompany));
+      result = result.filter((company: any) => cids?.has(company.id));
+    }
+    return result;
+  }, [companies, searchTerm, filterEmployeeCompany, companyIdsByEmployeeName]);
 
   // Efeito para pré-preencher dados ao editar uma escala
   useEffect(() => {
@@ -207,25 +311,73 @@ export default function EscalaPage() {
       grupo.entry2 && grupo.exit2
         ? ` | ${formatTime(grupo.entry2)} - ${formatTime(grupo.exit2)}`
         : "";
-    const listaFuncionarios = grupo.funcionarios
-      .map((f) => f.nome)
-      .sort((a, b) => a.localeCompare(b, "pt-BR"))
-      .join("\n  - ");
+
+    // Agrupar funcionários por cargo, ordenados pelo nome dentro de cada cargo
+    const porCargo = new Map<string, string[]>();
+    const funcionariosOrdenados = [...grupo.funcionarios].sort((a, b) =>
+      a.nome.localeCompare(b.nome, "pt-BR")
+    );
+    funcionariosOrdenados.forEach((f) => {
+      const cargo = f.cargo || "Sem cargo";
+      if (!porCargo.has(cargo)) porCargo.set(cargo, []);
+      porCargo.get(cargo)!.push(f.nome);
+    });
+
+    // Ordenar os cargos alfabeticamente
+    const cargosOrdenados = [...porCargo.keys()].sort((a, b) =>
+      a.localeCompare(b, "pt-BR")
+    );
+
+    // Montar lista com numeração sequencial contínua
+    let contador = 1;
+    const linhasFuncionarios: string[] = [];
+    cargosOrdenados.forEach((cargo) => {
+      linhasFuncionarios.push(`${cargo}`);
+      porCargo.get(cargo)!.forEach((nome) => {
+        linhasFuncionarios.push(` ${contador} - ${toTitleCase(nome)}`);
+        contador++;
+      });
+      linhasFuncionarios.push("");
+    });
 
     const mensagem = [
       `Empresa: ${empresa}`,
       `Período: ${inicio} até ${fim}`,
       `Horários: ${horariosPrincipal}${horariosExtra}`,
       "",
-      "Funcionários:",
-      `  - ${listaFuncionarios}`,
-    ].join("\n");
+      ...linhasFuncionarios,
+    ].join("\n").trimEnd();
 
     try {
       if (typeof navigator !== "undefined" && navigator.clipboard) {
         await navigator.clipboard.writeText(mensagem);
         toast.success(
           "Informações da escala copiadas para a área de transferência!"
+        );
+      } else {
+        throw new Error("Clipboard API não disponível");
+      }
+    } catch {
+      toast.error("Não foi possível copiar para a área de transferência.");
+    }
+  };
+
+  const handleCopyDisponiveis = async () => {
+    const dataDoDia = formatDateLocal(new Date().toISOString().slice(0, 10));
+    const linhas = funcionariosDisponiveis.map(
+      (nome, i) => `${i + 1} - ${nome}`
+    );
+    const mensagem = [
+      `Funcionários disponíveis (${dataDoDia}):`,
+      "",
+      ...linhas,
+    ].join("\n");
+
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard) {
+        await navigator.clipboard.writeText(mensagem);
+        toast.success(
+          "Lista de funcionários disponíveis copiada para a área de transferência!"
         );
       } else {
         throw new Error("Clipboard API não disponível");
@@ -354,14 +506,101 @@ export default function EscalaPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-              <Input
-                placeholder="Buscar empresa..."
-                className="pl-9"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              {/* Filtro por funcionário: mostra só as empresas onde ele já foi escalado */}
+              <Popover
+                open={openCompanyEmployeeFilter}
+                onOpenChange={setOpenCompanyEmployeeFilter}
+              >
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openCompanyEmployeeFilter}
+                    className="w-full sm:w-[280px] justify-between font-normal"
+                  >
+                    <span className="truncate">
+                      {filterEmployeeCompany || "Filtrar por funcionário..."}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[280px] p-0">
+                  <Command
+                    filter={(value, search) => {
+                      const normalize = (s: string) =>
+                        s
+                          .normalize("NFD")
+                          .replace(/[̀-ͯ]/g, "")
+                          .toLowerCase();
+                      return normalize(value).includes(normalize(search))
+                        ? 1
+                        : 0;
+                    }}
+                  >
+                    <CommandInput placeholder="Pesquisar funcionário..." />
+                    <CommandList className="max-h-60 overflow-y-auto">
+                      <CommandEmpty>Nenhum funcionário encontrado.</CommandEmpty>
+                      <CommandGroup>
+                        {allEmployeeNamesForFilter.map((name) => (
+                          <CommandItem
+                            key={name}
+                            value={name}
+                            onSelect={(val) => {
+                              setFilterEmployeeCompany(
+                                val === filterEmployeeCompany ? "" : val
+                              );
+                              setOpenCompanyEmployeeFilter(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                filterEmployeeCompany === name
+                                  ? "opacity-100"
+                                  : "opacity-0"
+                              )}
+                            />
+                            {name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+
+              {/* Busca por empresa */}
+              <div className="relative w-full sm:w-[280px]">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  placeholder="Buscar empresa..."
+                  className="pl-9"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+
+              {(searchTerm || filterEmployeeCompany) && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSearchTerm("");
+                    setFilterEmployeeCompany("");
+                  }}
+                >
+                  Remover filtros
+                </Button>
+              )}
+
+              <Button
+                variant="outline"
+                className="sm:ml-auto"
+                onClick={() => setIsAvailableDialogOpen(true)}
+              >
+                <Users className="h-4 w-4 mr-2" />
+                Funcionários disponíveis
+              </Button>
             </div>
 
             {filteredCompanies.length === 0 ? (
@@ -459,7 +698,13 @@ export default function EscalaPage() {
 
     {/* Modal de Visualização/Edição de Escalas */}
     <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-      <DialogContent className="!max-w-6xl sm:!max-w-6xl md:!max-w-6xl max-h-[80vh] overflow-y-auto">
+      <DialogContent
+        ref={viewDialogContentRef}
+        onScroll={() => {
+          if (openEmployeeFilter) setOpenEmployeeFilter(false);
+        }}
+        className="!max-w-6xl sm:!max-w-6xl md:!max-w-6xl max-h-[80vh] overflow-y-auto"
+      >
         <DialogHeader>
           <DialogTitle>Escalas Aplicadas</DialogTitle>
           <DialogDescription>
@@ -471,21 +716,78 @@ export default function EscalaPage() {
 
         {viewCompanyId && (
           <div className="space-y-6">
-            {/* Filtro por data única com largura reduzida */}
-            <div className="flex items-end gap-4">
-              <div className="w-full max-w-xs">
+            {/* Filtros */}
+            <div className="flex flex-wrap items-end gap-4">
+              {/* Filtro por funcionário */}
+              <div className="flex flex-col gap-1">
+                <Label>Filtrar por funcionário</Label>
+                <Popover open={openEmployeeFilter} onOpenChange={setOpenEmployeeFilter}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={openEmployeeFilter}
+                      className="w-[260px] justify-between font-normal"
+                    >
+                      <span className="truncate">
+                        {filterEmployeeName || "Selecione um funcionário..."}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent portal={false} className="w-[260px] p-0">
+                    <Command
+                      filter={(value, search) => {
+                        const normalize = (s: string) =>
+                          s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+                        return normalize(value).includes(normalize(search)) ? 1 : 0;
+                      }}
+                    >
+                      <CommandInput placeholder="Pesquisar funcionário..." />
+                      <CommandList className="max-h-60 overflow-y-auto">
+                        <CommandEmpty>Nenhum funcionário encontrado.</CommandEmpty>
+                        <CommandGroup>
+                          {employeeNamesForFilter.map((name) => (
+                            <CommandItem
+                              key={name}
+                              value={name}
+                              onSelect={(val) => {
+                                setFilterEmployeeName(val === filterEmployeeName ? "" : val);
+                                setOpenEmployeeFilter(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  filterEmployeeName === name ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* Filtro por data */}
+              <div className="flex flex-col gap-1">
                 <Label>Filtrar por dia</Label>
                 <Input
                   type="date"
                   value={filterDate}
                   onChange={(e) => setFilterDate(e.target.value)}
+                  className="w-full max-w-xs"
                 />
               </div>
+
               <Button
                 variant="outline"
-                onClick={() => setFilterDate("")}
+                onClick={() => { setFilterDate(""); setFilterEmployeeName(""); }}
               >
-                Limpar filtro
+                Limpar filtros
               </Button>
             </div>
 
@@ -498,6 +800,7 @@ export default function EscalaPage() {
               <EscalasList
                 companyId={viewCompanyId}
                 filterDate={filterDate}
+                filterEmployeeName={filterEmployeeName}
                 escalas={escalas}
                 onEdit={(grupo) => {
                   setIsViewDialogOpen(false);
@@ -510,6 +813,47 @@ export default function EscalaPage() {
                 companies={companies}
               />
             )}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+
+    {/* Modal de Funcionários Disponíveis (ativos, não escalados hoje) */}
+    <Dialog open={isAvailableDialogOpen} onOpenChange={setIsAvailableDialogOpen}>
+      <DialogContent className="!max-w-2xl sm:!max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Funcionários disponíveis</DialogTitle>
+          <DialogDescription>
+            Funcionários ativos que hoje não estão escalados em nenhuma empresa
+          </DialogDescription>
+        </DialogHeader>
+
+        {allEmployeesLoading ? (
+          <div className="py-8 text-center text-muted-foreground">
+            Carregando funcionários...
+          </div>
+        ) : funcionariosDisponiveis.length === 0 ? (
+          <div className="py-8 text-center text-muted-foreground">
+            Todos os funcionários ativos já estão escalados hoje.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground">
+                {funcionariosDisponiveis.length} funcionário
+                {funcionariosDisponiveis.length !== 1 ? "s" : ""} disponível
+                {funcionariosDisponiveis.length !== 1 ? "is" : ""}
+              </p>
+              <Button variant="outline" size="sm" onClick={handleCopyDisponiveis}>
+                <Copy className="h-4 w-4 mr-1" />
+                Copiar
+              </Button>
+            </div>
+            <ol className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm list-decimal pl-6">
+              {funcionariosDisponiveis.map((nome, i) => (
+                <li key={`${nome}-${i}`}>{nome}</li>
+              ))}
+            </ol>
           </div>
         )}
       </DialogContent>
@@ -743,6 +1087,7 @@ export default function EscalaPage() {
 interface EscalasListProps {
   companyId: string;
   filterDate: string;
+  filterEmployeeName: string;
   escalas: any[];
   onEdit: (grupo: EscalaAgrupada) => void;
   onDelete: (id: string) => void;
@@ -753,6 +1098,7 @@ interface EscalasListProps {
 function EscalasList({
   companyId,
   filterDate,
+  filterEmployeeName,
   escalas,
   onEdit,
   onDelete,
@@ -789,6 +1135,7 @@ function EscalasList({
         nome: e.employee?.name ?? "Funcionário não encontrado",
         escalaId: e.id,
         employeeId: e.employee_id,
+        cargo: e.employee?.position_name ?? null,
       });
     });
     return Array.from(map.values()).sort((a, b) => {
@@ -798,15 +1145,31 @@ function EscalasList({
     });
   }, [escalasByCompany]);
 
-  // Filtrar por data única: se filterDate estiver preenchida, só mostra grupos cujo período cobre a data
+  // Filtrar por data e por nome de funcionário
   const gruposFiltrados = useMemo(() => {
-    if (!filterDate) return grupos;
+    const normalize = (s: string) =>
+      s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
     return grupos.filter((g) => {
-      const start = g.startDate;
-      const end = g.endDate || "9999-12-31"; // se não tem fim, considera infinito
-      return filterDate >= start && filterDate <= end;
+      // Filtro por data
+      if (filterDate) {
+        const start = g.startDate;
+        const end = g.endDate || "9999-12-31";
+        if (!(filterDate >= start && filterDate <= end)) return false;
+      }
+
+      // Filtro por nome (inclui o grupo se algum funcionário bate)
+      if (filterEmployeeName) {
+        const query = normalize(filterEmployeeName);
+        const match = g.funcionarios.some((f) =>
+          normalize(toTitleCase(f.nome)).includes(query)
+        );
+        if (!match) return false;
+      }
+
+      return true;
     });
-  }, [grupos, filterDate]);
+  }, [grupos, filterDate, filterEmployeeName]);
 
   if (gruposFiltrados.length === 0) {
     return (
@@ -837,30 +1200,40 @@ function EscalasList({
                 <p>
                   <span className="text-muted-foreground">Período:</span>{" "}
                   {formatDateLocal(grupo.startDate)} até{" "}
-                  {grupo.endDate ? formatDateLocal(grupo.endDate) : "Indefinido"}
+                  {grupo.endDate
+                    ? formatDateLocal(grupo.endDate)
+                    : "indefinido"}
                 </p>
                 <p>
                   <span className="text-muted-foreground">Horários:</span>{" "}
                   {formatTime(grupo.entry1)} - {formatTime(grupo.exit1)}
-                  {grupo.entry2 &&
-                    grupo.exit2 &&
-                    ` | ${formatTime(grupo.entry2)} - ${formatTime(
-                      grupo.exit2
-                    )}`}
+                  {grupo.entry2 && grupo.exit2 && (
+                    <>
+                      {" "}
+                      | {formatTime(grupo.entry2)} - {formatTime(grupo.exit2)}
+                    </>
+                  )}
                 </p>
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => onEdit(grupo)}>
-                  <Pencil className="h-4 w-4 mr-2" />
-                  Editar
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => onCopy(grupo)}>
-                  <Copy className="h-4 w-4 mr-2" />
+              <div className="flex gap-2 flex-wrap justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onCopy(grupo)}
+                >
+                  <Copy className="h-4 w-4 mr-1" />
                   Copiar
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onEdit(grupo)}
+                >
+                  <Pencil className="h-4 w-4 mr-1" />
+                  Editar
                 </Button>
               </div>
             </div>
-
             <Collapsible
               open={funcionariosExpandido.has(groupKey)}
               onOpenChange={(open) => {
@@ -872,47 +1245,36 @@ function EscalasList({
                 });
               }}
             >
-              <div className="border-t pt-3">
-                <CollapsibleTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-between gap-2 py-1 text-left text-sm font-medium text-muted-foreground hover:text-foreground"
-                  >
-                    <span>Funcionários ({grupo.funcionarios.length})</span>
-                    <ChevronDown
-                      className={`h-4 w-4 shrink-0 transition-transform duration-200 ${
-                        funcionariosExpandido.has(groupKey) ? "rotate-180" : ""
-                      }`}
-                    />
-                  </button>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <ul className="list-disc list-inside text-sm space-y-1 pt-2">
-                    {grupo.funcionarios
-                      .slice()
-                      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
-                      .map((f) => (
-                        <li
-                          key={f.escalaId}
-                          className="flex items-center justify-between gap-2"
-                        >
-                          <span>{f.nome}</span>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-destructive"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              onDelete(f.escalaId);
-                            }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </li>
-                      ))}
-                  </ul>
-                </CollapsibleContent>
-              </div>
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="p-0 h-auto text-muted-foreground hover:text-foreground"
+                >
+                  <span>Funcionários ({grupo.funcionarios.length})</span>
+                  <ChevronDown
+                    className={`h-4 w-4 ml-1 transition-transform ${
+                      funcionariosExpandido.has(groupKey) ? "rotate-180" : ""
+                    }`}
+                  />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <ul className="mt-2 space-y-1 text-sm">
+                  {grupo.funcionarios
+                    .slice()
+                    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
+                    .map((f) => (
+                      <li
+                        key={f.employeeId}
+                        className="flex items-center gap-2"
+                      >
+                        <span className="text-muted-foreground">•</span>
+                        <span>{f.nome}</span>
+                      </li>
+                    ))}
+                </ul>
+              </CollapsibleContent>
             </Collapsible>
           </div>
         );
