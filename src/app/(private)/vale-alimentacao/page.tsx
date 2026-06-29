@@ -288,8 +288,24 @@ export default function ValeAlimentacaoPage() {
     >();
     const lastGroupByEmployee = new Map<
       string,
-      { key: string; dateStr: string; hadNightShift: boolean }
+      {
+        key: string;
+        dateStr: string;
+        hadNightShift: boolean;
+        lastNightShiftOpen: boolean;
+        lastShiftEndAt: Date | null;
+        lastShiftEndedAfterMidnight: boolean;
+        lastShiftEndedLateNight: boolean;
+      }
     >();
+
+    // Quantas horas, no maximo, um retorno de madrugada/manha pode estar
+    // distante do fim do turno noturno anterior para ser considerado
+    // continuacao do mesmo dia (e nao um novo dia de trabalho).
+    const CONTINUACAO_NOTURNA_MAX_HORAS = 2;
+    // A partir de que hora uma saida (antes da meia-noite) e considerada
+    // "tarde da noite" para fins de continuacao noturna.
+    const HORA_SAIDA_NOTURNA_TARDE = 22;
 
     // Criar mapa de funcionários por nome para obter IDs (normalizado para comparação)
     const employeesByNameMap = new Map<string, number>();
@@ -354,10 +370,18 @@ export default function ValeAlimentacaoPage() {
         if (!punchDateStr) return;
 
         const entryDate = punch.dateIn ? new Date(punch.dateIn) : undefined;
+        const exitDate = punch.dateOut ? new Date(punch.dateOut) : undefined;
         const entryHour = entryDate ? entryDate.getHours() : undefined;
         const isEarlyMorning = entryHour !== undefined ? entryHour < 12 : false;
         const isNightShiftEntry =
           entryHour !== undefined ? entryHour >= 18 : false;
+        const shiftCrossedMidnight = !!(
+          entryDate &&
+          exitDate &&
+          (entryDate.getFullYear() !== exitDate.getFullYear() ||
+            entryDate.getMonth() !== exitDate.getMonth() ||
+            entryDate.getDate() !== exitDate.getDate())
+        );
 
         const lastGroup = lastGroupByEmployee.get(employeeName);
         const shouldAttachToPreviousDay =
@@ -371,7 +395,33 @@ export default function ValeAlimentacaoPage() {
             const diffDays =
               (currentDate.getTime() - lastDate.getTime()) /
               (1000 * 60 * 60 * 24);
-            return Math.round(diffDays) === 1 && lastGroup.hadNightShift;
+            if (Math.round(diffDays) !== 1) return false;
+            if (!lastGroup.hadNightShift) return false;
+
+            // Caso 1: turno anterior ficou aberto (esqueceu de bater saida).
+            if (lastGroup.lastNightShiftOpen) return true;
+
+            // Caso 2: turno anterior fechou de madrugada (saida cruzou
+            // meia-noite) OU fechou tarde da noite (antes da meia-noite) e o
+            // retorno foi em ate CONTINUACAO_NOTURNA_MAX_HORAS horas.
+            if (
+              (lastGroup.lastShiftEndedAfterMidnight ||
+                lastGroup.lastShiftEndedLateNight) &&
+              lastGroup.lastShiftEndAt &&
+              entryDate
+            ) {
+              const diffHoras =
+                (entryDate.getTime() - lastGroup.lastShiftEndAt.getTime()) /
+                (1000 * 60 * 60);
+              if (
+                diffHoras >= 0 &&
+                diffHoras <= CONTINUACAO_NOTURNA_MAX_HORAS
+              ) {
+                return true;
+              }
+            }
+
+            return false;
           })();
 
         const baseDateStr = shouldAttachToPreviousDay
@@ -410,14 +460,154 @@ export default function ValeAlimentacaoPage() {
         });
 
         const prev = lastGroupByEmployee.get(employeeName);
+        const currentPunchIsNightShiftWithoutOut =
+          (isNightShiftEntry || shiftCrossedMidnight) && !punch.dateOut;
+
+        // Se este punch tem saida e ela cruzou meia-noite, registramos o
+        // horario da saida para que um eventual retorno em ate
+        // CONTINUACAO_NOTURNA_MAX_HORAS da proxima madrugada seja anexado a
+        // este dia. Caso contrario, herda do prev (mesmo key).
+        let lastShiftEndAt: Date | null = null;
+        let lastShiftEndedAfterMidnight = false;
+        let lastShiftEndedLateNight = false;
+        if (exitDate && shiftCrossedMidnight) {
+          lastShiftEndAt = exitDate;
+          lastShiftEndedAfterMidnight = true;
+        } else if (
+          exitDate &&
+          exitDate.getHours() >= HORA_SAIDA_NOTURNA_TARDE
+        ) {
+          // Saiu tarde da noite, mas antes da meia-noite (ex.: 23:30).
+          lastShiftEndAt = exitDate;
+          lastShiftEndedLateNight = true;
+        } else if (prev && prev.key === key) {
+          lastShiftEndAt = prev.lastShiftEndAt;
+          lastShiftEndedAfterMidnight = prev.lastShiftEndedAfterMidnight;
+          lastShiftEndedLateNight = prev.lastShiftEndedLateNight;
+        }
+
         lastGroupByEmployee.set(employeeName, {
           key,
           dateStr: baseDateStr,
           hadNightShift:
-            (prev?.hadNightShift && prev.key === key) || isNightShiftEntry,
+            (prev?.hadNightShift && prev.key === key) ||
+            isNightShiftEntry ||
+            shiftCrossedMidnight,
+          lastNightShiftOpen:
+            currentPunchIsNightShiftWithoutOut ||
+            (!!prev &&
+              prev.key === key &&
+              prev.lastNightShiftOpen &&
+              !isNightShiftEntry),
+          lastShiftEndAt,
+          lastShiftEndedAfterMidnight,
+          lastShiftEndedLateNight,
         });
       }
     );
+
+    // Segundo passo (rede de seguranca): realocar pontos de madrugada que
+    // pertencem ao turno noturno do dia anterior, para casos que o
+    // agrupamento em fluxo possa nao ter capturado. Mesma logica da pagina
+    // de Ponto, adaptada a estrutura por funcionario/data.
+    const getHourFromDateValue = (
+      value: string | number | undefined
+    ): number | null => {
+      if (value === undefined || value === null) return null;
+      const date = new Date(value);
+      if (isNaN(date.getTime())) return null;
+      return date.getHours();
+    };
+
+    grouped.forEach((employeeGroups) => {
+      const groups = Array.from(employeeGroups.values()).sort((a, b) =>
+        a.date.localeCompare(b.date)
+      );
+
+      for (let i = 1; i < groups.length; i += 1) {
+        const previousGroup = groups[i - 1];
+        const currentGroup = groups[i];
+
+        // "Ultimo turno noturno" do dia anterior: entrada >= 18h OU saida em
+        // dia diferente da entrada (cruzou meia-noite).
+        const lastNightPunch = previousGroup.punches
+          .slice()
+          .reverse()
+          .find((p) => {
+            const entryHour = getHourFromDateValue(p.dateIn);
+            if (entryHour !== null && entryHour >= 18) return true;
+            const inD = p.dateIn ? new Date(p.dateIn) : null;
+            const outD = p.dateOut ? new Date(p.dateOut) : null;
+            if (
+              inD &&
+              outD &&
+              (inD.getFullYear() !== outD.getFullYear() ||
+                inD.getMonth() !== outD.getMonth() ||
+                inD.getDate() !== outD.getDate())
+            ) {
+              return true;
+            }
+            return false;
+          });
+
+        if (!lastNightPunch) continue;
+
+        const lastPunchOut = lastNightPunch.dateOut
+          ? new Date(lastNightPunch.dateOut)
+          : null;
+        const lastPunchIn = lastNightPunch.dateIn
+          ? new Date(lastNightPunch.dateIn)
+          : null;
+        const lastShiftCrossedMidnight = !!(
+          lastPunchIn &&
+          lastPunchOut &&
+          (lastPunchIn.getFullYear() !== lastPunchOut.getFullYear() ||
+            lastPunchIn.getMonth() !== lastPunchOut.getMonth() ||
+            lastPunchIn.getDate() !== lastPunchOut.getDate())
+        );
+
+        const punchesToMove = currentGroup.punches.filter((p) => {
+          const punchDate = toDateKey(p.dateIn) ?? toDateKey(p.dateOut);
+          if (punchDate !== currentGroup.date) return false;
+          const entryHour = getHourFromDateValue(p.dateIn);
+          if (entryHour === null || entryHour >= 12) return false;
+
+          // Caso 1: turno anterior ficou aberto (sem saida) -> realocar.
+          if (!lastPunchOut) return true;
+
+          // Caso 2: turno anterior fechou de madrugada e o retorno aconteceu
+          // em ate CONTINUACAO_NOTURNA_MAX_HORAS da saida -> continuacao.
+          if (lastShiftCrossedMidnight) {
+            const newEntry = p.dateIn ? new Date(p.dateIn) : null;
+            if (newEntry) {
+              const diffHoras =
+                (newEntry.getTime() - lastPunchOut.getTime()) /
+                (1000 * 60 * 60);
+              if (
+                diffHoras >= 0 &&
+                diffHoras <= CONTINUACAO_NOTURNA_MAX_HORAS
+              ) {
+                return true;
+              }
+            }
+          }
+          return false;
+        });
+
+        if (punchesToMove.length === 0) continue;
+
+        previousGroup.punches.push(...punchesToMove);
+        currentGroup.punches = currentGroup.punches.filter(
+          (p) => !punchesToMove.includes(p)
+        );
+
+        // Se o dia atual ficou sem pontos apos a realocacao, remove-lo para
+        // nao gerar um dia vazio no relatorio.
+        if (currentGroup.punches.length === 0) {
+          employeeGroups.delete(currentGroup.date);
+        }
+      }
+    });
 
     // Processar grupos e calcular valores
     const result = new Map<number, WorkDay[]>();
