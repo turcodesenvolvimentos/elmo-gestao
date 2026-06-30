@@ -991,6 +991,12 @@ export default function PontoPage() {
       return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
     };
 
+    // "YYYY-MM-DD" -> "DD/MM"
+    const toDiaMes = (dateStr: string): string => {
+      const [, mm, dd] = dateStr.split("-");
+      return `${dd}/${mm}`;
+    };
+
     type Acc = {
       employeeName: string;
       adn: number;
@@ -999,6 +1005,9 @@ export default function PontoPage() {
       e50n: number;
       e100n: number;
       normal: number;
+      // primeiro/ultimo dia com batida (YYYY-MM-DD), comparáveis lexicograficamente
+      firstDate: string | null;
+      lastDate: string | null;
     };
     const byEmp = new Map<string, Acc>();
     for (const g of groupedPunches) {
@@ -1011,6 +1020,8 @@ export default function PontoPage() {
         e50n: 0,
         e100n: 0,
         normal: 0,
+        firstDate: null,
+        lastDate: null,
       };
       prev.adn += parseHm(g.adicionalNoturno);
       prev.e50d += parseHm(g.extra50Diurno);
@@ -1018,6 +1029,11 @@ export default function PontoPage() {
       prev.e50n += parseHm(g.extra50Noturno);
       prev.e100n += parseHm(g.extra100Noturno);
       prev.normal += parseHm(g.horasNormais);
+      // Considera apenas dias que tenham batida de ponto.
+      if (g.punches.length > 0) {
+        if (!prev.firstDate || g.date < prev.firstDate) prev.firstDate = g.date;
+        if (!prev.lastDate || g.date > prev.lastDate) prev.lastDate = g.date;
+      }
       byEmp.set(key, prev);
     }
 
@@ -1025,6 +1041,8 @@ export default function PontoPage() {
       .sort((a, b) => a.employeeName.localeCompare(b.employeeName))
       .map((r) => ({
         employeeName: r.employeeName,
+        primeiroDia: r.firstDate ? toDiaMes(r.firstDate) : "-",
+        ultimoDia: r.lastDate ? toDiaMes(r.lastDate) : "-",
         adicionalNoturno: fmtHm(r.adn),
         extra50Diurno: fmtHm(r.e50d),
         extra100Diurno: fmtHm(r.e100d),

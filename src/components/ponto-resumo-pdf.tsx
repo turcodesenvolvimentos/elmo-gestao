@@ -16,6 +16,8 @@ import {
 
 export interface PontoResumoRow {
   employeeName: string;
+  primeiroDia: string;
+  ultimoDia: string;
   adicionalNoturno: string;
   extra50Diurno: string;
   extra100Diurno: string;
@@ -95,9 +97,16 @@ const styles = StyleSheet.create({
     backgroundColor: "#f9fafb",
   },
   cellName: {
-    width: "22%",
+    width: "16%",
     paddingHorizontal: 6,
     fontSize: NAME_FONT,
+    borderRight: "0.5px solid #e5e7eb",
+  },
+  cellDate: {
+    width: "7%",
+    paddingHorizontal: 2,
+    fontSize: NUM_FONT,
+    textAlign: "center",
     borderRight: "0.5px solid #e5e7eb",
   },
   cellNum: {
@@ -111,14 +120,14 @@ const styles = StyleSheet.create({
     fontSize: NUM_FONT,
     textAlign: "center",
   },
-  col_adn: { width: "10%" },
-  col_grat: { width: "9%" },
-  col_50d: { width: "10%" },
-  col_100d: { width: "10%" },
-  col_50n: { width: "10%" },
-  col_100n: { width: "10%" },
-  col_adi: { width: "9%" },
-  col_normal: { width: "10%" },
+  col_adn: { width: "9%" },
+  col_grat: { width: "8%" },
+  col_50d: { width: "9%" },
+  col_100d: { width: "9%" },
+  col_50n: { width: "9%" },
+  col_100n: { width: "9%" },
+  col_adi: { width: "8%" },
+  col_normal: { width: "9%" },
   footer: {
     position: "absolute",
     bottom: 18,
@@ -183,6 +192,12 @@ export const PontoResumoPDF: React.FC<PontoResumoPDFProps> = ({
             <Text style={[styles.cellName, { color: "#ffffff" }]}>
               Funcionário
             </Text>
+            <Text style={[styles.cellDate, { color: "#ffffff" }]}>
+              1º dia
+            </Text>
+            <Text style={[styles.cellDate, { color: "#ffffff" }]}>
+              Último dia
+            </Text>
             <Text style={[styles.cellNum, styles.col_adn]}>Ad. Noturno</Text>
             <Text style={[styles.cellNum, styles.col_grat]}>Gratificação</Text>
             <Text style={[styles.cellNum, styles.col_50d]}>HE 50% D</Text>
@@ -206,6 +221,8 @@ export const PontoResumoPDF: React.FC<PontoResumoPDFProps> = ({
               wrap={false}
             >
               <Text style={styles.cellName}>{row.employeeName}</Text>
+              <Text style={styles.cellDate}>{row.primeiroDia || "-"}</Text>
+              <Text style={styles.cellDate}>{row.ultimoDia || "-"}</Text>
               <Text style={[styles.cellNum, styles.col_adn]}>
                 {dashIfZero(row.adicionalNoturno)}
               </Text>
