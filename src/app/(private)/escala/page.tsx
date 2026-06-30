@@ -146,6 +146,7 @@ export default function EscalaPage() {
   // Estados para o modal de visualização/edição
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [viewCompanyId, setViewCompanyId] = useState<string | null>(null);
+  const [deleteConfirmGroup, setDeleteConfirmGroup] = useState<EscalaAgrupada | null>(null);
   const [filterDate, setFilterDate] = useState(""); // filtro único
   const [filterEmployeeName, setFilterEmployeeName] = useState(""); // filtro por nome
   const [openEmployeeFilter, setOpenEmployeeFilter] = useState(false);
@@ -285,13 +286,27 @@ export default function EscalaPage() {
 
   const handleDeleteEscala = async (id: string) => {
     const confirmed = window.confirm(
-      "Tem certeza que deseja remover esta aplicação de escala?"
+      "Tem certeza que deseja remover este funcionário da escala?"
     );
     if (!confirmed) return;
 
     try {
       await deleteEscalaMutation.mutateAsync(id);
+      toast.success("Funcionário removido da escala com sucesso!");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Erro ao remover funcionário da escala"
+      );
+    }
+  };
+
+  const handleDeleteEscalaGrupo = async (grupo: EscalaAgrupada) => {
+    try {
+      await Promise.all(
+        grupo.funcionarios.map((f) => deleteEscalaMutation.mutateAsync(f.escalaId))
+      );
       toast.success("Escala removida com sucesso!");
+      setDeleteConfirmGroup(null);
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Erro ao remover escala"
@@ -809,6 +824,7 @@ export default function EscalaPage() {
                   setIsDialogOpen(true);
                 }}
                 onDelete={handleDeleteEscala}
+                onDeleteGroup={(grupo) => setDeleteConfirmGroup(grupo)}
                 onCopy={handleCopyEscalaAgrupada}
                 companies={companies}
               />
@@ -1079,6 +1095,43 @@ export default function EscalaPage() {
       </DialogContent>
     </Dialog>
   </div>
+
+    {/* Modal de confirmação de remoção de escala */}
+    <Dialog open={!!deleteConfirmGroup} onOpenChange={(open) => { if (!open) setDeleteConfirmGroup(null); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Remover escala</DialogTitle>
+          <DialogDescription>
+            Tem certeza que deseja remover a escala{" "}
+            <strong>{deleteConfirmGroup?.shiftName}</strong>?{" "}
+            {deleteConfirmGroup && deleteConfirmGroup.funcionarios.length > 0 && (
+              <>
+                Isso removerá{" "}
+                {deleteConfirmGroup.funcionarios.length === 1
+                  ? "1 funcionário"
+                  : `${deleteConfirmGroup.funcionarios.length} funcionários`}{" "}
+                desta escala.
+              </>
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button
+            variant="outline"
+            onClick={() => setDeleteConfirmGroup(null)}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={() => deleteConfirmGroup && handleDeleteEscalaGrupo(deleteConfirmGroup)}
+            disabled={deleteEscalaMutation.isPending}
+          >
+            {deleteEscalaMutation.isPending ? "Removendo..." : "Remover"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </>
   );
 }
@@ -1091,6 +1144,7 @@ interface EscalasListProps {
   escalas: any[];
   onEdit: (grupo: EscalaAgrupada) => void;
   onDelete: (id: string) => void;
+  onDeleteGroup: (grupo: EscalaAgrupada) => void;
   onCopy: (grupo: EscalaAgrupada) => void;
   companies: any[];
 }
@@ -1102,6 +1156,7 @@ function EscalasList({
   escalas,
   onEdit,
   onDelete,
+  onDeleteGroup,
   onCopy,
   companies,
 }: EscalasListProps) {
@@ -1232,6 +1287,15 @@ function EscalasList({
                   <Pencil className="h-4 w-4 mr-1" />
                   Editar
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => onDeleteGroup(grupo)}
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Remover
+                </Button>
               </div>
             </div>
             <Collapsible
@@ -1267,10 +1331,20 @@ function EscalasList({
                     .map((f) => (
                       <li
                         key={f.employeeId}
-                        className="flex items-center gap-2"
+                        className="flex items-center justify-between gap-2"
                       >
-                        <span className="text-muted-foreground">•</span>
-                        <span>{f.nome}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">•</span>
+                          <span>{f.nome}</span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                          onClick={() => onDelete(f.escalaId)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
                       </li>
                     ))}
                 </ul>
