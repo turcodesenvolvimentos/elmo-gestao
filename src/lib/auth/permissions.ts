@@ -69,6 +69,7 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   "/empresas-e-funcionarios": [
     Permission.COMPANIES,
     Permission.EMPLOYEES,
+    Permission.FERIADOS,
   ],
   "/ponto": [Permission.PONTO],
   "/vale-alimentacao": [Permission.VALE_ALIMENTACAO],

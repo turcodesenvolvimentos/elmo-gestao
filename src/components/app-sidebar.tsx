@@ -98,7 +98,11 @@ const navGroups: NavGroup[] = [
         title: "Empresas & Funcionários",
         url: "/empresas-e-funcionarios",
         icon: Building,
-        permissions: [Permission.COMPANIES, Permission.EMPLOYEES],
+        permissions: [
+          Permission.COMPANIES,
+          Permission.EMPLOYEES,
+          Permission.FERIADOS,
+        ],
       },
       {
         title: "Usuários",

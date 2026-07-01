@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
+import { Permission, hasPermission } from "@/types/permissions";
 import {
   Building,
   MapPin,
@@ -1205,12 +1207,43 @@ function CompaniesEmployeesTab() {
 }
 
 export default function EmpresasPage() {
-  const { data: companiesData, isLoading, error } = useCompanies();
+  // Permissões do usuário: cada aba só aparece para quem tem a permissão da área.
+  const { data: session } = useSession();
+  const userPermissions = session?.user?.permissions;
+  const canCompanies = hasPermission(userPermissions, Permission.COMPANIES);
+  const canEmployees = hasPermission(userPermissions, Permission.EMPLOYEES);
+  const canFeriados = hasPermission(userPermissions, Permission.FERIADOS);
+
+  // A query de empresas só dispara para quem tem permissão de empresas,
+  // evitando 403/erro para usuários de apenas Funcionários ou Feriados.
+  const { data: companiesData, isLoading, error } = useCompanies(canCompanies);
   const createCompanyMutation = useCreateCompany();
   const updateCompanyMutation = useUpdateCompany();
   const deleteCompanyMutation = useDeleteCompany();
 
+  // Primeira aba permitida, na ordem Empresas > Funcionários > Feriados.
+  const firstAllowedTab = canCompanies
+    ? "empresas"
+    : canEmployees
+      ? "funcionarios"
+      : canFeriados
+        ? "feriados"
+        : "empresas";
+
   const [activeTab, setActiveTab] = useState("empresas");
+
+  // Ajusta a aba ativa quando as permissões carregam: se o usuário está numa
+  // aba que não pode ver, move para a primeira aba permitida.
+  useEffect(() => {
+    const allowed =
+      (activeTab === "empresas" && canCompanies) ||
+      (activeTab === "funcionarios" && canEmployees) ||
+      (activeTab === "feriados" && canFeriados);
+    if (!allowed) {
+      setActiveTab(firstAllowedTab);
+    }
+  }, [canCompanies, canEmployees, canFeriados, activeTab, firstAllowedTab]);
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -1454,7 +1487,7 @@ export default function EmpresasPage() {
         onValueChange={setActiveTab}
         className="w-full"
       >
-      {error && (
+      {canCompanies && error && (
         <Alert variant="destructive">
           <AlertDescription>
             Erro ao carregar empresas. Tente recarregar a página.
@@ -1462,10 +1495,10 @@ export default function EmpresasPage() {
         </Alert>
       )}
 
-      {isLoading ? (
+      {canCompanies && isLoading ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg sm:text-xl">Empresas</CardTitle>
+            <CardTitle className="text-lg sm:text-xl">Carregando...</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -1516,19 +1549,25 @@ export default function EmpresasPage() {
           ) : null}
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
-            <TabsList className="grid w-full grid-cols-1 gap-2 sm:grid-cols-3 sm:w-auto">
-              <TabsTrigger value="empresas" className="gap-2">
-                <Building className="h-4 w-4" />
-                Empresas
-              </TabsTrigger>
-              <TabsTrigger value="funcionarios" className="gap-2">
-                <Users className="h-4 w-4" />
-                Funcionários
-              </TabsTrigger>
-              <TabsTrigger value="feriados" className="gap-2">
-                <Calendar className="h-4 w-4" />
-                Feriados
-              </TabsTrigger>
+            <TabsList className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-flow-col sm:auto-cols-fr">
+              {canCompanies && (
+                <TabsTrigger value="empresas" className="gap-2">
+                  <Building className="h-4 w-4" />
+                  Empresas
+                </TabsTrigger>
+              )}
+              {canEmployees && (
+                <TabsTrigger value="funcionarios" className="gap-2">
+                  <Users className="h-4 w-4" />
+                  Funcionários
+                </TabsTrigger>
+              )}
+              {canFeriados && (
+                <TabsTrigger value="feriados" className="gap-2">
+                  <Calendar className="h-4 w-4" />
+                  Feriados
+                </TabsTrigger>
+              )}
             </TabsList>
 
             {activeTab !== "feriados" && (
@@ -1712,7 +1751,7 @@ export default function EmpresasPage() {
             )}
           </div>
 
-          {companiesData?.companies &&
+          {canCompanies && (companiesData?.companies &&
           companiesData.companies.length > 0 ? (
             <TabsContent
               value="empresas"
@@ -2056,20 +2095,24 @@ export default function EmpresasPage() {
                 </CardContent>
               </Card>
             </TabsContent>
-          )}
+          ))}
         </>
       )}
 
-      <TabsContent
-        value="funcionarios"
-        className="space-y-4 sm:space-y-6"
-      >
-        <CompaniesEmployeesTab />
-      </TabsContent>
+      {canEmployees && (
+        <TabsContent
+          value="funcionarios"
+          className="space-y-4 sm:space-y-6"
+        >
+          <CompaniesEmployeesTab />
+        </TabsContent>
+      )}
 
-      <TabsContent value="feriados" className="space-y-4 sm:space-y-6">
-        <CustomHolidaysTab />
-      </TabsContent>
+      {canFeriados && (
+        <TabsContent value="feriados" className="space-y-4 sm:space-y-6">
+          <CustomHolidaysTab />
+        </TabsContent>
+      )}
     </Tabs>
 
     {/* Modal de Edição */}

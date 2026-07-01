@@ -17,7 +17,11 @@ export async function PUT(
   }
 
   if (
-    !checkAnyPermission(session, [Permission.COMPANIES, Permission.EMPLOYEES])
+    !checkAnyPermission(session, [
+      Permission.COMPANIES,
+      Permission.EMPLOYEES,
+      Permission.FERIADOS,
+    ])
   ) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
@@ -111,7 +115,11 @@ export async function DELETE(
   }
 
   if (
-    !checkAnyPermission(session, [Permission.COMPANIES, Permission.EMPLOYEES])
+    !checkAnyPermission(session, [
+      Permission.COMPANIES,
+      Permission.EMPLOYEES,
+      Permission.FERIADOS,
+    ])
   ) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }

@@ -5,7 +5,7 @@ import { handleSolidesError } from "@/lib/axios/error-handler";
 import { AxiosError } from "axios";
 import { supabaseAdmin } from "@/lib/db/client";
 import { Permission } from "@/types/permissions";
-import { checkPermission } from "@/lib/auth/permissions";
+import { checkAnyPermission } from "@/lib/auth/permissions";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -17,9 +17,18 @@ export async function GET(request: NextRequest) {
     );
   }
 
-    if (!checkPermission(session, Permission.EMPLOYEES)) {
+  // Leitura da lista de funcionários é liberada para as telas de visualização
+  // (Ponto, Vale-alimentação, Escala) além da tela de edição (Funcionários).
+  if (
+    !checkAnyPermission(session, [
+      Permission.EMPLOYEES,
+      Permission.PONTO,
+      Permission.VALE_ALIMENTACAO,
+      Permission.ESCALAS,
+    ])
+  ) {
     return NextResponse.json(
-      { error: "Sem permissão para gerenciar funcionários" },
+      { error: "Sem permissão para visualizar funcionários" },
       { status: 403 }
     );
   }

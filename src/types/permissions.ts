@@ -25,6 +25,9 @@ export enum Permission {
 
   // Gerenciamento de escalas
   ESCALAS = "escalas",
+
+  // Gerenciamento de feriados
+  FERIADOS = "feriados",
 }
 
 /**
@@ -110,4 +113,5 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   [Permission.VALE_ALIMENTACAO]: "Vale Alimentação",
   [Permission.BOLETIM]: "Boletim",
   [Permission.ESCALAS]: "Escalas",
+  [Permission.FERIADOS]: "Feriados",
 };

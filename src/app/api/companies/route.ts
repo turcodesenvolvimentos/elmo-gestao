@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { supabaseAdmin } from "@/lib/db/client";
 import { Permission } from "@/types/permissions";
-import { checkPermission } from "@/lib/auth/permissions";
+import { checkPermission, checkAnyPermission } from "@/lib/auth/permissions";
 import { ensureDefaultPositionForCompany } from "@/lib/default-position";
 
 export async function POST(request: NextRequest) {
@@ -117,9 +117,18 @@ export async function GET() {
     );
   }
 
-    if (!checkPermission(session, Permission.COMPANIES)) {
+  // Leitura de empresas é usada pelas telas de Boletim, Vale-alimentação e
+  // Escala, além da tela de edição (Empresas).
+  if (
+    !checkAnyPermission(session, [
+      Permission.COMPANIES,
+      Permission.BOLETIM,
+      Permission.VALE_ALIMENTACAO,
+      Permission.ESCALAS,
+    ])
+  ) {
     return NextResponse.json(
-      { error: "Sem permissão para gerenciar empresas" },
+      { error: "Sem permissão para visualizar empresas" },
       { status: 403 }
     );
   }

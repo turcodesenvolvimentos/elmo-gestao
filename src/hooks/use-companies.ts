@@ -17,11 +17,14 @@ import {
 } from "@/services/companies.service";
 import { CompaniesResponse, Company } from "@/types/companies";
 
-export function useCompanies(): UseQueryResult<CompaniesResponse, Error> {
+export function useCompanies(
+  enabled: boolean = true
+): UseQueryResult<CompaniesResponse, Error> {
   return useQuery({
     queryKey: ["companies"],
     queryFn: fetchCompanies,
     staleTime: 5 * 60 * 1000,
+    enabled,
   });
 }
 

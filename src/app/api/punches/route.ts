@@ -4,7 +4,7 @@ import { solidesApiClient } from "@/lib/axios/solides.client";
 import { handleSolidesError } from "@/lib/axios/error-handler";
 import { AxiosError } from "axios";
 import { Permission } from "@/types/permissions";
-import { checkPermission } from "@/lib/auth/permissions";
+import { checkAnyPermission } from "@/lib/auth/permissions";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -16,9 +16,15 @@ export async function GET(request: NextRequest) {
     );
   }
 
-    if (!checkPermission(session, Permission.PONTO)) {
+  // As batidas alimentam tanto a tela de Ponto quanto a de Vale-alimentação.
+  if (
+    !checkAnyPermission(session, [
+      Permission.PONTO,
+      Permission.VALE_ALIMENTACAO,
+    ])
+  ) {
     return NextResponse.json(
-      { error: "Sem permissão para gerenciar ponto" },
+      { error: "Sem permissão para visualizar as batidas" },
       { status: 403 }
     );
   }

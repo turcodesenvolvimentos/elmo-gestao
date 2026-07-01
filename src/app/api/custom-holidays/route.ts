@@ -13,8 +13,16 @@ export async function GET() {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }
 
+  // Leitura de feriados personalizados é usada também pelas telas de
+  // Ponto e Vale-alimentação (cálculo de horas), além de Empresas/Funcionários.
   if (
-    !checkAnyPermission(session, [Permission.COMPANIES, Permission.EMPLOYEES])
+    !checkAnyPermission(session, [
+      Permission.COMPANIES,
+      Permission.EMPLOYEES,
+      Permission.PONTO,
+      Permission.VALE_ALIMENTACAO,
+      Permission.FERIADOS,
+    ])
   ) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
@@ -50,7 +58,11 @@ export async function POST(request: NextRequest) {
   }
 
   if (
-    !checkAnyPermission(session, [Permission.COMPANIES, Permission.EMPLOYEES])
+    !checkAnyPermission(session, [
+      Permission.COMPANIES,
+      Permission.EMPLOYEES,
+      Permission.FERIADOS,
+    ])
   ) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
