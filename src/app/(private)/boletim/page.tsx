@@ -53,6 +53,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { useCompanies } from "@/hooks/use-companies";
 import { usePositions } from "@/hooks/use-positions";
+import { useCustomHolidays } from "@/hooks/use-custom-holidays";
 import { useQueryClient } from "@tanstack/react-query";
 import { fetchBoletim } from "@/services/boletim.service";
 import {
@@ -63,6 +64,7 @@ import {
 import type { BoletimData } from "@/services/boletim.service";
 import { BoletimHistory } from "./components/boletim-history";
 import { formatEmployeeName } from "@/utils/employee-name-format";
+import { calcularHorasPorPeriodo, formatarHoras } from "@/lib/ponto-calculator";
 
 // Importação dinâmica do PDFViewer (só funciona no client-side)
 const PDFViewer = dynamic(
@@ -86,6 +88,42 @@ const ALL_VALUES = {
   DEPARTMENT: "all-departments",
   DATE: "all-dates",
 };
+
+function buildPunchesFromTimes(
+  dateStr: string,
+  e1?: string,
+  s1?: string,
+  e2?: string,
+  s2?: string
+): Array<{ dateIn: string; dateOut: string }> {
+  const toMin = (t: string) => {
+    const [h, m] = t.split(":").map(Number);
+    return (Number.isNaN(h) ? 0 : h) * 60 + (Number.isNaN(m) ? 0 : m);
+  };
+  let dayOffset = 0;
+  let prevMin = -1;
+  const mk = (t?: string): Date | null => {
+    if (!t || !t.includes(":")) return null;
+    const mins = toMin(t);
+    if (mins < prevMin) dayOffset += 1;
+    prevMin = mins;
+    const [h, m] = t.split(":").map(Number);
+    const d = new Date(`${dateStr}T00:00:00`);
+    d.setDate(d.getDate() + dayOffset);
+    d.setHours(h, Number.isNaN(m) ? 0 : m, 0, 0);
+    return d;
+  };
+  const di1 = mk(e1);
+  const do1 = mk(s1);
+  const di2 = mk(e2);
+  const do2 = mk(s2);
+  const punches: Array<{ dateIn: string; dateOut: string }> = [];
+  if (di1 && do1)
+    punches.push({ dateIn: di1.toISOString(), dateOut: do1.toISOString() });
+  if (di2 && do2)
+    punches.push({ dateIn: di2.toISOString(), dateOut: do2.toISOString() });
+  return punches;
+}
 
 function isNoCompany(value?: string | null): boolean {
   return (value || "").trim().toLowerCase() === "sem empresa";
@@ -169,6 +207,15 @@ export default function BoletimPage() {
   const companyPositions = useMemo(
     () => positionsResponse?.positions || [],
     [positionsResponse]
+  );
+
+  const { data: customHolidaysResponse } = useCustomHolidays();
+  const customHolidaySet = useMemo(
+    () =>
+      new Set<string>(
+        (customHolidaysResponse?.holidays || []).map((h) => h.holiday_date)
+      ),
+    [customHolidaysResponse]
   );
 
   const queryClient = useQueryClient();
@@ -529,13 +576,45 @@ export default function BoletimPage() {
     "extra_100_night",
   ]);
 
+  const TIME_FIELDS = new Set<keyof typeof editFormData>([
+    "entry1",
+    "exit1",
+    "entry2",
+    "exit2",
+  ]);
+
   const handleEditFieldChange = (
     field: keyof typeof editFormData,
     value: string
   ) => {
     setEditFormData((prev) => {
       const updated = { ...prev, [field]: value };
-      if (VALUE_AFFECTING_FIELDS.has(field)) {
+
+      if (TIME_FIELDS.has(field)) {
+        const rowDate =
+          editingRow !== null
+            ? filteredBulletinData[editingRow]?.date
+            : undefined;
+        if (rowDate) {
+          const punches = buildPunchesFromTimes(
+            rowDate,
+            updated.entry1,
+            updated.exit1,
+            updated.entry2,
+            updated.exit2
+          );
+          const h = calcularHorasPorPeriodo(punches, rowDate, customHolidaySet);
+          updated.total_hours = formatarHoras(h.totalHoras);
+          updated.normal_hours = formatarHoras(h.horasNormais);
+          updated.night_additional = formatarHoras(h.adicionalNoturno);
+          updated.extra_50_day = formatarHoras(h.extra50Diurno);
+          updated.extra_50_night = formatarHoras(h.extra50Noturno);
+          updated.extra_100_day = formatarHoras(h.extra100Diurno);
+          updated.extra_100_night = formatarHoras(h.extra100Noturno);
+        }
+      }
+
+      if (VALUE_AFFECTING_FIELDS.has(field) || TIME_FIELDS.has(field)) {
         const posName = field === "position" ? value : updated.position;
         const pos = companyPositions.find((p) => p.name === posName);
         if (pos) {
@@ -1434,9 +1513,7 @@ export default function BoletimPage() {
             id="edit-entry1"
             type="time"
             value={editFormData.entry1}
-            onChange={(e) =>
-              setEditFormData({ ...editFormData, entry1: e.target.value })
-            }
+            onChange={(e) => handleEditFieldChange("entry1", e.target.value)}
           />
         </div>
 
@@ -1446,9 +1523,7 @@ export default function BoletimPage() {
             id="edit-exit1"
             type="time"
             value={editFormData.exit1}
-            onChange={(e) =>
-              setEditFormData({ ...editFormData, exit1: e.target.value })
-            }
+            onChange={(e) => handleEditFieldChange("exit1", e.target.value)}
           />
         </div>
 
@@ -1458,9 +1533,7 @@ export default function BoletimPage() {
             id="edit-entry2"
             type="time"
             value={editFormData.entry2}
-            onChange={(e) =>
-              setEditFormData({ ...editFormData, entry2: e.target.value })
-            }
+            onChange={(e) => handleEditFieldChange("entry2", e.target.value)}
           />
         </div>
 
@@ -1470,9 +1543,7 @@ export default function BoletimPage() {
             id="edit-exit2"
             type="time"
             value={editFormData.exit2}
-            onChange={(e) =>
-              setEditFormData({ ...editFormData, exit2: e.target.value })
-            }
+            onChange={(e) => handleEditFieldChange("exit2", e.target.value)}
           />
         </div>
 
