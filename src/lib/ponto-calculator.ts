@@ -433,7 +433,6 @@ export function calcularHorasPorPeriodo(
     }
   }
 
-
   adicionalNoturno = Math.max(
     0,
     horasNoturnas - extra50Noturno - extra100NoturnoHoras,
