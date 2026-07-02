@@ -433,6 +433,12 @@ export function calcularHorasPorPeriodo(
     }
   }
 
+
+  adicionalNoturno = Math.max(
+    0,
+    horasNoturnas - extra50Noturno - extra100NoturnoHoras,
+  );
+
   const heDomEFer = horasNormaisHoras === 0 ? horasTotal : 0;
 
   return {
