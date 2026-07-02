@@ -863,7 +863,13 @@ export default function BoletimPage() {
     open={isBulletinDialogOpen}
     onOpenChange={setIsBulletinDialogOpen}
   >
-    <DialogContent className="dialog-override overflow-hidden flex flex-col">
+    <DialogContent
+      className="dialog-override overflow-hidden flex flex-col"
+      onFocusOutside={(e) => e.preventDefault()}
+      onInteractOutside={(e) => {
+        if (isEditDialogOpen) e.preventDefault();
+      }}
+    >
       <DialogHeader>
         <div className="flex items-center justify-between">
           <div>
