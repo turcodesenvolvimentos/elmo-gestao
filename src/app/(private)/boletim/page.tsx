@@ -1365,11 +1365,7 @@ export default function BoletimPage() {
           Fechar
         </Button>
       </DialogFooter>
-    </DialogContent>
-  </Dialog>
-
-  {/* Modal de Edição (separado do modal principal) */}
-  <Dialog open={isEditDialogOpen} onOpenChange={handleCancelEdit}>
+      <Dialog open={isEditDialogOpen} onOpenChange={handleCancelEdit}>
     <DialogContent className="max-w-2xl">
       <DialogHeader>
         <DialogTitle>Editar Valores</DialogTitle>
@@ -1587,6 +1583,8 @@ export default function BoletimPage() {
         </Button>
         <Button onClick={handleSaveEdit}>Salvar Alterações</Button>
       </DialogFooter>
+      </DialogContent>
+      </Dialog>
     </DialogContent>
   </Dialog>
     </>

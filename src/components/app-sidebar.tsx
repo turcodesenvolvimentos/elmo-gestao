@@ -189,7 +189,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-0.5 leading-none group-data-[collapsible=icon]:hidden">
             <span className="truncate text-sm font-semibold">Elmosys</span>
-            <span className="text-muted-foreground truncate text-xs">v0.3.0</span>
+            <span className="text-muted-foreground truncate text-xs">v0.3.1</span>
           </div>
           <SidebarTrigger className="text-muted-foreground hover:text-foreground size-7 shrink-0" />
         </div>
