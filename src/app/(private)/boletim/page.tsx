@@ -54,6 +54,7 @@ import { Label } from "@/components/ui/label";
 import { useCompanies } from "@/hooks/use-companies";
 import { usePositions } from "@/hooks/use-positions";
 import { useCustomHolidays } from "@/hooks/use-custom-holidays";
+import { useDepartments } from "@/hooks/use-departments";
 import { useQueryClient } from "@tanstack/react-query";
 import { fetchBoletim } from "@/services/boletim.service";
 import {
@@ -207,6 +208,12 @@ export default function BoletimPage() {
   const companyPositions = useMemo(
     () => positionsResponse?.positions || [],
     [positionsResponse]
+  );
+
+  const { data: departmentsResponse } = useDepartments(selectedCompany || "");
+  const companyDepartments = useMemo(
+    () => departmentsResponse?.departments || [],
+    [departmentsResponse]
   );
 
   const { data: customHolidaysResponse } = useCustomHolidays();
@@ -1496,6 +1503,7 @@ export default function BoletimPage() {
           <Input
             id="edit-employee-department"
             type="text"
+            list="edit-department-options"
             value={editFormData.department}
             onChange={(e) =>
               setEditFormData({
@@ -1503,8 +1511,13 @@ export default function BoletimPage() {
                 department: e.target.value,
               })
             }
-            placeholder="Digite o setor"
+            placeholder="Selecione ou digite o setor"
           />
+          <datalist id="edit-department-options">
+            {companyDepartments.map((d) => (
+              <option key={d.id} value={d.name} />
+            ))}
+          </datalist>
         </div>
 
         <div>

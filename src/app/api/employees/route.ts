@@ -108,6 +108,7 @@ export async function GET(request: NextRequest) {
             `
             company_id,
             position_id,
+            department,
             companies (
               id,
               name,
@@ -129,12 +130,14 @@ export async function GET(request: NextRequest) {
               const row = ec as unknown as {
                 companies?: CompanyRow;
                 position_id?: string;
+                department?: string;
                 positions?: unknown;
               };
               return {
                 ...row.companies,
                 position_id: row.position_id,
                 position: row.positions || null,
+                department: row.department ?? undefined,
               };
             })
             .filter((c: CompanyRow | null): c is CompanyRow => c !== null && !!c.id)

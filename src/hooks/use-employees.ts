@@ -32,13 +32,18 @@ export function useEmployees(
 export function useAddCompanyToEmployee(): UseMutationResult<
   void,
   Error,
-  { solidesId: number; companyId: string; positionId?: string }
+  {
+    solidesId: number;
+    companyId: string;
+    positionId?: string;
+    department?: string;
+  }
 > {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ solidesId, companyId, positionId }) =>
-      addCompanyToEmployee(solidesId, companyId, positionId),
+    mutationFn: ({ solidesId, companyId, positionId, department }) =>
+      addCompanyToEmployee(solidesId, companyId, positionId, department),
     onSuccess: async () => {
       // Invalidar e recarregar a lista de funcionários
       await queryClient.invalidateQueries({ queryKey: ["employees"] });
@@ -52,13 +57,18 @@ export function useAddCompanyToEmployee(): UseMutationResult<
 export function useUpdateEmployeeCompanyPosition(): UseMutationResult<
   void,
   Error,
-  { solidesId: number; companyId: string; positionId?: string }
+  {
+    solidesId: number;
+    companyId: string;
+    positionId?: string;
+    department?: string;
+  }
 > {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ solidesId, companyId, positionId }) =>
-      updateEmployeeCompanyPosition(solidesId, companyId, positionId),
+    mutationFn: ({ solidesId, companyId, positionId, department }) =>
+      updateEmployeeCompanyPosition(solidesId, companyId, positionId, department),
     onSuccess: async () => {
       // Invalidar e recarregar a lista de funcionários
       await queryClient.invalidateQueries({ queryKey: ["employees"] });

@@ -13,7 +13,7 @@ export async function POST(
   try {
     const { solidesId } = await params;
     const body = await request.json();
-    const { companyId, positionId } = body;
+    const { companyId, positionId, department } = body;
 
     if (!solidesId) {
       return NextResponse.json(
@@ -106,6 +106,10 @@ export async function POST(
         employee_id: localEmployee.id,
         company_id: companyId,
         position_id: resolvedPositionId || null,
+        department:
+          typeof department === "string" && department.trim()
+            ? department.trim()
+            : null,
       })
       .select()
       .single();
@@ -138,7 +142,7 @@ export async function PUT(
   try {
     const { solidesId } = await params;
     const body = await request.json();
-    const { companyId, positionId } = body;
+    const { companyId, positionId, department } = body;
 
     if (!solidesId) {
       return NextResponse.json(
@@ -220,12 +224,26 @@ export async function PUT(
       );
     }
 
-    // Atualizar o cargo
+    // Atualizar o cargo e/ou o setor (apenas os campos enviados no body)
+    const updateData: {
+      position_id?: string | null;
+      department?: string | null;
+    } = {};
+
+    if ("positionId" in body) {
+      updateData.position_id = positionId || null;
+    }
+
+    if ("department" in body) {
+      updateData.department =
+        typeof department === "string" && department.trim()
+          ? department.trim()
+          : null;
+    }
+
     const { data: updatedLink, error: updateError } = await supabaseAdmin
       .from("employee_companies")
-      .update({
-        position_id: positionId || null,
-      })
+      .update(updateData)
       .eq("id", existingLink.id)
       .select()
       .single();

@@ -49,6 +49,7 @@ interface Employee {
       name: string;
       hour_value: number;
     };
+    department?: string;
   }[];
 }
 

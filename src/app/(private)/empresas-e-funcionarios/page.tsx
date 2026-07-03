@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { Permission, hasPermission } from "@/types/permissions";
 import {
@@ -15,6 +15,9 @@ import {
   User,
   Link2,
   Briefcase,
+  Layers,
+  Check,
+  ChevronsUpDown,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -74,6 +77,13 @@ import {
 import { Company } from "@/types/companies";
 import { Employee } from "@/types/employees";
 import { Position, CreatePositionData } from "@/types/positions";
+import {
+  useDepartments,
+  useCreateDepartment,
+  useUpdateDepartment,
+  useDeleteDepartment,
+} from "@/hooks/use-departments";
+import { Department, CreateDepartmentData } from "@/types/departments";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -85,6 +95,24 @@ import {
 } from "@/components/ui/select";
 import { CustomHolidaysTab } from "./custom-holidays-tab";
 import { formatEmployeeName } from "@/utils/employee-name-format";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { cn } from "@/lib/utils";
+
+function removeAccentsFrom(str: string): string {
+  return str.normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
 
 function PositionsManager({ companyId }: { companyId: string }) {
   const { data: positionsData, isLoading } = usePositions(companyId);
@@ -519,6 +547,320 @@ function PositionsManager({ companyId }: { companyId: string }) {
   );
 }
 
+function DepartmentsManager({ companyId }: { companyId: string }) {
+  const { data: departmentsData, isLoading } = useDepartments(companyId);
+  const createDepartmentMutation = useCreateDepartment();
+  const updateDepartmentMutation = useUpdateDepartment();
+  const deleteDepartmentMutation = useDeleteDepartment();
+
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [editingDepartment, setEditingDepartment] = useState<Department | null>(
+    null
+  );
+  const [deletingDepartment, setDeletingDepartment] =
+    useState<Department | null>(null);
+
+  const [departmentName, setDepartmentName] = useState("");
+  const [departmentError, setDepartmentError] = useState<string | undefined>();
+
+  const handleCreateDepartment = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!departmentName.trim()) {
+      setDepartmentError("Nome do setor é obrigatório");
+      return;
+    }
+
+    try {
+      const departmentData: CreateDepartmentData = {
+        name: departmentName.trim(),
+        company_id: companyId,
+      };
+
+      await createDepartmentMutation.mutateAsync({
+        companyId,
+        data: departmentData,
+      });
+
+      toast.success("Setor criado com sucesso!");
+      setIsCreateDialogOpen(false);
+      setDepartmentName("");
+      setDepartmentError(undefined);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Erro ao criar setor"
+      );
+    }
+  };
+
+  const handleEditClick = (department: Department) => {
+    setEditingDepartment(department);
+    setDepartmentName(department.name);
+    setDepartmentError(undefined);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleEditDepartment = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!departmentName.trim()) {
+      setDepartmentError("Nome do setor é obrigatório");
+      return;
+    }
+    if (!editingDepartment) return;
+
+    try {
+      await updateDepartmentMutation.mutateAsync({
+        id: editingDepartment.id,
+        companyId,
+        data: { name: departmentName.trim() },
+      });
+
+      toast.success("Setor atualizado com sucesso!");
+      setIsEditDialogOpen(false);
+      setEditingDepartment(null);
+      setDepartmentName("");
+      setDepartmentError(undefined);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Erro ao atualizar setor"
+      );
+    }
+  };
+
+  const handleDeleteClick = (department: Department) => {
+    setDeletingDepartment(department);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteDepartment = async () => {
+    if (!deletingDepartment) return;
+
+    try {
+      await deleteDepartmentMutation.mutateAsync({
+        id: deletingDepartment.id,
+        companyId,
+      });
+
+      toast.success("Setor excluído com sucesso!");
+      setIsDeleteDialogOpen(false);
+      setDeletingDepartment(null);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Erro ao excluir setor"
+      );
+    }
+  };
+
+  return (
+    <>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold">Setores</h3>
+          <Button
+            onClick={() => {
+              setDepartmentName("");
+              setDepartmentError(undefined);
+              setIsCreateDialogOpen(true);
+            }}
+            size="sm"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Novo Setor
+          </Button>
+        </div>
+
+        {isLoading ? (
+          <div className="space-y-2">
+            {[...Array(3)].map((_, i) => (
+              <Skeleton key={i} className="h-16 w-full" />
+            ))}
+          </div>
+        ) : departmentsData?.departments &&
+          departmentsData.departments.length > 0 ? (
+          <div className="space-y-2">
+            {departmentsData.departments.map((department) => (
+              <Card key={department.id} className="border">
+                <CardContent className="px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                      <Layers className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold text-base truncate">
+                          {department.name}
+                        </h4>
+                      </div>
+                    </div>
+                    <div className="flex gap-1 flex-shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9"
+                        onClick={() => handleEditClick(department)}
+                      >
+                        <Edit className="h-5 w-5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9"
+                        onClick={() => handleDeleteClick(department)}
+                      >
+                        <Trash2 className="h-5 w-5 text-destructive" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-muted-foreground">
+            Nenhum setor cadastrado. Clique no botão acima para adicionar.
+          </div>
+        )}
+      </div>
+
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <DialogContent>
+          <form onSubmit={handleCreateDepartment}>
+            <DialogHeader>
+              <DialogTitle>Criar Novo Setor</DialogTitle>
+              <DialogDescription>
+                Preencha o nome do setor desta empresa.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <Field orientation="vertical">
+                <FieldLabel htmlFor="department-name">
+                  Nome do Setor <span className="text-destructive">*</span>
+                </FieldLabel>
+                <FieldContent>
+                  <Input
+                    id="department-name"
+                    name="name"
+                    placeholder="Ex: Administrativo"
+                    value={departmentName}
+                    onChange={(e) => {
+                      setDepartmentName(e.target.value);
+                      if (departmentError) setDepartmentError(undefined);
+                    }}
+                    aria-invalid={!!departmentError}
+                  />
+                  {departmentError && (
+                    <FieldError>{departmentError}</FieldError>
+                  )}
+                </FieldContent>
+              </Field>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsCreateDialogOpen(false)}
+                disabled={createDepartmentMutation.isPending}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={createDepartmentMutation.isPending}
+              >
+                {createDepartmentMutation.isPending ? "Criando..." : "Criar"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <form onSubmit={handleEditDepartment}>
+            <DialogHeader>
+              <DialogTitle>Editar Setor</DialogTitle>
+              <DialogDescription>
+                Atualize o nome do setor.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <Field orientation="vertical">
+                <FieldLabel htmlFor="edit-department-name">
+                  Nome do Setor <span className="text-destructive">*</span>
+                </FieldLabel>
+                <FieldContent>
+                  <Input
+                    id="edit-department-name"
+                    name="name"
+                    placeholder="Ex: Administrativo"
+                    value={departmentName}
+                    onChange={(e) => {
+                      setDepartmentName(e.target.value);
+                      if (departmentError) setDepartmentError(undefined);
+                    }}
+                    aria-invalid={!!departmentError}
+                  />
+                  {departmentError && (
+                    <FieldError>{departmentError}</FieldError>
+                  )}
+                </FieldContent>
+              </Field>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsEditDialogOpen(false)}
+                disabled={updateDepartmentMutation.isPending}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={updateDepartmentMutation.isPending}
+              >
+                {updateDepartmentMutation.isPending ? "Salvando..." : "Salvar"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir Setor</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja excluir o setor
+              {deletingDepartment ? ` "${deletingDepartment.name}"` : ""}? Essa
+              ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsDeleteDialogOpen(false)}
+              disabled={deleteDepartmentMutation.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleDeleteDepartment}
+              disabled={deleteDepartmentMutation.isPending}
+            >
+              {deleteDepartmentMutation.isPending ? "Excluindo..." : "Excluir"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 function CompanyPositionSelect({
   companyId,
   selectedPositionId,
@@ -606,8 +948,95 @@ function CompanyPositionSelect({
   );
 }
 
+function CompanyDepartmentSelect({
+  companyId,
+  selectedDepartment,
+  onDepartmentChange,
+}: {
+  companyId: string;
+  selectedDepartment: string;
+  onDepartmentChange: (department: string) => void;
+}) {
+  const { data: departmentsData, isLoading } = useDepartments(companyId);
+
+  const selectValue =
+    selectedDepartment && selectedDepartment !== ""
+      ? selectedDepartment
+      : undefined;
+
+  const hasDepartments =
+    departmentsData?.departments && departmentsData.departments.length > 0;
+
+  if (!isLoading && !hasDepartments) {
+    return (
+      <div className="pl-8 space-y-2">
+        <Field orientation="vertical">
+          <FieldLabel htmlFor={`department-${companyId}`}>
+            Setor (opcional)
+          </FieldLabel>
+          <FieldContent>
+            <p className="text-sm text-muted-foreground">
+              Nenhum setor cadastrado para esta empresa.
+            </p>
+          </FieldContent>
+        </Field>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pl-8 space-y-2">
+      <Field orientation="vertical">
+        <FieldLabel htmlFor={`department-${companyId}`}>
+          Setor (opcional)
+        </FieldLabel>
+        <FieldContent>
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground">
+              Carregando setores...
+            </p>
+          ) : (
+            <>
+              <Select
+                value={selectValue}
+                onValueChange={(value) => onDepartmentChange(value || "")}
+                disabled={isLoading}
+              >
+                <SelectTrigger id={`department-${companyId}`}>
+                  <SelectValue placeholder="Selecione um setor (opcional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {departmentsData?.departments &&
+                    departmentsData.departments.map((department) => (
+                      <SelectItem key={department.id} value={department.name}>
+                        {department.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              {selectValue && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="mt-2 h-7 text-xs"
+                  onClick={() => onDepartmentChange("")}
+                >
+                  Remover setor
+                </Button>
+              )}
+            </>
+          )}
+        </FieldContent>
+      </Field>
+    </div>
+  );
+}
+
 function CompaniesEmployeesTab() {
   const [showInactiveEmployees, setShowInactiveEmployees] = useState(false);
+  const [openEmployeeFilter, setOpenEmployeeFilter] = useState(false);
+  const [employeeFilterId, setEmployeeFilterId] = useState<string>("");
   const {
     data: employeesData,
     isLoading: employeesLoading,
@@ -617,6 +1046,20 @@ function CompaniesEmployeesTab() {
     size: 100,
     includeFired: showInactiveEmployees,
   });
+
+  const filteredEmployees = useMemo(() => {
+    const list = employeesData?.content || [];
+    if (!employeeFilterId) return list;
+    return list.filter((e) => String(e.id) === employeeFilterId);
+  }, [employeesData, employeeFilterId]);
+
+  const selectedEmployeeName = useMemo(() => {
+    if (!employeeFilterId) return "";
+    const e = (employeesData?.content || []).find(
+      (emp) => String(emp.id) === employeeFilterId
+    );
+    return e ? formatEmployeeName(e.name) : "";
+  }, [employeesData, employeeFilterId]);
 
   const { data: companiesData } = useCompanies();
   const addCompanyMutation = useAddCompanyToEmployee();
@@ -632,6 +1075,9 @@ function CompaniesEmployeesTab() {
     new Set()
   );
   const [selectedPositions, setSelectedPositions] = useState<
+    Map<string, string>
+  >(new Map());
+  const [selectedDepartments, setSelectedDepartments] = useState<
     Map<string, string>
   >(new Map());
 
@@ -652,6 +1098,15 @@ function CompaniesEmployeesTab() {
     });
     setSelectedPositions(positionsMap);
 
+    // Inicializar com setores já vinculados
+    const departmentsMap = new Map<string, string>();
+    (employee.companies || []).forEach((c) => {
+      if (c.department) {
+        departmentsMap.set(c.id, c.department);
+      }
+    });
+    setSelectedDepartments(departmentsMap);
+
     setIsManageCompaniesDialogOpen(true);
   };
 
@@ -663,6 +1118,10 @@ function CompaniesEmployeesTab() {
       const newPositions = new Map(selectedPositions);
       newPositions.delete(companyId);
       setSelectedPositions(newPositions);
+      // Remover setor quando desmarcar empresa
+      const newDepartments = new Map(selectedDepartments);
+      newDepartments.delete(companyId);
+      setSelectedDepartments(newDepartments);
     } else {
       newSelected.add(companyId);
     }
@@ -677,6 +1136,16 @@ function CompaniesEmployeesTab() {
       newPositions.set(companyId, positionId);
     }
     setSelectedPositions(newPositions);
+  };
+
+  const handleDepartmentChange = (companyId: string, department: string) => {
+    const newDepartments = new Map(selectedDepartments);
+    if (department === "") {
+      newDepartments.delete(companyId);
+    } else {
+      newDepartments.set(companyId, department);
+    }
+    setSelectedDepartments(newDepartments);
   };
 
   const handleSaveCompanies = async () => {
@@ -699,14 +1168,16 @@ function CompaniesEmployeesTab() {
       // Adicionar empresas
       for (const companyId of toAdd) {
         const positionId = selectedPositions.get(companyId);
+        const department = selectedDepartments.get(companyId);
         await addCompanyMutation.mutateAsync({
           solidesId: selectedEmployee.id,
           companyId,
           positionId,
+          department,
         });
       }
 
-      // Atualizar cargos de empresas já vinculadas
+      // Atualizar cargos e setores de empresas já vinculadas
       for (const companyId of toUpdate) {
         const currentCompany = selectedEmployee.companies?.find(
           (c) => c.id === companyId
@@ -715,19 +1186,33 @@ function CompaniesEmployeesTab() {
         const newPositionId = selectedPositions.get(companyId) || undefined;
 
         // Normalizar para comparação (null/undefined/string vazia são tratados como sem cargo)
-        const normalizedCurrent =
+        const normalizedCurrentPos =
           currentPositionId && currentPositionId !== ""
             ? currentPositionId
             : undefined;
-        const normalizedNew =
+        const normalizedNewPos =
           newPositionId && newPositionId !== "" ? newPositionId : undefined;
 
-        // Só atualizar se o cargo mudou
-        if (normalizedCurrent !== normalizedNew) {
+        const currentDepartment = currentCompany?.department || undefined;
+        const newDepartment = selectedDepartments.get(companyId) || undefined;
+        const normalizedCurrentDep =
+          currentDepartment && currentDepartment !== ""
+            ? currentDepartment
+            : undefined;
+        const normalizedNewDep =
+          newDepartment && newDepartment !== "" ? newDepartment : undefined;
+
+        // Só atualizar se cargo ou setor mudaram (envia ambos como string,
+        // "" limpa o campo no backend)
+        if (
+          normalizedCurrentPos !== normalizedNewPos ||
+          normalizedCurrentDep !== normalizedNewDep
+        ) {
           await updatePositionMutation.mutateAsync({
             solidesId: selectedEmployee.id,
             companyId,
-            positionId: normalizedNew,
+            positionId: normalizedNewPos ?? "",
+            department: normalizedNewDep ?? "",
           });
         }
       }
@@ -745,6 +1230,7 @@ function CompaniesEmployeesTab() {
       setSelectedEmployee(null);
       setSelectedCompanyIds(new Set());
       setSelectedPositions(new Map());
+      setSelectedDepartments(new Map());
     } catch (error) {
       toast.error(
         error instanceof Error
@@ -833,6 +1319,81 @@ function CompaniesEmployeesTab() {
                 Exibir inativos
               </label>
             </div>
+            <div className="mt-3">
+              <Popover
+                open={openEmployeeFilter}
+                onOpenChange={setOpenEmployeeFilter}
+              >
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openEmployeeFilter}
+                    className="w-[260px] justify-between font-normal"
+                  >
+                    <span className="truncate">
+                      {selectedEmployeeName || "Filtrar por nome..."}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[260px] p-0">
+                  <Command
+                    filter={(value, search) => {
+                      const v = removeAccentsFrom(value).toLowerCase();
+                      const s = removeAccentsFrom(search).toLowerCase();
+                      return v.includes(s) ? 1 : 0;
+                    }}
+                  >
+                    <CommandInput placeholder="Pesquisar funcionário..." />
+                    <CommandList>
+                      <CommandEmpty>
+                        Nenhum funcionário encontrado.
+                      </CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="todos"
+                          onSelect={() => {
+                            setEmployeeFilterId("");
+                            setOpenEmployeeFilter(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              employeeFilterId === ""
+                                ? "opacity-100"
+                                : "opacity-0"
+                            )}
+                          />
+                          Todos
+                        </CommandItem>
+                        {(employeesData?.content || []).map((emp) => (
+                          <CommandItem
+                            key={emp.id}
+                            value={`${formatEmployeeName(emp.name)}__${emp.id}`}
+                            onSelect={() => {
+                              setEmployeeFilterId(String(emp.id));
+                              setOpenEmployeeFilter(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                employeeFilterId === String(emp.id)
+                                  ? "opacity-100"
+                                  : "opacity-0"
+                              )}
+                            />
+                            {formatEmployeeName(emp.name)}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
           </CardHeader>
           <CardContent className="p-0 sm:p-6">
             {/* Visualização Desktop: Tabela */}
@@ -851,7 +1412,7 @@ function CompaniesEmployeesTab() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {employeesData.content.map((employee) => (
+                  {filteredEmployees.map((employee) => (
                     <TableRow key={employee.id}>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
@@ -876,6 +1437,11 @@ function CompaniesEmployeesTab() {
                                 {company.position && (
                                   <span className="ml-1 text-xs">
                                     ({company.position.name})
+                                  </span>
+                                )}
+                                {company.department && (
+                                  <span className="ml-1 text-xs">
+                                    / ({company.department})
                                   </span>
                                 )}
                               </Badge>
@@ -927,7 +1493,7 @@ function CompaniesEmployeesTab() {
 
             {/* Visualização Mobile: Cards */}
             <div className="md:hidden space-y-3 p-4">
-              {employeesData.content.map((employee) => (
+              {filteredEmployees.map((employee) => (
                 <Card key={employee.id} className="border">
                   <CardContent className="p-4">
                     <div className="space-y-3">
@@ -968,6 +1534,11 @@ function CompaniesEmployeesTab() {
                                     {company.position && (
                                       <span className="ml-1">
                                         ({company.position.name})
+                                      </span>
+                                    )}
+                                    {company.department && (
+                                      <span className="ml-1">
+                                        / ({company.department})
                                       </span>
                                     )}
                                   </Badge>
@@ -1015,7 +1586,7 @@ function CompaniesEmployeesTab() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {employeesData.content.map((employee) => (
+                    {filteredEmployees.map((employee) => (
                       <TableRow key={employee.id}>
                         <TableCell className="font-medium">
                           <div className="flex items-center gap-2">
@@ -1043,6 +1614,11 @@ function CompaniesEmployeesTab() {
                                   {company.position && (
                                     <span className="ml-1">
                                       ({company.position.name})
+                                    </span>
+                                  )}
+                                  {company.department && (
+                                    <span className="ml-1">
+                                      / ({company.department})
                                     </span>
                                   )}
                                 </Badge>
@@ -1149,15 +1725,26 @@ function CompaniesEmployeesTab() {
                       </label>
                     </div>
                     {selectedCompanyIds.has(company.id) && (
-                      <CompanyPositionSelect
-                        companyId={company.id}
-                        selectedPositionId={
-                          selectedPositions.get(company.id) || ""
-                        }
-                        onPositionChange={(positionId: string) =>
-                          handlePositionChange(company.id, positionId)
-                        }
-                      />
+                      <>
+                        <CompanyPositionSelect
+                          companyId={company.id}
+                          selectedPositionId={
+                            selectedPositions.get(company.id) || ""
+                          }
+                          onPositionChange={(positionId: string) =>
+                            handlePositionChange(company.id, positionId)
+                          }
+                        />
+                        <CompanyDepartmentSelect
+                          companyId={company.id}
+                          selectedDepartment={
+                            selectedDepartments.get(company.id) || ""
+                          }
+                          onDepartmentChange={(department: string) =>
+                            handleDepartmentChange(company.id, department)
+                          }
+                        />
+                      </>
                     )}
                   </div>
                 ))}
@@ -1177,6 +1764,7 @@ function CompaniesEmployeesTab() {
                 setSelectedEmployee(null);
                 setSelectedCompanyIds(new Set());
                 setSelectedPositions(new Map());
+                setSelectedDepartments(new Map());
               }}
               disabled={
                 addCompanyMutation.isPending ||
@@ -1251,6 +1839,9 @@ export default function EmpresasPage() {
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [deletingCompany, setDeletingCompany] = useState<Company | null>(null);
   const [managingPositionsCompany, setManagingPositionsCompany] =
+    useState<Company | null>(null);
+  const [isDepartmentsDialogOpen, setIsDepartmentsDialogOpen] = useState(false);
+  const [managingDepartmentsCompany, setManagingDepartmentsCompany] =
     useState<Company | null>(null);
 
   const [formData, setFormData] = useState({
@@ -1464,6 +2055,18 @@ export default function EmpresasPage() {
     setIsPositionsDialogOpen(open);
     if (!open) {
       setManagingPositionsCompany(null);
+    }
+  };
+
+  const handleManageDepartmentsClick = (company: Company) => {
+    setManagingDepartmentsCompany(company);
+    setIsDepartmentsDialogOpen(true);
+  };
+
+  const handleDepartmentsDialogOpenChange = (open: boolean) => {
+    setIsDepartmentsDialogOpen(open);
+    if (!open) {
+      setManagingDepartmentsCompany(null);
     }
   };
 
@@ -1851,6 +2454,14 @@ export default function EmpresasPage() {
                                     <Briefcase className="h-4 w-4 mr-2" />
                                     Gerenciar Cargos
                                   </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      handleManageDepartmentsClick(company)
+                                    }
+                                  >
+                                    <Layers className="h-4 w-4 mr-2" />
+                                    Gerenciar Setores
+                                  </DropdownMenuItem>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem
                                     variant="destructive"
@@ -1920,6 +2531,14 @@ export default function EmpresasPage() {
                                   >
                                     <Briefcase className="h-4 w-4 mr-2" />
                                     Gerenciar Cargos
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      handleManageDepartmentsClick(company)
+                                    }
+                                  >
+                                    <Layers className="h-4 w-4 mr-2" />
+                                    Gerenciar Setores
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem
@@ -2055,6 +2674,16 @@ export default function EmpresasPage() {
                                     >
                                       <Briefcase className="h-4 w-4 mr-2" />
                                       Gerenciar Cargos
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() =>
+                                        handleManageDepartmentsClick(
+                                          company
+                                        )
+                                      }
+                                    >
+                                      <Layers className="h-4 w-4 mr-2" />
+                                      Gerenciar Setores
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
@@ -2300,6 +2929,26 @@ export default function EmpresasPage() {
         </DialogHeader>
         {managingPositionsCompany && (
           <PositionsManager companyId={managingPositionsCompany.id} />
+        )}
+      </DialogContent>
+    </Dialog>
+
+    {/* Dialog de Gerenciar Setores */}
+    <Dialog
+      open={isDepartmentsDialogOpen}
+      onOpenChange={handleDepartmentsDialogOpenChange}
+    >
+      <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>
+            Gerenciar Setores - {managingDepartmentsCompany?.name}
+          </DialogTitle>
+          <DialogDescription>
+            Crie e gerencie os setores desta empresa.
+          </DialogDescription>
+        </DialogHeader>
+        {managingDepartmentsCompany && (
+          <DepartmentsManager companyId={managingDepartmentsCompany.id} />
         )}
       </DialogContent>
     </Dialog>

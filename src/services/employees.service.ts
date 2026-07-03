@@ -33,14 +33,15 @@ export async function fetchEmployees(
 export async function addCompanyToEmployee(
   solidesId: number,
   companyId: string,
-  positionId?: string
+  positionId?: string,
+  department?: string
 ): Promise<void> {
   const response = await fetch(`/api/employees/${solidesId}/companies`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ companyId, positionId }),
+    body: JSON.stringify({ companyId, positionId, department }),
   });
 
   if (!response.ok) {
@@ -52,14 +53,15 @@ export async function addCompanyToEmployee(
 export async function updateEmployeeCompanyPosition(
   solidesId: number,
   companyId: string,
-  positionId?: string
+  positionId?: string,
+  department?: string
 ): Promise<void> {
   const response = await fetch(`/api/employees/${solidesId}/companies`, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ companyId, positionId }),
+    body: JSON.stringify({ companyId, positionId, department }),
   });
 
   if (!response.ok) {
