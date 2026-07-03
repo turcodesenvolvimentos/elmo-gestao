@@ -127,6 +127,30 @@ export const exportPontoResumoPDF = async (
   return data;
 };
 
+// Funcionário no PDF consolidado de todos (detalhado, uma página por pessoa)
+export interface PontoTodosEmployee {
+  employeeName?: string;
+  employeeCpf?: string;
+  employeeAdmissionDate?: string;
+  data: PontoData[];
+}
+
+export interface ExportPontoTodosParams {
+  startDate: string;
+  endDate: string;
+  employees: PontoTodosEmployee[];
+}
+
+// Exportar PDF consolidado com todos os funcionários que bateram ponto no período
+export const exportPontoTodosPDF = async (
+  params: ExportPontoTodosParams
+): Promise<Blob> => {
+  const { data } = await axios.post("/api/ponto/export-todos", params, {
+    responseType: "blob",
+  });
+  return data;
+};
+
 // Salvar relatório de ponto no histórico
 export const savePontoToHistory = async (
   params: SavePontoToHistoryParams

@@ -51,6 +51,7 @@ import { PontoHistory } from "./components/ponto-history";
 import {
   useExportPontoPDF,
   useExportPontoResumoPDF,
+  useExportPontoTodosPDF,
   useSavePontoToHistory,
 } from "@/hooks/use-ponto";
 import type { PontoData } from "@/services/ponto.service";
@@ -135,7 +136,10 @@ function toYyyyMmDdFromUtcDate(date: Date): string {
 }
 
 function isNoCompany(value?: string | null): boolean {
-  return (value || "").trim().toLowerCase() === "sem empresa";
+  return (
+    (value || "").trim().toLowerCase() ===
+    NO_MAPPED_COMPANY_LABEL.trim().toLowerCase()
+  );
 }
 
 interface GroupedPunch {
@@ -243,6 +247,7 @@ export default function PontoPage() {
   }, [employees]);
 
   const selectedEmployeeName = useMemo(() => {
+    if (filter.employeeId === 0) return "Todos";
     if (!filter.employeeId || !employees?.content) return "";
     const employee = employees.content.find((e) => e.id === filter.employeeId);
     return employee ? formatEmployeeName(employee.name) : "";
@@ -326,6 +331,7 @@ export default function PontoPage() {
 
   const exportPDFMutation = useExportPontoPDF();
   const exportResumoMutation = useExportPontoResumoPDF();
+  const exportTodosMutation = useExportPontoTodosPDF();
   const saveToHistoryMutation = useSavePontoToHistory();
 
   const loadMoreRef = useRef<HTMLTableRowElement>(null);
@@ -394,6 +400,17 @@ export default function PontoPage() {
       const dateB = String(b.dateIn || b.dateOut || b.date);
       return dateA.localeCompare(dateB);
     });
+
+    const solidesIdByEmployeeName = new Map<string, number>();
+    if (employees?.content) {
+      for (const emp of employees.content) {
+        solidesIdByEmployeeName.set(formatEmployeeName(emp.name), emp.id);
+      }
+    }
+    const resolveSolidesId = (name: string): number =>
+      filter.employeeId > 0
+        ? filter.employeeId
+        : (solidesIdByEmployeeName.get(name) ?? 0);
 
     const grouped = new Map<string, GroupedPunch>();
     const lastGroupByEmployee = new Map<
@@ -497,7 +514,7 @@ export default function PontoPage() {
           key,
           employeeName: formatEmployeeName(punch.employee?.name) || "-",
           company: resolveWorkCompanyName({
-            employeeSolidesId: filter.employeeId,
+            employeeSolidesId: resolveSolidesId(employeeName),
             workDate: baseDateStr,
             locationInAddress: punch.locationIn?.address,
             locationOutAddress: punch.locationOut?.address,
@@ -779,7 +796,7 @@ export default function PontoPage() {
           const dayOfWeekNumber = date.getDay();
 
           const company = resolveWorkCompanyName({
-            employeeSolidesId: filter.employeeId,
+            employeeSolidesId: resolveSolidesId(employeeName),
             workDate: dateStr,
             locationInAddress: null,
             locationOutAddress: null,
@@ -831,19 +848,37 @@ export default function PontoPage() {
       },
     );
 
-    groupedPunchesInSelectedRange.sort((a, b) => {
+    // No modo "Todos", inclui apenas funcionarios que realmente bateram ponto
+    // dentro do periodo. Sem isso, quem tem uma unica batida no dia de contexto
+    // (vespera/dia seguinte, usado para colar turnos noturnos) entraria no
+    // relatorio com a pagina inteira vazia.
+    const groupedPunchesFiltered =
+      filter.employeeId === 0
+        ? (() => {
+            const employeesWithRealPunch = new Set(
+              groupedPunchesInSelectedRange
+                .filter((g) => g.punches.length > 0)
+                .map((g) => g.employeeName),
+            );
+            return groupedPunchesInSelectedRange.filter((g) =>
+              employeesWithRealPunch.has(g.employeeName),
+            );
+          })()
+        : groupedPunchesInSelectedRange;
+
+    groupedPunchesFiltered.sort((a, b) => {
       const employeeCompare = a.employeeName.localeCompare(b.employeeName);
       if (employeeCompare !== 0) return employeeCompare;
       return a.date.localeCompare(b.date);
     });
 
     let maxPairs = 1;
-    groupedPunchesInSelectedRange.forEach((group) => {
+    groupedPunchesFiltered.forEach((group) => {
       maxPairs = Math.max(maxPairs, group.punches.length);
     });
 
     return {
-      groupedPunches: groupedPunchesInSelectedRange,
+      groupedPunches: groupedPunchesFiltered,
       maxPunchPairs: maxPairs,
       totals: {
         horasDiurnas: formatarHoras(totalsNumeric.horasDiurnas),
@@ -868,6 +903,7 @@ export default function PontoPage() {
     shouldSendDates,
     customHolidaySet,
     escalaEntries,
+    employees,
   ]);
 
   const prepareExportData = (): PontoData[] => {
@@ -1055,6 +1091,38 @@ export default function PontoPage() {
       startDate: filter.startDate,
       endDate: filter.endDate,
       data,
+    });
+  };
+
+  // Gera um PDF detalhado consolidado: uma pagina por funcionario que bateu
+  // ponto no periodo filtrado.
+  const handleExportTodos = () => {
+    if (!filter.startDate || !filter.endDate || groupedPunches.length === 0) {
+      return;
+    }
+
+    const exportData = prepareExportData();
+
+    const byEmp = new Map<string, PontoData[]>();
+    for (const row of exportData) {
+      const key = row.employeeName || "—";
+      if (!byEmp.has(key)) byEmp.set(key, []);
+      byEmp.get(key)!.push(row);
+    }
+
+    const employeesPayload = Array.from(byEmp.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([name, rows]) => ({
+        employeeName: name,
+        employeeCpf: rows[0]?.employeeCpf,
+        employeeAdmissionDate: rows[0]?.employeeAdmissionDate,
+        data: rows,
+      }));
+
+    exportTodosMutation.mutate({
+      startDate: filter.startDate,
+      endDate: filter.endDate,
+      employees: employeesPayload,
     });
   };
 
@@ -1439,6 +1507,25 @@ export default function PontoPage() {
                   isDateRangeValid &&
                   groupedPunches.length > 0 && (
                     <div className="ml-auto flex gap-2">
+                      {/* Exportar PDF detalhado de todos: apenas no modo Todos */}
+                      {filter.employeeId === 0 && (
+                        <Button
+                          onClick={handleExportTodos}
+                          disabled={exportTodosMutation.isPending}
+                        >
+                          {exportTodosMutation.isPending ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Exportando...
+                            </>
+                          ) : (
+                            <>
+                              <Download className="mr-2 h-4 w-4" />
+                              Exportar PDF
+                            </>
+                          )}
+                        </Button>
+                      )}
                       {/* Resumo PDF: apenas no modo Todos (employeeId === 0) */}
                       {filter.employeeId === 0 && (
                         <Button

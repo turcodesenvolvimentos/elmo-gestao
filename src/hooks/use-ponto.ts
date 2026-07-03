@@ -4,6 +4,8 @@ import {
   ExportPontoParams,
   exportPontoResumoPDF,
   ExportPontoResumoParams,
+  exportPontoTodosPDF,
+  ExportPontoTodosParams,
   savePontoToHistory,
   fetchPontoHistory,
   downloadPontoFromHistory,
@@ -63,6 +65,29 @@ export const useExportPontoResumoPDF = () => {
     onError: (error) => {
       console.error("Erro ao exportar resumo:", error);
       toast.error("Erro ao exportar resumo");
+    },
+  });
+};
+
+// Hook para exportar PDF consolidado de todos os funcionarios (detalhado)
+export const useExportPontoTodosPDF = () => {
+  return useMutation<Blob, Error, ExportPontoTodosParams>({
+    mutationFn: exportPontoTodosPDF,
+    onSuccess: (blob, variables) => {
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `relatorio-ponto-todos-${variables.startDate}-${variables.endDate}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast.success("PDF exportado com sucesso!");
+    },
+    onError: (error) => {
+      console.error("Erro ao exportar PDF:", error);
+      toast.error("Erro ao exportar PDF");
     },
   });
 };

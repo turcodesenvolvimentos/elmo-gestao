@@ -321,7 +321,7 @@ const calculateTotals = (data: PontoData[]) => {
   };
 };
 
-export const PontoPDF: React.FC<PontoPDFProps> = ({
+const PontoReportPage: React.FC<PontoPDFProps> = ({
   employeeName,
   startDate,
   endDate,
@@ -333,7 +333,6 @@ export const PontoPDF: React.FC<PontoPDFProps> = ({
   const totals = calculateTotals(data);
 
   return (
-    <Document>
       <Page size="A4" orientation="portrait" style={styles.page}>
         <View style={styles.header}>
           <View style={styles.headerTop}>
@@ -491,6 +490,47 @@ export const PontoPDF: React.FC<PontoPDFProps> = ({
           />
         </View>
       </Page>
-    </Document>
   );
 };
+
+export const PontoPDF: React.FC<PontoPDFProps> = (props) => (
+  <Document>
+    <PontoReportPage {...props} />
+  </Document>
+);
+
+interface PontoTodosEmployee {
+  employeeName?: string;
+  employeeCpf?: string;
+  employeeAdmissionDate?: string | number;
+  data: PontoData[];
+}
+
+interface PontoPDFTodosProps {
+  startDate: string;
+  endDate: string;
+  logoBase64?: string;
+  employees: PontoTodosEmployee[];
+}
+
+export const PontoPDFTodos: React.FC<PontoPDFTodosProps> = ({
+  startDate,
+  endDate,
+  logoBase64,
+  employees,
+}) => (
+  <Document>
+    {employees.map((emp, index) => (
+      <PontoReportPage
+        key={index}
+        employeeName={emp.employeeName}
+        startDate={startDate}
+        endDate={endDate}
+        data={emp.data}
+        logoBase64={logoBase64}
+        employeeCpf={emp.employeeCpf}
+        employeeAdmissionDate={emp.employeeAdmissionDate}
+      />
+    ))}
+  </Document>
+);
