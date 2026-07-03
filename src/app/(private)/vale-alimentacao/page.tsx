@@ -644,23 +644,35 @@ export default function ValeAlimentacaoPage() {
         const workDate = new Date(dateStr + "T12:00:00Z");
         const dayOfWeek = workDate.getDay(); // 0 = domingo, 6 = sábado
         const isHoliday = isHolidayForDisplay(dateStr, customHolidaySet);
-        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6; // Domingo ou sábado
-        const isWeekendOrHoliday = isWeekend || isHoliday;
+        const isSaturday = dayOfWeek === 6;
+        const isSundayOrHoliday = dayOfWeek === 0 || isHoliday;
 
-        // Regras de ativação automática:
-        // - Dia útil (segunda a sexta, não feriado): > 6 horas → ativa automaticamente
-        // - Sábado, domingo ou feriado: > 4 horas → ativa automaticamente
-        const minHoursForAutoActivation = isWeekendOrHoliday ? 4 : 6;
-        const shouldAutoActivate =
-          totalHoursNumeric > minHoursForAutoActivation;
+        // Regras de ativação automática (atingir o limite já ativa):
+        // - Dia útil (seg-sex, não feriado): ajuda de custo >= 4h; vale >= 6h
+        // - Sábado: ajuda de custo >= 3:50 (4h com 10 min de tolerância); vale não ativa
+        // - Domingo/feriado: mantém a regra atual (> 4h para ambos)
+        const SABADO_AJUDA_MIN = 3 + 50 / 60;
+        let valeShouldAutoActivate: boolean;
+        let ajudaShouldAutoActivate: boolean;
+
+        if (isSundayOrHoliday) {
+          valeShouldAutoActivate = totalHoursNumeric > 4;
+          ajudaShouldAutoActivate = totalHoursNumeric > 4;
+        } else if (isSaturday) {
+          valeShouldAutoActivate = false;
+          ajudaShouldAutoActivate = totalHoursNumeric >= SABADO_AJUDA_MIN;
+        } else {
+          valeShouldAutoActivate = totalHoursNumeric >= 6;
+          ajudaShouldAutoActivate = totalHoursNumeric >= 4;
+        }
 
         // Se há estado salvo, usar ele; senão, usar regra automática baseada nas horas
         const valeAlimentacaoEnabled = savedState
           ? savedState.vale_alimentacao
-          : shouldAutoActivate && vrValue > 0;
+          : valeShouldAutoActivate && vrValue > 0;
         const ajudaCustoEnabled = savedState
           ? savedState.ajuda_custo
-          : shouldAutoActivate && costHelpValue > 0;
+          : ajudaShouldAutoActivate && costHelpValue > 0;
 
         // Formatar entradas e saídas
         const punches = group.punches.filter(
@@ -1049,8 +1061,8 @@ export default function ValeAlimentacaoPage() {
 
             <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-end lg:gap-6">
               <div className="flex-1 space-y-4 lg:space-y-0 lg:flex lg:items-center lg:gap-4">
-                <div className="flex items-center gap-2 flex-1">
-                  <div className="relative flex-1">
+                <div className="flex items-center gap-2">
+                  <div className="relative w-full sm:w-[260px]">
                     <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
                       placeholder="Buscar por nome..."
@@ -1325,6 +1337,9 @@ export default function ValeAlimentacaoPage() {
                               Data
                             </th>
                             <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
+                              Dia da Semana
+                            </th>
+                            <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
                               Empresa
                             </th>
                             <th className="h-12 px-4 text-left align-middle font-medium whitespace-nowrap bg-background">
@@ -1354,7 +1369,7 @@ export default function ValeAlimentacaoPage() {
                           {workDays.length === 0 ? (
                             <tr>
                               <td
-                                colSpan={9}
+                                colSpan={10}
                                 className="p-8 text-center text-muted-foreground"
                               >
                                 Nenhum dia trabalhado encontrado no
@@ -1369,6 +1384,14 @@ export default function ValeAlimentacaoPage() {
                               >
                                 <td className="p-4 align-middle font-medium whitespace-nowrap">
                                   {day.formattedDate}
+                                </td>
+                                <td className="p-4 align-middle whitespace-nowrap capitalize">
+                                  {new Date(
+                                    day.date + "T12:00:00Z"
+                                  ).toLocaleDateString("pt-BR", {
+                                    weekday: "long",
+                                    timeZone: "UTC",
+                                  })}
                                 </td>
                                 <td className="p-4 align-middle whitespace-nowrap">
                                   {day.company}
