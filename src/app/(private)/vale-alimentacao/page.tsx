@@ -11,7 +11,15 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState, useMemo } from "react";
-import { Search, History, Download, Loader2, Eye } from "lucide-react";
+import {
+  Search,
+  History,
+  Download,
+  Loader2,
+  Eye,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { useEmployees } from "@/hooks/use-employees";
 import { usePunchesInfinite } from "@/hooks/use-punches";
 import { useCompanies } from "@/hooks/use-companies";
@@ -803,6 +811,26 @@ export default function ValeAlimentacaoPage() {
     }
   };
 
+  const navigateEmployee = (direction: "prev" | "next") => {
+    if (!selectedEmployee || filteredEmployees.length <= 1) return;
+    const currentIndex = filteredEmployees.findIndex(
+      (e) => e.id === selectedEmployee.id
+    );
+    if (currentIndex === -1) return;
+    const nextIndex =
+      direction === "next"
+        ? (currentIndex + 1) % filteredEmployees.length
+        : (currentIndex - 1 + filteredEmployees.length) %
+          filteredEmployees.length;
+    const nextSummary = filteredEmployees[nextIndex];
+    const fullEmployee = employeesData?.content.find(
+      (e) => e.id === nextSummary.id
+    );
+    if (fullEmployee) {
+      setSelectedEmployee(fullEmployee);
+    }
+  };
+
   const handleApplyFilters = () => {
     if (startDate && endDate && isInputDateRangeValid) {
       setAppliedFilters({ startDate, endDate });
@@ -1244,10 +1272,32 @@ export default function ValeAlimentacaoPage() {
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
           <DialogContent className="dialog-override flex flex-col p-6">
             <DialogHeader>
-              <DialogTitle className="flex items-center justify-between text-xl">
-                <span>
+              <DialogTitle className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-xl">
+                <span className="truncate min-w-0">
                   Detalhes do Funcionário - {selectedEmployee?.name}
                 </span>
+                <div className="flex items-center gap-1 justify-self-center">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 flex-shrink-0"
+                    onClick={() => navigateEmployee("prev")}
+                    disabled={filteredEmployees.length <= 1}
+                    title="Colaborador anterior"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 flex-shrink-0"
+                    onClick={() => navigateEmployee("next")}
+                    disabled={filteredEmployees.length <= 1}
+                    title="Próximo colaborador"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
                 {selectedEmployee &&
                   appliedFilters.startDate &&
                   appliedFilters.endDate && (
@@ -1258,7 +1308,7 @@ export default function ValeAlimentacaoPage() {
                         saveToHistoryMutation.isPending ||
                         workDays.length === 0
                       }
-                      className="gap-2"
+                      className="gap-2 mr-8 justify-self-end"
                       size="sm"
                     >
                       {exportPDFMutation.isPending ||
