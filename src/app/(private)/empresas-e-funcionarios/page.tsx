@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { Permission, hasPermission } from "@/types/permissions";
 import {
@@ -1820,17 +1820,11 @@ export default function EmpresasPage() {
 
   const [activeTab, setActiveTab] = useState("empresas");
 
-  // Ajusta a aba ativa quando as permissões carregam: se o usuário está numa
-  // aba que não pode ver, move para a primeira aba permitida.
-  useEffect(() => {
-    const allowed =
-      (activeTab === "empresas" && canCompanies) ||
-      (activeTab === "funcionarios" && canEmployees) ||
-      (activeTab === "feriados" && canFeriados);
-    if (!allowed) {
-      setActiveTab(firstAllowedTab);
-    }
-  }, [canCompanies, canEmployees, canFeriados, activeTab, firstAllowedTab]);
+  const activeTabAllowed =
+    (activeTab === "empresas" && canCompanies) ||
+    (activeTab === "funcionarios" && canEmployees) ||
+    (activeTab === "feriados" && canFeriados);
+  const effectiveTab = activeTabAllowed ? activeTab : firstAllowedTab;
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -2086,7 +2080,7 @@ export default function EmpresasPage() {
       </div>
 
       <Tabs
-        value={activeTab}
+        value={effectiveTab}
         onValueChange={setActiveTab}
         className="w-full"
       >
@@ -2173,7 +2167,7 @@ export default function EmpresasPage() {
               )}
             </TabsList>
 
-            {activeTab !== "feriados" && (
+            {effectiveTab !== "feriados" && (
             <Dialog
               open={isDialogOpen}
               onOpenChange={handleDialogOpenChange}
@@ -2181,7 +2175,7 @@ export default function EmpresasPage() {
               <DialogTrigger asChild>
                 <Button className="w-full sm:w-auto">
                   <Plus className="h-4 w-4" />
-                  {activeTab === "empresas" ? (
+                  {effectiveTab === "empresas" ? (
                     <>
                       <span className="hidden sm:inline">
                         Nova Empresa
@@ -2202,12 +2196,12 @@ export default function EmpresasPage() {
                 <form onSubmit={handleSubmit}>
                   <DialogHeader>
                     <DialogTitle>
-                      {activeTab === "empresas"
+                      {effectiveTab === "empresas"
                         ? "Cadastrar Nova Empresa"
                         : "Cadastrar Novo Funcionário"}
                     </DialogTitle>
                     <DialogDescription>
-                      {activeTab === "empresas"
+                      {effectiveTab === "empresas"
                         ? "Preencha os dados abaixo para cadastrar uma nova empresa."
                         : "Preencha os dados abaixo para cadastrar um novo funcionário."}
                     </DialogDescription>
@@ -2215,7 +2209,7 @@ export default function EmpresasPage() {
                   <div className="space-y-4 py-4">
                     <Field orientation="vertical">
                       <FieldLabel htmlFor="name">
-                        {activeTab === "empresas"
+                        {effectiveTab === "empresas"
                           ? "Nome da Empresa"
                           : "Nome do Funcionário"}{" "}
                         <span className="text-destructive">*</span>
@@ -2225,7 +2219,7 @@ export default function EmpresasPage() {
                           id="name"
                           name="name"
                           placeholder={
-                            activeTab === "empresas"
+                            effectiveTab === "empresas"
                               ? "Ex: Empresa ABC Ltda"
                               : "Ex: João da Silva"
                           }
@@ -2239,7 +2233,7 @@ export default function EmpresasPage() {
                       </FieldContent>
                     </Field>
 
-                    {activeTab === "empresas" && (
+                    {effectiveTab === "empresas" && (
                       <>
                         <Field orientation="vertical">
                           <FieldLabel htmlFor="address">
@@ -2338,11 +2332,11 @@ export default function EmpresasPage() {
                       type="submit"
                       disabled={
                         createCompanyMutation.isPending ||
-                        activeTab !== "empresas"
+                        effectiveTab !== "empresas"
                       }
                     >
                       {createCompanyMutation.isPending
-                        ? activeTab === "empresas"
+                        ? effectiveTab === "empresas"
                           ? "Cadastrando..."
                           : "Processando..."
                         : "Cadastrar"}

@@ -161,7 +161,6 @@ export const ValeAlimentacaoSummaryPDF: React.FC<
           <View style={styles.headerTop}>
               {logoBase64 && (
               <View style={styles.logoContainer}>
-                {/* eslint-disable-next-line jsx-a11y/alt-text */}
                 <Image style={styles.logo} src={logoBase64} />
               </View>
             )}

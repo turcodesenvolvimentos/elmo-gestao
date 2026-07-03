@@ -4,6 +4,23 @@ import { supabaseAdmin } from "@/lib/db/client";
 import { Permission } from "@/types/permissions";
 import { checkPermission } from "@/lib/auth/permissions";
 
+type EscalaJoinRow = {
+  employee_id: string;
+  employee?: {
+    id: string;
+    name: string;
+    solides_id: number;
+    position_name?: string | null;
+  } | null;
+  shift?: { company_id: string } | null;
+};
+
+type EmpCompanyRow = {
+  employee_id: string;
+  company_id: string;
+  position?: { id: string; name: string } | null;
+};
+
 // GET - Listar escalas aplicadas (com filtros opcionais)
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -81,8 +98,9 @@ export async function GET(request: NextRequest) {
 
     // Enriquecer com cargo (position) de cada funcionário na empresa do shift
     if (list.length > 0) {
-      const employeeIds = [...new Set(list.filter((e: any) => e.employee_id).map((e: any) => e.employee_id))];
-      const companyIds = [...new Set(list.filter((e: any) => e.shift?.company_id).map((e: any) => e.shift.company_id))];
+      const rows = list as EscalaJoinRow[];
+      const employeeIds = [...new Set(rows.filter((e) => e.employee_id).map((e) => e.employee_id))];
+      const companyIds = [...new Set(rows.filter((e) => e.shift?.company_id).map((e) => e.shift!.company_id))];
 
       if (employeeIds.length > 0 && companyIds.length > 0) {
         const { data: empCompanies } = await supabaseAdmin
@@ -93,11 +111,11 @@ export async function GET(request: NextRequest) {
 
         // Mapa: "employee_id|company_id" -> position_name
         const positionMap = new Map<string, string | null>();
-        (empCompanies || []).forEach((ec: any) => {
+        (empCompanies as EmpCompanyRow[] | null || []).forEach((ec) => {
           positionMap.set(`${ec.employee_id}|${ec.company_id}`, ec.position?.name ?? null);
         });
 
-        list.forEach((e: any) => {
+        rows.forEach((e) => {
           if (e.employee && e.shift?.company_id) {
             e.employee.position_name = positionMap.get(`${e.employee_id}|${e.shift.company_id}`) ?? null;
           }

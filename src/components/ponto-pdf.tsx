@@ -11,7 +11,6 @@ import {
 
 const NUM_FONT = 7;
 const HEADER_FONT = 7;
-const NAME_FONT = 8;
 
 const styles = StyleSheet.create({
   page: {

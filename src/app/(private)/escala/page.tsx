@@ -75,14 +75,14 @@ import {
   useEscalas,
   useDeleteEscala,
 } from "@/hooks/use-escalas";
-import { useQuery } from "@tanstack/react-query";
-import { fetchAllShifts } from "@/services/shifts.service";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { formatEmployeeName } from "@/utils/employee-name-format";
+import { Escala } from "@/types/escalas";
+import { Company } from "@/types/companies";
 
 // Tipo para grupo de escala (agrupado por shift + período)
 interface EscalaAgrupada {
@@ -157,11 +157,6 @@ export default function EscalaPage() {
   const { data: companiesData } = useCompanies();
   const { data: employeesData } = useCompanyEmployees(selectedCompany || "");
   const { data: shiftsData } = useShifts(selectedCompany || "");
-  const { data: allShiftsData } = useQuery({
-    queryKey: ["shifts", "all"],
-    queryFn: () => fetchAllShifts(),
-    staleTime: 5 * 60 * 1000,
-  });
   const batchCreateEscalasMutation = useBatchCreateEscalas();
   const deleteEscalaMutation = useDeleteEscala();
   const { data: escalasData, isLoading: escalasLoading } = useEscalas();
@@ -174,14 +169,16 @@ export default function EscalaPage() {
   );
   const companyEmployees = employeesData?.employees || [];
   const companyShifts = shiftsData?.shifts || [];
-  const allShifts = allShiftsData?.shifts || [];
-  const escalas = escalasData?.escalas || [];
+  const escalas = useMemo(
+    () => escalasData?.escalas || [],
+    [escalasData?.escalas]
+  );
 
   // Nomes únicos dos funcionários da empresa sendo visualizada (para o filtro)
   const employeeNamesForFilter = useMemo(() => {
     if (!viewCompanyId) return [];
     const names = new Set<string>();
-    escalas.forEach((e: any) => {
+    escalas.forEach((e) => {
       if (e.shift?.company_id === viewCompanyId && e.employee?.name) {
         names.add(toTitleCase(e.employee.name));
       }
@@ -194,7 +191,7 @@ export default function EscalaPage() {
     const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
     const distinctShifts: Record<string, Set<string>> = {};
     const distinctEmployees: Record<string, Set<string>> = {};
-    escalas.forEach((e: any) => {
+    escalas.forEach((e) => {
       const cid = e.shift?.company_id;
       if (!cid) return;
       const starts = e.start_date <= today;
@@ -219,7 +216,7 @@ export default function EscalaPage() {
     const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
     // solides_id de todos que têm escala vigente hoje (em qualquer empresa)
     const escaladosHoje = new Set<number>();
-    escalas.forEach((e: any) => {
+    escalas.forEach((e) => {
       const starts = e.start_date <= today;
       const open = !e.end_date || e.end_date >= today;
       if (starts && open && e.employee?.solides_id != null) {
@@ -229,15 +226,15 @@ export default function EscalaPage() {
 
     const ativos = allEmployeesData?.content ?? [];
     return ativos
-      .filter((emp: any) => !emp.fired && !escaladosHoje.has(emp.id))
-      .map((emp: any) => formatEmployeeName(emp.name))
+      .filter((emp) => !emp.fired && !escaladosHoje.has(emp.id))
+      .map((emp) => formatEmployeeName(emp.name))
       .sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [escalas, allEmployeesData]);
 
   // Nomes únicos de todos os funcionários já escalados (para o filtro global de empresas)
   const allEmployeeNamesForFilter = useMemo(() => {
     const names = new Set<string>();
-    escalas.forEach((e: any) => {
+    escalas.forEach((e) => {
       if (e.employee?.name) names.add(toTitleCase(e.employee.name));
     });
     return [...names].sort((a, b) => a.localeCompare(b, "pt-BR"));
@@ -248,7 +245,7 @@ export default function EscalaPage() {
     const normalize = (s: string) =>
       s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
     const map = new Map<string, Set<string>>();
-    escalas.forEach((e: any) => {
+    escalas.forEach((e) => {
       const cid = e.shift?.company_id;
       const name = e.employee?.name;
       if (!cid || !name) return;
@@ -263,12 +260,12 @@ export default function EscalaPage() {
   const filteredCompanies = useMemo(() => {
     const normalize = (s: string) =>
       s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-    let result = companies.filter((company: any) =>
+    let result = companies.filter((company) =>
       company.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
     if (filterEmployeeCompany) {
       const cids = companyIdsByEmployeeName.get(normalize(filterEmployeeCompany));
-      result = result.filter((company: any) => cids?.has(company.id));
+      result = result.filter((company) => cids?.has(company.id));
     }
     return result;
   }, [companies, searchTerm, filterEmployeeCompany, companyIdsByEmployeeName]);
@@ -316,7 +313,7 @@ export default function EscalaPage() {
 
   const handleCopyEscalaAgrupada = async (grupo: EscalaAgrupada) => {
     const empresa =
-      companies.find((c: any) => c.id === viewCompanyId)?.name || "Não informada";
+      companies.find((c) => c.id === viewCompanyId)?.name || "Não informada";
     const inicio = formatDateLocal(grupo.startDate);
     const fim = grupo.endDate ? formatDateLocal(grupo.endDate) : "indefinido";
     const horariosPrincipal = `${formatTime(grupo.entry1)} - ${formatTime(
@@ -427,7 +424,7 @@ export default function EscalaPage() {
     if (selectedEmployeeIds.size === companyEmployees.length) {
       setSelectedEmployeeIds(new Set());
     } else {
-      const allIds = new Set(companyEmployees.map((emp: any) => emp.id));
+      const allIds = new Set(companyEmployees.map((emp) => emp.id));
       setSelectedEmployeeIds(allIds);
     }
   };
@@ -454,7 +451,7 @@ export default function EscalaPage() {
         await Promise.all(deletePromises);
       }
 
-      const selectedShift = companyShifts.find((s: any) => s.id === selectedShiftId);
+      const selectedShift = companyShifts.find((s) => s.id === selectedShiftId);
       await batchCreateEscalasMutation.mutateAsync({
         employee_ids: Array.from(selectedEmployeeIds),
         shift_id: selectedShiftId,
@@ -635,7 +632,7 @@ export default function EscalaPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredCompanies.map((company: any) => {
+                    {filteredCompanies.map((company) => {
                       const badge = escalasBadgeByCompanyId[
                         company.id
                       ] ?? {
@@ -725,7 +722,7 @@ export default function EscalaPage() {
           <DialogDescription>
             Visualize e edite as escalas da empresa{" "}
             {viewCompanyId &&
-              companies.find((c: any) => c.id === viewCompanyId)?.name}
+              companies.find((c) => c.id === viewCompanyId)?.name}
           </DialogDescription>
         </DialogHeader>
 
@@ -913,7 +910,7 @@ export default function EscalaPage() {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {companyEmployees.map((employee: any) => (
+                      {companyEmployees.map((employee) => (
                         <div
                           key={employee.id}
                           className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded"
@@ -952,7 +949,7 @@ export default function EscalaPage() {
                       <SelectValue placeholder="Selecione uma escala" />
                     </SelectTrigger>
                     <SelectContent>
-                      {companyShifts.map((shift: any) => (
+                      {companyShifts.map((shift) => (
                         <SelectItem key={shift.id} value={shift.id}>
                           <div className="flex flex-col">
                             <span>{shift.name}</span>
@@ -1028,7 +1025,7 @@ export default function EscalaPage() {
                       <span>Empresa:</span>
                       <span className="font-medium">
                         {
-                          companies.find((c: any) => c.id === selectedCompany)
+                          companies.find((c) => c.id === selectedCompany)
                             ?.name
                         }
                       </span>
@@ -1044,7 +1041,7 @@ export default function EscalaPage() {
                       <span className="font-medium">
                         {selectedShiftId
                           ? companyShifts.find(
-                              (s: any) => s.id === selectedShiftId
+                              (s) => s.id === selectedShiftId
                             )?.name
                           : "Não selecionada"}
                       </span>
@@ -1141,12 +1138,12 @@ interface EscalasListProps {
   companyId: string;
   filterDate: string;
   filterEmployeeName: string;
-  escalas: any[];
+  escalas: Escala[];
   onEdit: (grupo: EscalaAgrupada) => void;
   onDelete: (id: string) => void;
   onDeleteGroup: (grupo: EscalaAgrupada) => void;
   onCopy: (grupo: EscalaAgrupada) => void;
-  companies: any[];
+  companies: Company[];
 }
 
 function EscalasList({
@@ -1246,7 +1243,7 @@ function EscalasList({
               <div className="grid gap-1 text-sm">
                 <p>
                   <span className="text-muted-foreground">Empresa:</span>{" "}
-                  {companies.find((c: any) => c.id === companyId)?.name}
+                  {companies.find((c) => c.id === companyId)?.name}
                 </p>
                 <p>
                   <span className="text-muted-foreground">Escala:</span>{" "}

@@ -314,10 +314,6 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const employeeSolidesIds = Array.from(
-      new Set(Array.from(employeeMap.values()).map((e) => e.solidesId))
-    ).filter((id): id is number => typeof id === "number");
-
     const { data: employeeCompaniesRows } = await supabaseAdmin
       .from("employee_companies")
       .select(
