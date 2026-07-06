@@ -30,7 +30,7 @@ interface BoletimData {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { companyName, startDate, endDate, data } = body;
+    const { companyName, companyCnpj, startDate, endDate, data } = body;
 
     // Validação
     if (!companyName || !startDate || !endDate || !data) {
@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
     // Gerar PDF
     const pdfDocument = React.createElement(BoletimPDF, {
       companyName,
+      companyCnpj,
       startDate,
       endDate,
       data: data as BoletimData[],

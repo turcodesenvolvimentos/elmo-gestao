@@ -40,6 +40,7 @@ interface BoletimData {
 interface SaveBoletimRequest {
   companyId: string;
   companyName: string;
+  companyCnpj?: string | null;
   startDate: string;
   endDate: string;
   data: BoletimData[];
@@ -59,6 +60,7 @@ export async function POST(request: NextRequest) {
     const {
       companyId,
       companyName,
+      companyCnpj,
       startDate,
       endDate,
       data,
@@ -100,6 +102,7 @@ export async function POST(request: NextRequest) {
     // Gerar PDF
     const pdfDocument = React.createElement(BoletimPDF, {
       companyName,
+      companyCnpj,
       startDate,
       endDate,
       data: data as BoletimData[],

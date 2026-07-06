@@ -4,6 +4,7 @@ export interface Company {
   id: string;
   name: string;
   address: string;
+  cnpj?: string | null;
   vr_per_hour: number;
   cost_help_per_hour: number;
   created_at: string;

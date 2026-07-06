@@ -95,6 +95,7 @@ import {
 } from "@/components/ui/select";
 import { CustomHolidaysTab } from "./custom-holidays-tab";
 import { formatEmployeeName } from "@/utils/employee-name-format";
+import { formatCNPJ, maskCNPJ } from "@/utils/format-cnpj";
 import {
   Popover,
   PopoverContent,
@@ -1841,6 +1842,7 @@ export default function EmpresasPage() {
   const [formData, setFormData] = useState({
     name: "",
     address: "",
+    cnpj: "",
     vr_per_hour: "",
     cost_help_per_hour: "",
   });
@@ -1869,6 +1871,10 @@ export default function EmpresasPage() {
     if (formErrors[name as keyof typeof formErrors]) {
       setFormErrors((prev) => ({ ...prev, [name]: undefined }));
     }
+  };
+
+  const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData((prev) => ({ ...prev, cnpj: maskCNPJ(e.target.value) }));
   };
 
   const validateForm = () => {
@@ -1919,6 +1925,7 @@ export default function EmpresasPage() {
       await createCompanyMutation.mutateAsync({
         name: formData.name.trim(),
         address: formData.address.trim(),
+        cnpj: formData.cnpj.trim() || undefined,
         vr_per_hour: formData.vr_per_hour.trim()
           ? parseFloat(formData.vr_per_hour)
           : undefined,
@@ -1932,6 +1939,7 @@ export default function EmpresasPage() {
       setFormData({
         name: "",
         address: "",
+        cnpj: "",
         vr_per_hour: "",
         cost_help_per_hour: "",
       });
@@ -1950,6 +1958,7 @@ export default function EmpresasPage() {
       setFormData({
         name: "",
         address: "",
+        cnpj: "",
         vr_per_hour: "",
         cost_help_per_hour: "",
       });
@@ -1962,6 +1971,7 @@ export default function EmpresasPage() {
     setFormData({
       name: company.name,
       address: company.address,
+      cnpj: company.cnpj ? maskCNPJ(company.cnpj) : "",
       vr_per_hour: company.vr_per_hour?.toString() || "",
       cost_help_per_hour: company.cost_help_per_hour?.toString() || "",
     });
@@ -1976,6 +1986,7 @@ export default function EmpresasPage() {
       setFormData({
         name: "",
         address: "",
+        cnpj: "",
         vr_per_hour: "",
         cost_help_per_hour: "",
       });
@@ -1996,6 +2007,7 @@ export default function EmpresasPage() {
         data: {
           name: formData.name.trim(),
           address: formData.address.trim(),
+          cnpj: formData.cnpj.trim() || undefined,
           vr_per_hour: formData.vr_per_hour.trim()
             ? parseFloat(formData.vr_per_hour)
             : undefined,
@@ -2262,6 +2274,25 @@ export default function EmpresasPage() {
                         </Field>
 
                         <Field orientation="vertical">
+                          <FieldLabel htmlFor="cnpj">
+                            CNPJ{" "}
+                            <span className="text-muted-foreground">
+                              (opcional)
+                            </span>
+                          </FieldLabel>
+                          <FieldContent>
+                            <Input
+                              id="cnpj"
+                              name="cnpj"
+                              inputMode="numeric"
+                              placeholder="00.000.000/0000-00"
+                              value={formData.cnpj}
+                              onChange={handleCnpjChange}
+                            />
+                          </FieldContent>
+                        </Field>
+
+                        <Field orientation="vertical">
                           <FieldLabel htmlFor="vr-per-hour">
                             VR (R$){" "}
                             <span className="text-muted-foreground">
@@ -2387,7 +2418,14 @@ export default function EmpresasPage() {
                             <TableCell className="font-medium">
                               <div className="flex items-center gap-2">
                                 <Building className="h-4 w-4 text-muted-foreground" />
-                                {company.name}
+                                <div className="min-w-0">
+                                  <div>{company.name}</div>
+                                  {company.cnpj && (
+                                    <div className="text-xs font-normal text-muted-foreground">
+                                      {formatCNPJ(company.cnpj)}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </TableCell>
                             <TableCell>
@@ -2485,9 +2523,16 @@ export default function EmpresasPage() {
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-2">
                                   <Building className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                  <h3 className="font-semibold text-base truncate">
-                                    {company.name}
-                                  </h3>
+                                  <div className="min-w-0">
+                                    <h3 className="font-semibold text-base truncate">
+                                      {company.name}
+                                    </h3>
+                                    {company.cnpj && (
+                                      <p className="text-xs text-muted-foreground">
+                                        {formatCNPJ(company.cnpj)}
+                                      </p>
+                                    )}
+                                  </div>
                                 </div>
                                 <div className="flex items-start gap-2 text-sm text-muted-foreground">
                                   <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" />
@@ -2792,6 +2837,23 @@ export default function EmpresasPage() {
                   O endereço deve ser único e completo para identificar a
                   empresa.
                 </p>
+              </FieldContent>
+            </Field>
+
+            <Field orientation="vertical">
+              <FieldLabel htmlFor="edit-cnpj">
+                CNPJ{" "}
+                <span className="text-muted-foreground">(opcional)</span>
+              </FieldLabel>
+              <FieldContent>
+                <Input
+                  id="edit-cnpj"
+                  name="cnpj"
+                  inputMode="numeric"
+                  placeholder="00.000.000/0000-00"
+                  value={formData.cnpj}
+                  onChange={handleCnpjChange}
+                />
               </FieldContent>
             </Field>
 

@@ -11,7 +11,7 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, address, vr_per_hour, cost_help_per_hour } = body;
+    const { name, address, cnpj, vr_per_hour, cost_help_per_hour } = body;
 
     console.log("PUT /api/companies/[id] - ID recebido:", id);
 
@@ -67,12 +67,17 @@ export async function PUT(
     const updateData: {
       name: string;
       address: string;
+      cnpj?: string | null;
       vr_per_hour?: number;
       cost_help_per_hour?: number;
     } = {
       name: name.trim(),
       address: address.trim(),
     };
+
+    if (cnpj !== undefined) {
+      updateData.cnpj = cnpj?.trim() || null;
+    }
 
     // Atualizar VR e Ajuda de Custo se fornecidos
     if (vr_per_hour !== undefined) {

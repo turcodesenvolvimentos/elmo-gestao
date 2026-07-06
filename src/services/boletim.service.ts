@@ -30,6 +30,7 @@ export interface FetchBoletimParams {
 
 export interface ExportBoletimParams {
   companyName: string;
+  companyCnpj?: string | null;
   startDate: string;
   endDate: string;
   data: BoletimData[];
@@ -81,6 +82,7 @@ export interface BoletimExport {
 export interface SaveBoletimToHistoryParams {
   companyId: string;
   companyName: string;
+  companyCnpj?: string | null;
   startDate: string;
   endDate: string;
   data: BoletimData[];

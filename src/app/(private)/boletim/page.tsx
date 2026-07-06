@@ -65,6 +65,7 @@ import {
 import type { BoletimData } from "@/services/boletim.service";
 import { BoletimHistory } from "./components/boletim-history";
 import { formatEmployeeName } from "@/utils/employee-name-format";
+import { formatCNPJ } from "@/utils/format-cnpj";
 import { calcularHorasPorPeriodo, formatarHoras } from "@/lib/ponto-calculator";
 
 // Importação dinâmica do PDFViewer (só funciona no client-side)
@@ -144,6 +145,7 @@ export default function BoletimPage() {
   const [isDateRangeValid, setIsDateRangeValid] = useState(true);
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
   const [selectedCompanyName, setSelectedCompanyName] = useState<string>("");
+  const [selectedCompanyCnpj, setSelectedCompanyCnpj] = useState<string>("");
   const [isBulletinDialogOpen, setIsBulletinDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingRow, setEditingRow] = useState<number | null>(null);
@@ -458,6 +460,7 @@ export default function BoletimPage() {
 
     setSelectedCompany(companyId);
     setSelectedCompanyName(company.name);
+    setSelectedCompanyCnpj(company.cnpj || "");
     setEditedData({});
     setIsGeneratingBoletim(true);
 
@@ -502,6 +505,7 @@ export default function BoletimPage() {
       {
         companyId: selectedCompany,
         companyName: selectedCompanyName,
+        companyCnpj: selectedCompanyCnpj,
         startDate,
         endDate,
         data: filteredBulletinData,
@@ -524,6 +528,7 @@ export default function BoletimPage() {
           // Após salvar no histórico, fazer download do PDF
           exportPDF({
             companyName: selectedCompanyName,
+            companyCnpj: selectedCompanyCnpj,
             startDate,
             endDate,
             data: filteredBulletinData,
@@ -964,6 +969,9 @@ export default function BoletimPage() {
             </DialogTitle>
             <DialogDescription>
               {selectedCompanyName}
+              {selectedCompanyCnpj
+                ? ` - CNPJ: ${formatCNPJ(selectedCompanyCnpj)}`
+                : ""}
               {" - "}
               Período: {formatDate(startDate)} até {formatDate(endDate)}
             </DialogDescription>
@@ -1008,6 +1016,7 @@ export default function BoletimPage() {
             <PDFViewer width="100%" height="100%">
               <BoletimPDF
                 companyName={selectedCompanyName}
+                companyCnpj={selectedCompanyCnpj}
                 startDate={startDate}
                 endDate={endDate}
                 data={filteredBulletinData}

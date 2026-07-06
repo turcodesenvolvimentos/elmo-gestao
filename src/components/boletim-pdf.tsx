@@ -9,6 +9,7 @@ import {
   Image,
 } from "@react-pdf/renderer";
 import { formatEmployeeName } from "@/utils/employee-name-format";
+import { formatCNPJ } from "@/utils/format-cnpj";
 
 // Mesma paleta usada no PDF do Ponto, adaptada para o layout horizontal do
 // boletim. Ver `ponto-pdf.tsx` para a referência de cores.
@@ -266,6 +267,7 @@ interface BoletimData {
 
 interface BoletimPDFProps {
   companyName: string;
+  companyCnpj?: string | null;
   startDate: string;
   endDate: string;
   data: BoletimData[];
@@ -424,6 +426,7 @@ const calculateTotals = (data: BoletimData[]) => {
 
 export const BoletimPDF: React.FC<BoletimPDFProps> = ({
   companyName,
+  companyCnpj,
   startDate,
   endDate,
   data,
@@ -590,7 +593,10 @@ export const BoletimPDF: React.FC<BoletimPDFProps> = ({
               <Text style={styles.title}>
                 Elmo Gestão - Boletim de Ponto
               </Text>
-              <Text style={styles.subtitle}>{companyName}</Text>
+              <Text style={styles.subtitle}>
+                {companyName}
+                {companyCnpj ? `  -  CNPJ: ${formatCNPJ(companyCnpj)}` : ""}
+              </Text>
               <Text style={styles.info}>
                 Período: {formatDate(startDate)} até {formatDate(endDate)}
               </Text>

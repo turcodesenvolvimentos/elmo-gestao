@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { name, address, vr_per_hour, cost_help_per_hour } = body;
+    const { name, address, cnpj, vr_per_hour, cost_help_per_hour } = body;
 
     // Validação
     if (!name || !name.trim()) {
@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
       .insert({
         name: name.trim(),
         address: address.trim(),
+        cnpj: cnpj?.trim() || null,
         vr_per_hour: vrValue,
         cost_help_per_hour: costValue,
       })
@@ -142,6 +143,7 @@ export async function GET() {
         id,
         name,
         address,
+        cnpj,
         vr_per_hour,
         cost_help_per_hour,
         created_at,
