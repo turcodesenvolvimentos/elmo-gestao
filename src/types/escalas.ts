@@ -13,6 +13,7 @@ export interface Escala {
     name: string;
     solides_id: number;
     position_name?: string | null;
+    department_name?: string | null;
   };
   shift?: {
     id: string;

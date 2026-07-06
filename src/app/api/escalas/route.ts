@@ -11,6 +11,7 @@ type EscalaJoinRow = {
     name: string;
     solides_id: number;
     position_name?: string | null;
+    department_name?: string | null;
   } | null;
   shift?: { company_id: string } | null;
 };
@@ -18,6 +19,7 @@ type EscalaJoinRow = {
 type EmpCompanyRow = {
   employee_id: string;
   company_id: string;
+  department?: string | null;
   position?: { id: string; name: string } | null;
 };
 
@@ -105,19 +107,22 @@ export async function GET(request: NextRequest) {
       if (employeeIds.length > 0 && companyIds.length > 0) {
         const { data: empCompanies } = await supabaseAdmin
           .from("employee_companies")
-          .select("employee_id, company_id, position:positions(id, name)")
+          .select("employee_id, company_id, department, position:positions(id, name)")
           .in("employee_id", employeeIds)
           .in("company_id", companyIds);
 
-        // Mapa: "employee_id|company_id" -> position_name
+        // Mapa: "employee_id|company_id" -> position_name / department
         const positionMap = new Map<string, string | null>();
+        const departmentMap = new Map<string, string | null>();
         (empCompanies as EmpCompanyRow[] | null || []).forEach((ec) => {
           positionMap.set(`${ec.employee_id}|${ec.company_id}`, ec.position?.name ?? null);
+          departmentMap.set(`${ec.employee_id}|${ec.company_id}`, ec.department ?? null);
         });
 
         rows.forEach((e) => {
           if (e.employee && e.shift?.company_id) {
             e.employee.position_name = positionMap.get(`${e.employee_id}|${e.shift.company_id}`) ?? null;
+            e.employee.department_name = departmentMap.get(`${e.employee_id}|${e.shift.company_id}`) ?? null;
           }
         });
       }

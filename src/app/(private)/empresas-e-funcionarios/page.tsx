@@ -1399,7 +1399,7 @@ function CompaniesEmployeesTab() {
           <CardContent className="p-0 sm:p-6">
             {/* Visualização Desktop: Tabela */}
             <div className="hidden lg:block rounded-md border">
-              <Table>
+              <Table className="[&_tbody_tr:nth-child(even)]:bg-muted/30 [&_tbody_tr:nth-child(even):hover]:bg-muted/50">
                 <TableHeader>
                   <TableRow className="bg-muted/50">
                     <TableHead>Nome</TableHead>
@@ -1572,7 +1572,7 @@ function CompaniesEmployeesTab() {
             {/* Visualização Tablet: Tabela compacta */}
             <div className="hidden md:block lg:hidden rounded-md border">
               <div className="overflow-x-auto">
-                <Table>
+                <Table className="[&_tbody_tr:nth-child(even)]:bg-muted/30 [&_tbody_tr:nth-child(even):hover]:bg-muted/50">
                   <TableHeader>
                     <TableRow className="bg-muted/50">
                       <TableHead className="min-w-[200px]">Nome</TableHead>
@@ -2394,7 +2394,7 @@ export default function EmpresasPage() {
                 <CardContent className="p-0 sm:p-6">
                   {/* Visualização Desktop: Tabela */}
                   <div className="hidden lg:block rounded-md border">
-                    <Table>
+                    <Table className="[&_tbody_tr:nth-child(even)]:bg-muted/30 [&_tbody_tr:nth-child(even):hover]:bg-muted/50">
                       <TableHeader>
                         <TableRow className="bg-muted/50">
                           <TableHead className="w-[300px]">
@@ -2626,7 +2626,7 @@ export default function EmpresasPage() {
                   {/* Visualização Tablet: Tabela compacta com scroll */}
                   <div className="hidden md:block lg:hidden rounded-md border">
                     <div className="overflow-x-auto">
-                      <Table>
+                      <Table className="[&_tbody_tr:nth-child(even)]:bg-muted/30 [&_tbody_tr:nth-child(even):hover]:bg-muted/50">
                         <TableHeader>
                           <TableRow className="bg-muted/50">
                             <TableHead className="min-w-[200px]">

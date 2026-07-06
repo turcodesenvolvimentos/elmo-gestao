@@ -99,6 +99,7 @@ interface EscalaAgrupada {
     escalaId: string;
     employeeId: string;
     cargo: string | null;
+    setor: string | null;
   }[];
 }
 
@@ -325,14 +326,14 @@ export default function EscalaPage() {
         : "";
 
     // Agrupar funcionários por cargo, ordenados pelo nome dentro de cada cargo
-    const porCargo = new Map<string, string[]>();
+    const porCargo = new Map<string, { nome: string; setor: string | null }[]>();
     const funcionariosOrdenados = [...grupo.funcionarios].sort((a, b) =>
       a.nome.localeCompare(b.nome, "pt-BR")
     );
     funcionariosOrdenados.forEach((f) => {
       const cargo = f.cargo || "Sem cargo";
       if (!porCargo.has(cargo)) porCargo.set(cargo, []);
-      porCargo.get(cargo)!.push(f.nome);
+      porCargo.get(cargo)!.push({ nome: f.nome, setor: f.setor });
     });
 
     // Ordenar os cargos alfabeticamente
@@ -345,14 +346,20 @@ export default function EscalaPage() {
     const linhasFuncionarios: string[] = [];
     cargosOrdenados.forEach((cargo) => {
       linhasFuncionarios.push(`${cargo}`);
-      porCargo.get(cargo)!.forEach((nome) => {
-        linhasFuncionarios.push(` ${contador} - ${toTitleCase(nome)}`);
+      porCargo.get(cargo)!.forEach(({ nome, setor }) => {
+        const setorSuffix = setor ? ` - (${setor})` : "";
+        linhasFuncionarios.push(
+          ` ${contador} - ${toTitleCase(nome)}${setorSuffix}`
+        );
         contador++;
       });
       linhasFuncionarios.push("");
     });
 
+    const dataHoje = formatDateLocal(new Date().toISOString().slice(0, 10));
+
     const mensagem = [
+      `Data: ${dataHoje}`,
       `Empresa: ${empresa}`,
       `Período: ${inicio} até ${fim}`,
       `Horários: ${horariosPrincipal}${horariosExtra}`,
@@ -621,7 +628,7 @@ export default function EscalaPage() {
               </div>
             ) : (
               <div className="rounded-md border">
-                <Table>
+                <Table className="[&_tbody_tr:nth-child(even)]:bg-muted/30 [&_tbody_tr:nth-child(even):hover]:bg-muted/50">
                   <TableHeader>
                     <TableRow className="bg-muted/50">
                       <TableHead>Empresa</TableHead>
@@ -1188,6 +1195,7 @@ function EscalasList({
         escalaId: e.id,
         employeeId: e.employee_id,
         cargo: e.employee?.position_name ?? null,
+        setor: e.employee?.department_name ?? null,
       });
     });
     return Array.from(map.values()).sort((a, b) => {
@@ -1325,10 +1333,12 @@ function EscalasList({
                   {grupo.funcionarios
                     .slice()
                     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
-                    .map((f) => (
+                    .map((f, i) => (
                       <li
                         key={f.employeeId}
-                        className="flex items-center justify-between gap-2"
+                        className={`flex items-center justify-between gap-2 rounded px-2 py-1 ${
+                          i % 2 === 1 ? "bg-muted/30" : ""
+                        }`}
                       >
                         <div className="flex items-center gap-2">
                           <span className="text-muted-foreground">•</span>
