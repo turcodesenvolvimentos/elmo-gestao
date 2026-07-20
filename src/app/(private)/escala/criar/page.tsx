@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -26,6 +26,7 @@ import {
   Edit,
   Trash2,
   ArrowLeft,
+  Users,
 } from "lucide-react";
 import {
   Dialog,
@@ -48,6 +49,11 @@ import {
 import { Shift } from "@/types/shifts";
 import { useQuery } from "@tanstack/react-query";
 import { fetchAllShifts } from "@/services/shifts.service";
+import { usePositions } from "@/hooks/use-positions";
+import {
+  useShiftVacancies,
+  useSaveShiftVacancies,
+} from "@/hooks/use-shift-vacancies";
 
 export default function CriarEscalaPage() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -55,6 +61,7 @@ export default function CriarEscalaPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [vagasShift, setVagasShift] = useState<Shift | null>(null);
 
   const timeToMinutes = (time: string): number => {
     const [hours, minutes] = time.split(":").map(Number);
@@ -427,6 +434,16 @@ export default function CriarEscalaPage() {
                                           <Button
                                             variant="ghost"
                                             size="icon"
+                                            title="Vagas disponíveis"
+                                            onClick={() =>
+                                              setVagasShift(shift)
+                                            }
+                                          >
+                                            <Users className="h-4 w-4" />
+                                          </Button>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
                                             onClick={() =>
                                               handleOpenEditDialog(shift)
                                             }
@@ -744,6 +761,155 @@ export default function CriarEscalaPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal de Vagas Disponíveis por função (por escala/turno) */}
+      {vagasShift && (
+        <VagasDisponiveisDialog
+          key={vagasShift.id}
+          shift={vagasShift}
+          open={!!vagasShift}
+          onOpenChange={(open) => {
+            if (!open) setVagasShift(null);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function VagasDisponiveisDialog({
+  shift,
+  open,
+  onOpenChange,
+}: {
+  shift: Shift;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { data: positionsData, isLoading: positionsLoading } = usePositions(
+    shift.company_id
+  );
+  const { data: vacanciesData, isLoading: vacanciesLoading } =
+    useShiftVacancies(shift.id);
+  const saveVacanciesMutation = useSaveShiftVacancies();
+
+  const positions = useMemo(
+    () => positionsData?.positions ?? [],
+    [positionsData?.positions]
+  );
+
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [initialized, setInitialized] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const isLoading = positionsLoading || vacanciesLoading;
+
+  useEffect(() => {
+    if (positionsData && vacanciesData && !initialized) {
+      const byPosition = new Map<string, number>();
+      vacanciesData.vacancies.forEach((v) => {
+        byPosition.set(v.position_id, v.vacancies);
+      });
+      const init: Record<string, string> = {};
+      positions.forEach((p) => {
+        init[p.id] = byPosition.has(p.id) ? String(byPosition.get(p.id)) : "";
+      });
+      setValues(init);
+      setInitialized(true);
+    }
+  }, [positionsData, vacanciesData, positions, initialized]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const items = positions.map((p) => {
+        const raw = (values[p.id] ?? "").trim();
+        return {
+          position_id: p.id,
+          vacancies: raw === "" ? null : parseInt(raw, 10),
+        };
+      });
+
+      await saveVacanciesMutation.mutateAsync({ shiftId: shift.id, items });
+
+      toast.success("Vagas disponíveis atualizadas com sucesso!");
+      onOpenChange(false);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Erro ao salvar vagas"
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Vagas disponíveis</DialogTitle>
+          <DialogDescription>
+            Defina a quantidade de vagas por função na escala{" "}
+            <strong>{shift.name}</strong>. Deixe em branco para não configurar.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="py-4">
+          {isLoading ? (
+            <div className="py-8 text-center text-muted-foreground">
+              Carregando funções...
+            </div>
+          ) : positions.length === 0 ? (
+            <div className="py-8 text-center text-muted-foreground">
+              Nenhuma função cadastrada para esta empresa
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {positions.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex items-center justify-between gap-4"
+                >
+                  <Label htmlFor={`vaga-${p.id}`} className="flex-1">
+                    {p.name}
+                  </Label>
+                  <Input
+                    id={`vaga-${p.id}`}
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    placeholder="—"
+                    className="w-24"
+                    value={values[p.id] ?? ""}
+                    onChange={(e) =>
+                      setValues((prev) => ({
+                        ...prev,
+                        [p.id]: e.target.value.replace(/[^0-9]/g, ""),
+                      }))
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={saving}
+          >
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={saving || isLoading || positions.length === 0}
+          >
+            {saving ? "Salvando..." : "Salvar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
