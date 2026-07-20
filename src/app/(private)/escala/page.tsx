@@ -33,6 +33,7 @@ import {
   Pencil,
   Check,
   ChevronsUpDown,
+  UserMinus,
 } from "lucide-react";
 import {
   Popover,
@@ -70,6 +71,12 @@ import Link from "next/link";
 import { useCompanies, useCompanyEmployees } from "@/hooks/use-companies";
 import { useEmployees } from "@/hooks/use-employees";
 import { useShifts } from "@/hooks/use-shifts";
+import { fetchShiftVacancies } from "@/services/shift-vacancies.service";
+import {
+  useDispensas,
+  useCreateDispensa,
+  useDeleteDispensa,
+} from "@/hooks/use-dispensas";
 import {
   useBatchCreateEscalas,
   useEscalas,
@@ -134,6 +141,16 @@ export default function EscalaPage() {
   const [openCompanyEmployeeFilter, setOpenCompanyEmployeeFilter] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
   const [isAvailableDialogOpen, setIsAvailableDialogOpen] = useState(false);
+  const [deselectedDisponiveis, setDeselectedDisponiveis] = useState<
+    Set<string>
+  >(new Set());
+  const [isDispensadosDialogOpen, setIsDispensadosDialogOpen] = useState(false);
+  const [dispensaEmployeeId, setDispensaEmployeeId] = useState("");
+  const [dispensaEmployeeName, setDispensaEmployeeName] = useState("");
+  const [dispensaDate, setDispensaDate] = useState(
+    new Date().toISOString().split("T")[0]
+  );
+  const [openDispensaEmpFilter, setOpenDispensaEmpFilter] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<string>>(
     new Set()
@@ -161,6 +178,9 @@ export default function EscalaPage() {
   const batchCreateEscalasMutation = useBatchCreateEscalas();
   const deleteEscalaMutation = useDeleteEscala();
   const { data: escalasData, isLoading: escalasLoading } = useEscalas();
+  const { data: dispensasData, isLoading: dispensasLoading } = useDispensas();
+  const createDispensaMutation = useCreateDispensa();
+  const deleteDispensaMutation = useDeleteDispensa();
   const { data: allEmployeesData, isLoading: allEmployeesLoading } =
     useEmployees({ page: 1, size: 1000, includeFired: false });
 
@@ -232,6 +252,20 @@ export default function EscalaPage() {
       .sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [escalas, allEmployeesData]);
 
+  const dispensas = useMemo(
+    () => dispensasData?.dispensas ?? [],
+    [dispensasData?.dispensas]
+  );
+
+  // Opções de funcionários (id + nome) para o filtro do modal de dispensas
+  const dispensaEmployeeOptions = useMemo(() => {
+    const ativos = allEmployeesData?.content ?? [];
+    return ativos
+      .filter((emp) => !emp.fired)
+      .map((emp) => ({ id: String(emp.id), name: formatEmployeeName(emp.name) }))
+      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  }, [allEmployeesData]);
+
   // Nomes únicos de todos os funcionários já escalados (para o filtro global de empresas)
   const allEmployeeNamesForFilter = useMemo(() => {
     const names = new Set<string>();
@@ -270,6 +304,11 @@ export default function EscalaPage() {
     }
     return result;
   }, [companies, searchTerm, filterEmployeeCompany, companyIdsByEmployeeName]);
+
+  // Ao abrir a modal de disponíveis, todos vêm marcados por padrão
+  useEffect(() => {
+    if (isAvailableDialogOpen) setDeselectedDisponiveis(new Set());
+  }, [isAvailableDialogOpen]);
 
   // Efeito para pré-preencher dados ao editar uma escala
   useEffect(() => {
@@ -342,11 +381,35 @@ export default function EscalaPage() {
     );
 
     // Montar lista com numeração sequencial contínua
+    const normalizeCargo = (s: string) =>
+      s.normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
+
+    // Vagas configuradas desta escala (turno) por função
+    const vagasByCargo = new Map<string, number>();
+    try {
+      const vac = await fetchShiftVacancies(grupo.shiftId);
+      vac.vacancies.forEach((v) => {
+        if (v.position_name != null)
+          vagasByCargo.set(normalizeCargo(v.position_name), v.vacancies);
+      });
+    } catch {
+      // Se falhar ao buscar vagas, segue a cópia sem exibir vagas
+    }
+
     let contador = 1;
     const linhasFuncionarios: string[] = [];
     cargosOrdenados.forEach((cargo) => {
-      linhasFuncionarios.push(`${cargo}`);
-      porCargo.get(cargo)!.forEach(({ nome, setor }) => {
+      const pessoas = porCargo.get(cargo)!;
+      const vagas = vagasByCargo.get(normalizeCargo(cargo));
+      let cabecalho = cargo;
+      if (vagas != null) {
+        const restantes = Math.max(0, vagas - pessoas.length);
+        cabecalho = `${cargo} - (${restantes} vaga${
+          restantes === 1 ? "" : "s"
+        } disponíve${restantes === 1 ? "l" : "is"})`;
+      }
+      linhasFuncionarios.push(cabecalho);
+      pessoas.forEach(({ nome, setor }) => {
         const setorSuffix = setor ? ` - (${setor})` : "";
         linhasFuncionarios.push(
           ` ${contador} - ${toTitleCase(nome)}${setorSuffix}`
@@ -381,11 +444,53 @@ export default function EscalaPage() {
     }
   };
 
+  const handleAddDispensa = async () => {
+    if (!dispensaEmployeeId || !dispensaDate) {
+      toast.error("Selecione um funcionário e uma data");
+      return;
+    }
+    try {
+      await createDispensaMutation.mutateAsync({
+        employee_id: dispensaEmployeeId,
+        employee_name: dispensaEmployeeName,
+        date: dispensaDate,
+      });
+      toast.success("Dispensa adicionada com sucesso!");
+      setDispensaEmployeeId("");
+      setDispensaEmployeeName("");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Erro ao adicionar dispensa"
+      );
+    }
+  };
+
+  const handleRemoveDispensa = async (id: string) => {
+    try {
+      await deleteDispensaMutation.mutateAsync(id);
+      toast.success("Dispensa removida com sucesso!");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Erro ao remover dispensa"
+      );
+    }
+  };
+
+  const toggleDisponivel = (nome: string) => {
+    setDeselectedDisponiveis((prev) => {
+      const next = new Set(prev);
+      if (next.has(nome)) next.delete(nome);
+      else next.add(nome);
+      return next;
+    });
+  };
+
   const handleCopyDisponiveis = async () => {
     const dataDoDia = formatDateLocal(new Date().toISOString().slice(0, 10));
-    const linhas = funcionariosDisponiveis.map(
-      (nome, i) => `${i + 1} - ${nome}`
+    const selecionados = funcionariosDisponiveis.filter(
+      (nome) => !deselectedDisponiveis.has(nome)
     );
+    const linhas = selecionados.map((nome, i) => `${i + 1} - ${nome}`);
     const mensagem = [
       `Funcionários disponíveis (${dataDoDia}):`,
       "",
@@ -612,14 +717,22 @@ export default function EscalaPage() {
                 </Button>
               )}
 
-              <Button
-                variant="outline"
-                className="sm:ml-auto"
-                onClick={() => setIsAvailableDialogOpen(true)}
-              >
-                <Users className="h-4 w-4 mr-2" />
-                Funcionários disponíveis
-              </Button>
+              <div className="flex flex-col gap-2 sm:flex-row sm:ml-auto">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsDispensadosDialogOpen(true)}
+                >
+                  <UserMinus className="h-4 w-4 mr-2" />
+                  Funcionários dispensados
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsAvailableDialogOpen(true)}
+                >
+                  <Users className="h-4 w-4 mr-2" />
+                  Funcionários disponíveis
+                </Button>
+              </div>
             </div>
 
             {filteredCompanies.length === 0 ? (
@@ -858,24 +971,210 @@ export default function EscalaPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm text-muted-foreground">
-                {funcionariosDisponiveis.length} funcionário
-                {funcionariosDisponiveis.length !== 1 ? "s" : ""} disponível
-                {funcionariosDisponiveis.length !== 1 ? "is" : ""}
-              </p>
-              <Button variant="outline" size="sm" onClick={handleCopyDisponiveis}>
-                <Copy className="h-4 w-4 mr-1" />
-                Copiar
-              </Button>
+            {(() => {
+              const selecionadosCount = funcionariosDisponiveis.filter(
+                (nome) => !deselectedDisponiveis.has(nome)
+              ).length;
+              return (
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm text-muted-foreground">
+                    {selecionadosCount} de {funcionariosDisponiveis.length}{" "}
+                    funcionário
+                    {funcionariosDisponiveis.length !== 1 ? "s" : ""} disponíve
+                    {funcionariosDisponiveis.length !== 1 ? "is" : "l"}
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopyDisponiveis}
+                    disabled={selecionadosCount === 0}
+                  >
+                    <Copy className="h-4 w-4 mr-1" />
+                    Copiar
+                  </Button>
+                </div>
+              );
+            })()}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
+              {funcionariosDisponiveis.map((nome, i) => {
+                const marcado = !deselectedDisponiveis.has(nome);
+                return (
+                  <label
+                    key={`${nome}-${i}`}
+                    className="flex items-center gap-2 cursor-pointer py-0.5"
+                  >
+                    <Checkbox
+                      checked={marcado}
+                      onCheckedChange={() => toggleDisponivel(nome)}
+                    />
+                    <span
+                      className={
+                        marcado
+                          ? ""
+                          : "line-through text-muted-foreground"
+                      }
+                    >
+                      {nome}
+                    </span>
+                  </label>
+                );
+              })}
             </div>
-            <ol className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm list-decimal pl-6">
-              {funcionariosDisponiveis.map((nome, i) => (
-                <li key={`${nome}-${i}`}>{nome}</li>
-              ))}
-            </ol>
           </div>
         )}
+      </DialogContent>
+    </Dialog>
+
+    {/* Modal de Funcionários Dispensados */}
+    <Dialog
+      open={isDispensadosDialogOpen}
+      onOpenChange={setIsDispensadosDialogOpen}
+    >
+      <DialogContent className="!max-w-2xl sm:!max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Funcionários dispensados</DialogTitle>
+          <DialogDescription>
+            Dispense um funcionário em um dia. A falta desse dia aparecerá em
+            amarelo (em vez de vermelho) no boletim e no ponto.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            {/* Filtro por funcionário */}
+            <div className="flex flex-col gap-1">
+              <Label>Funcionário</Label>
+              <Popover
+                open={openDispensaEmpFilter}
+                onOpenChange={setOpenDispensaEmpFilter}
+              >
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openDispensaEmpFilter}
+                    className="w-full sm:w-[260px] justify-between font-normal"
+                  >
+                    <span className="truncate">
+                      {dispensaEmployeeName || "Selecione um funcionário..."}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[260px] p-0">
+                  <Command
+                    filter={(value, search) => {
+                      const normalize = (s: string) =>
+                        s
+                          .normalize("NFD")
+                          .replace(/[̀-ͯ]/g, "")
+                          .toLowerCase();
+                      return normalize(value).includes(normalize(search))
+                        ? 1
+                        : 0;
+                    }}
+                  >
+                    <CommandInput placeholder="Pesquisar funcionário..." />
+                    <CommandList className="max-h-60 overflow-y-auto">
+                      <CommandEmpty>
+                        Nenhum funcionário encontrado.
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {dispensaEmployeeOptions.map((emp) => (
+                          <CommandItem
+                            key={emp.id}
+                            value={emp.name}
+                            onSelect={() => {
+                              setDispensaEmployeeId(emp.id);
+                              setDispensaEmployeeName(emp.name);
+                              setOpenDispensaEmpFilter(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                dispensaEmployeeId === emp.id
+                                  ? "opacity-100"
+                                  : "opacity-0"
+                              )}
+                            />
+                            {emp.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* Data */}
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="dispensa-date">Data</Label>
+              <Input
+                id="dispensa-date"
+                type="date"
+                value={dispensaDate}
+                onChange={(e) => setDispensaDate(e.target.value)}
+                className="w-full sm:w-[180px]"
+              />
+            </div>
+
+            <Button
+              onClick={handleAddDispensa}
+              disabled={
+                !dispensaEmployeeId ||
+                !dispensaDate ||
+                createDispensaMutation.isPending
+              }
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Adicionar dispensa
+            </Button>
+          </div>
+
+          <div className="border-t pt-4">
+            <h4 className="font-semibold mb-2 text-sm">
+              Dispensas cadastradas
+            </h4>
+            {dispensasLoading ? (
+              <div className="py-6 text-center text-muted-foreground">
+                Carregando...
+              </div>
+            ) : dispensas.length === 0 ? (
+              <div className="py-6 text-center text-muted-foreground">
+                Nenhuma dispensa cadastrada
+              </div>
+            ) : (
+              <ul className="space-y-1 text-sm">
+                {dispensas.map((d, i) => (
+                  <li
+                    key={d.id}
+                    className={`flex items-center justify-between gap-2 rounded px-2 py-1.5 ${
+                      i % 2 === 1 ? "bg-muted/30" : ""
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{d.employee_name}</span>
+                      <span className="text-muted-foreground">
+                        — {formatDateLocal(d.date)}
+                      </span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => handleRemoveDispensa(d.id)}
+                      disabled={deleteDispensaMutation.isPending}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
 

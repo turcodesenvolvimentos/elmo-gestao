@@ -31,6 +31,7 @@ export interface ExportPontoParams {
   data: PontoData[];
   employeeCpf?: string;
   employeeAdmissionDate?: string;
+  dispensadoKeys?: string[];
   filtersApplied?: {
     employeeId?: number;
     company?: string;
@@ -139,6 +140,7 @@ export interface ExportPontoTodosParams {
   startDate: string;
   endDate: string;
   employees: PontoTodosEmployee[];
+  dispensadoKeys?: string[];
 }
 
 // Exportar PDF consolidado com todos os funcionários que bateram ponto no período

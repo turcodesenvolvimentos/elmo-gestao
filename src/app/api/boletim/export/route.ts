@@ -6,6 +6,7 @@ import fs from "fs";
 import path from "path";
 
 interface BoletimData {
+  employee_id?: string;
   employee_name: string;
   work_company?: string;
   position: string;
@@ -30,7 +31,8 @@ interface BoletimData {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { companyName, companyCnpj, startDate, endDate, data } = body;
+    const { companyName, companyCnpj, startDate, endDate, data, dispensadoKeys } =
+      body;
 
     // Validação
     if (!companyName || !startDate || !endDate || !data) {
@@ -70,6 +72,7 @@ export async function POST(request: NextRequest) {
       endDate,
       data: data as BoletimData[],
       logoBase64,
+      dispensadoKeys: Array.isArray(dispensadoKeys) ? dispensadoKeys : [],
     });
 
     const pdfBuffer = await renderToBuffer(

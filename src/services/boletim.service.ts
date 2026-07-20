@@ -34,6 +34,7 @@ export interface ExportBoletimParams {
   startDate: string;
   endDate: string;
   data: BoletimData[];
+  dispensadoKeys?: string[];
 }
 
 export const fetchBoletim = async (

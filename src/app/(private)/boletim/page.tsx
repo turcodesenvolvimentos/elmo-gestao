@@ -54,6 +54,7 @@ import { Label } from "@/components/ui/label";
 import { useCompanies } from "@/hooks/use-companies";
 import { usePositions } from "@/hooks/use-positions";
 import { useCustomHolidays } from "@/hooks/use-custom-holidays";
+import { useDispensas } from "@/hooks/use-dispensas";
 import { useDepartments } from "@/hooks/use-departments";
 import { useQueryClient } from "@tanstack/react-query";
 import { fetchBoletim } from "@/services/boletim.service";
@@ -225,6 +226,25 @@ export default function BoletimPage() {
         (customHolidaysResponse?.holidays || []).map((h) => h.holiday_date)
       ),
     [customHolidaysResponse]
+  );
+
+  const { data: dispensasResponse } = useDispensas();
+  const normalizeDispensaName = (s: string) =>
+    s
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, " ");
+  const dispensaSet = useMemo(
+    () =>
+      new Set<string>(
+        (dispensasResponse?.dispensas || []).map(
+          (d) =>
+            `${normalizeDispensaName(d.employee_name)}|${d.date.slice(0, 10)}`
+        )
+      ),
+    [dispensasResponse]
   );
 
   const queryClient = useQueryClient();
@@ -532,6 +552,7 @@ export default function BoletimPage() {
             startDate,
             endDate,
             data: filteredBulletinData,
+            dispensadoKeys: Array.from(dispensaSet),
           });
         },
       }
@@ -1021,6 +1042,7 @@ export default function BoletimPage() {
                 endDate={endDate}
                 data={filteredBulletinData}
                 logoBase64={logoBase64}
+                dispensadoKeys={Array.from(dispensaSet)}
               />
             </PDFViewer>
           </div>
@@ -1219,9 +1241,28 @@ export default function BoletimPage() {
                               !item.exit2;
                             const shouldHighlight =
                               hasNoPunch && !isNoCompany(item.work_company);
+                            const isDispensado = dispensaSet.has(
+                              `${normalizeDispensaName(
+                                item.employee_name
+                              )}|${item.date.slice(0, 10)}`
+                            );
                             const missingClass = shouldHighlight
-                              ? "bg-red-300 text-red-900 font-semibold"
+                              ? isDispensado
+                                ? "bg-yellow-300 text-yellow-900 font-semibold"
+                                : "bg-red-300 text-red-900 font-semibold"
                               : "";
+                            const hasFirstPair =
+                              !!item.entry1 && !!item.exit1;
+                            const hasSecondPair =
+                              !!item.entry2 && !!item.exit2;
+                            const dispensadoSegundoPeriodo =
+                              isDispensado &&
+                              !isNoCompany(item.work_company) &&
+                              hasFirstPair &&
+                              !hasSecondPair;
+                            const secondPairClass = dispensadoSegundoPeriodo
+                              ? "bg-yellow-300 text-yellow-900 font-semibold"
+                              : missingClass;
 
                             return (
                               <tr
@@ -1265,10 +1306,10 @@ export default function BoletimPage() {
                                 <td className={`p-3 align-middle whitespace-nowrap ${missingClass}`}>
                                   {item.exit1 || "-"}
                                 </td>
-                                <td className={`p-3 align-middle whitespace-nowrap ${missingClass}`}>
+                                <td className={`p-3 align-middle whitespace-nowrap ${secondPairClass}`}>
                                   {item.entry2 || "-"}
                                 </td>
-                                <td className={`p-3 align-middle whitespace-nowrap ${missingClass}`}>
+                                <td className={`p-3 align-middle whitespace-nowrap ${secondPairClass}`}>
                                   {item.exit2 || "-"}
                                 </td>
                                 <td className="p-3 align-middle whitespace-nowrap font-medium">

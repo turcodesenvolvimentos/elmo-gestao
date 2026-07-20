@@ -37,6 +37,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { useEmployees } from "@/hooks/use-employees";
 import { useCustomHolidays } from "@/hooks/use-custom-holidays";
+import { useDispensas } from "@/hooks/use-dispensas";
 import { usePunchesInfinite } from "@/hooks/use-punches";
 import {
   getMappedCompanies,
@@ -212,6 +213,25 @@ export default function PontoPage() {
     customHolidaysData?.holidays.forEach((h) => s.add(h.holiday_date));
     return s;
   }, [customHolidaysData?.holidays]);
+
+  const { data: dispensasData } = useDispensas();
+  const normalizeDispensaName = (s: string) =>
+    s
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, " ");
+  const dispensaSet = useMemo(
+    () =>
+      new Set<string>(
+        (dispensasData?.dispensas || []).map(
+          (d) =>
+            `${normalizeDispensaName(d.employee_name)}|${d.date.slice(0, 10)}`
+        )
+      ),
+    [dispensasData?.dispensas]
+  );
 
   const [activeTab, setActiveTab] = useState("visualizar");
   const [openEmployee, setOpenEmployee] = useState(false);
@@ -995,6 +1015,7 @@ export default function PontoPage() {
             data: exportData,
             employeeCpf: selectedEmployee?.cpf,
             employeeAdmissionDate: selectedEmployee?.admissionDate,
+            dispensadoKeys: Array.from(dispensaSet),
             filtersApplied: {
               employeeId: filter.employeeId > 0 ? filter.employeeId : undefined,
               company: filter.company !== "Todos" ? filter.company : undefined,
@@ -1123,6 +1144,7 @@ export default function PontoPage() {
       startDate: filter.startDate,
       endDate: filter.endDate,
       employees: employeesPayload,
+      dispensadoKeys: Array.from(dispensaSet),
     });
   };
 
@@ -1714,13 +1736,36 @@ export default function PontoPage() {
                               const highlightDay =
                                 dayHasIncomplete &&
                                 !isNoCompany(group.company);
-                              const cellHighlight = highlightDay
-                                ? "bg-red-300 text-red-900 font-semibold"
-                                : "";
+                              const isDispensado = dispensaSet.has(
+                                `${normalizeDispensaName(
+                                  group.employeeName,
+                                )}|${group.date.slice(0, 10)}`,
+                              );
+                              const firstPunch = group.punches[0];
+                              const hasFirstPair =
+                                !!firstPunch &&
+                                !!firstPunch.dateIn &&
+                                !!firstPunch.dateOut;
+                              const dispensadoSegundoPeriodo =
+                                isDispensado &&
+                                !isNoCompany(group.company) &&
+                                hasFirstPair &&
+                                dayHasIncomplete;
 
                               return Array.from({ length: maxPunchPairs }).map(
                                 (_, index) => {
                                   const punch = group.punches[index];
+                                  const pairIncomplete =
+                                    !punch || !punch.dateIn || !punch.dateOut;
+                                  const cellHighlight = dispensadoSegundoPeriodo
+                                    ? pairIncomplete
+                                      ? "bg-yellow-300 text-yellow-900 font-semibold"
+                                      : ""
+                                    : highlightDay
+                                      ? isDispensado
+                                        ? "bg-yellow-300 text-yellow-900 font-semibold"
+                                        : "bg-red-300 text-red-900 font-semibold"
+                                      : "";
                                   const entryTime = punch?.dateIn
                                     ? new Date(
                                         punch.dateIn,

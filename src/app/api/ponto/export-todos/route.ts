@@ -38,7 +38,7 @@ interface PontoTodosEmployee {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { startDate, endDate, employees } = body;
+    const { startDate, endDate, employees, dispensadoKeys } = body;
 
     if (!startDate || !endDate || !employees) {
       return NextResponse.json(
@@ -71,6 +71,7 @@ export async function POST(request: NextRequest) {
       endDate,
       logoBase64,
       employees: employees as PontoTodosEmployee[],
+      dispensadoKeys: Array.isArray(dispensadoKeys) ? dispensadoKeys : [],
     });
 
     const pdfBuffer = await renderToBuffer(

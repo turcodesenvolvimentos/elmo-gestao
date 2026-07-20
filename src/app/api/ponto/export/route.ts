@@ -32,7 +32,7 @@ interface PontoData {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { employeeName, startDate, endDate, data, employeeCpf, employeeAdmissionDate } = body;
+    const { employeeName, startDate, endDate, data, employeeCpf, employeeAdmissionDate, dispensadoKeys } = body;
 
     // Validação
     if (!startDate || !endDate || !data) {
@@ -73,6 +73,7 @@ export async function POST(request: NextRequest) {
       logoBase64,
       employeeCpf,
       employeeAdmissionDate,
+      dispensadoKeys: Array.isArray(dispensadoKeys) ? dispensadoKeys : [],
     });
 
     const pdfBuffer = await renderToBuffer(

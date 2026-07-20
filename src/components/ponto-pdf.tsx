@@ -136,10 +136,17 @@ const styles = StyleSheet.create({
   col17: { width: "6.5%", fontSize: NUM_FONT },
   col18: { width: "8%", fontSize: NUM_FONT },
   missingCell: {
-    backgroundColor: "#ff3f3d",   
-    color: "#991B1B",            
+    backgroundColor: "#ff3f3d",
+    color: "#991B1B",
     fontWeight: "bold",
   },
+  missingCellDispensa: {
+    backgroundColor: "#FDE047",
+    color: "#854D0E",
+    fontWeight: "bold",
+  },
+  col_dispensado: { width: "26%", fontSize: NUM_FONT },
+  col_dispensado2: { width: "13%", fontSize: NUM_FONT },
   signatureSection: {
     marginTop: 14,
     paddingTop: 8,
@@ -221,7 +228,16 @@ interface PontoPDFProps {
   logoBase64?: string;
   employeeCpf?: string;
   employeeAdmissionDate?: string | number;
+  dispensadoKeys?: string[];
 }
+
+const normalizeDispensaName = (s: string) =>
+  s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ");
 
 const formatDate = (dateString: string) => {
   const date = new Date(dateString + "T12:00:00Z");
@@ -329,8 +345,10 @@ const PontoReportPage: React.FC<PontoPDFProps> = ({
   logoBase64,
   employeeCpf,
   employeeAdmissionDate,
+  dispensadoKeys,
 }) => {
   const totals = calculateTotals(data);
+  const dispensaSet = new Set(dispensadoKeys ?? []);
 
   return (
       <Page size="A4" orientation="portrait" style={styles.page}>
@@ -398,8 +416,24 @@ const PontoReportPage: React.FC<PontoPDFProps> = ({
               isEmptyTime(row.exit1) &&
               isEmptyTime(row.entry2) &&
               isEmptyTime(row.exit2);
+            const hasFirstPair =
+              !isEmptyTime(row.entry1) && !isEmptyTime(row.exit1);
+            const hasSecondPair =
+              !isEmptyTime(row.entry2) && !isEmptyTime(row.exit2);
             const shouldHighlight =
               hasNoPunch && !isNoCompany(row.company);
+            const rowName = row.employeeName || employeeName || "";
+            const isDispensado =
+              !!rowName &&
+              dispensaSet.has(
+                `${normalizeDispensaName(rowName)}|${row.date.slice(0, 10)}`
+              );
+            const dispensadoDiaTodo = isDispensado && shouldHighlight;
+            const dispensadoSegundoPeriodo =
+              isDispensado &&
+              !isNoCompany(row.company) &&
+              hasFirstPair &&
+              !hasSecondPair;
             const rowStyle =
               index % 2 === 1
                 ? [styles.tableRow, styles.tableRowAlt]
@@ -417,18 +451,34 @@ const PontoReportPage: React.FC<PontoPDFProps> = ({
               </View>
               <Text style={[styles.col3, styles.cellCenter]}>{formatDate(row.date)}</Text>
               <Text style={[styles.col4, styles.cellCenter]}>{row.dayOfWeek}</Text>
-              <Text style={shouldHighlight ? [styles.col5, styles.cellCenter, styles.missingCell] : [styles.col5, styles.cellCenter]}>
-                {row.entry1 || "-"}
-              </Text>
-              <Text style={shouldHighlight ? [styles.col6, styles.cellCenter, styles.missingCell] : [styles.col6, styles.cellCenter]}>
-                {row.exit1 || "-"}
-              </Text>
-              <Text style={shouldHighlight ? [styles.col7, styles.cellCenter, styles.missingCell] : [styles.col7, styles.cellCenter]}>
-                {row.entry2 || "-"}
-              </Text>
-              <Text style={shouldHighlight ? [styles.col8, styles.cellCenter, styles.missingCell] : [styles.col8, styles.cellCenter]}>
-                {row.exit2 || "-"}
-              </Text>
+              {dispensadoDiaTodo ? (
+                <Text style={[styles.col_dispensado, styles.cellCenter, styles.missingCellDispensa]}>
+                  Dispensado
+                </Text>
+              ) : (
+                <>
+                  <Text style={shouldHighlight ? [styles.col5, styles.cellCenter, styles.missingCell] : [styles.col5, styles.cellCenter]}>
+                    {row.entry1 || "-"}
+                  </Text>
+                  <Text style={shouldHighlight ? [styles.col6, styles.cellCenter, styles.missingCell] : [styles.col6, styles.cellCenter]}>
+                    {row.exit1 || "-"}
+                  </Text>
+                  {dispensadoSegundoPeriodo ? (
+                    <Text style={[styles.col_dispensado2, styles.cellCenter, styles.missingCellDispensa]}>
+                      Dispensado
+                    </Text>
+                  ) : (
+                    <>
+                      <Text style={shouldHighlight ? [styles.col7, styles.cellCenter, styles.missingCell] : [styles.col7, styles.cellCenter]}>
+                        {row.entry2 || "-"}
+                      </Text>
+                      <Text style={shouldHighlight ? [styles.col8, styles.cellCenter, styles.missingCell] : [styles.col8, styles.cellCenter]}>
+                        {row.exit2 || "-"}
+                      </Text>
+                    </>
+                  )}
+                </>
+              )}
               <Text style={[styles.col12, styles.cellCenter]}>{row.totalHoras}</Text>
               <Text style={[styles.col13, styles.cellCenter]}>{row.horasNormais}</Text>
               <Text style={[styles.col14, styles.cellCenter]}>{row.adicionalNoturno}</Text>
@@ -511,6 +561,7 @@ interface PontoPDFTodosProps {
   endDate: string;
   logoBase64?: string;
   employees: PontoTodosEmployee[];
+  dispensadoKeys?: string[];
 }
 
 export const PontoPDFTodos: React.FC<PontoPDFTodosProps> = ({
@@ -518,6 +569,7 @@ export const PontoPDFTodos: React.FC<PontoPDFTodosProps> = ({
   endDate,
   logoBase64,
   employees,
+  dispensadoKeys,
 }) => (
   <Document>
     {employees.map((emp, index) => (
@@ -530,6 +582,7 @@ export const PontoPDFTodos: React.FC<PontoPDFTodosProps> = ({
         logoBase64={logoBase64}
         employeeCpf={emp.employeeCpf}
         employeeAdmissionDate={emp.employeeAdmissionDate}
+        dispensadoKeys={dispensadoKeys}
       />
     ))}
   </Document>

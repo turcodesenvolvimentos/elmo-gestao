@@ -215,6 +215,13 @@ const styles = StyleSheet.create({
     color: "#991B1B",
     fontWeight: "bold",
   },
+  missingCellDispensa: {
+    backgroundColor: "#FDE047",
+    color: "#854D0E",
+    fontWeight: "bold",
+  },
+  col_dispensado: { width: "18%", fontSize: NUM_FONT },
+  col_dispensado2: { width: "9%", fontSize: NUM_FONT },
   companyBadge: {
     backgroundColor: "#FEF3C7",
     paddingHorizontal: 2,
@@ -245,6 +252,7 @@ const styles = StyleSheet.create({
 });
 
 interface BoletimData {
+  employee_id?: string;
   employee_name: string;
   work_company?: string;
   position: string;
@@ -272,6 +280,7 @@ interface BoletimPDFProps {
   endDate: string;
   data: BoletimData[];
   logoBase64?: string;
+  dispensadoKeys?: string[];
 }
 
 const formatDate = (dateString: string) => {
@@ -289,6 +298,14 @@ const formatCurrency = (value: number) => {
 const isNoCompany = (value?: string | null): boolean =>
   (value || "").trim().toLowerCase() === "não escalado";
 
+const normalizeDispensaName = (s: string): string =>
+  s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ");
+
 /**
  * Trunca o nome do colaborador para caber em uma linha na coluna.
  * Em ~32 caracteres já não cabe na largura de 13% da página landscape com
@@ -300,21 +317,58 @@ const truncateName = (name: string, max = 32): string => {
   return name.length > max ? `${name.slice(0, max - 1).trimEnd()}…` : name;
 };
 
-/** Pega os primeiros `count` nomes de uma string já formatada. */
+// Preposições/conectores que não contam como "nome" na regra dos 2 nomes.
+const NAME_PREFIXES = new Set(["de", "da", "do", "das", "dos", "e"]);
+
+const normalizeToken = (t: string): string =>
+  t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+const isPrefixToken = (t: string): boolean =>
+  NAME_PREFIXES.has(normalizeToken(t));
+
+/** Deixa as preposições em minúsculo (menos no início): "Kelvin Da Silva" -> "Kelvin da Silva". */
+const lowercasePrefixes = (display: string): string =>
+  display
+    .split(" ")
+    .map((token, i) => (i > 0 && isPrefixToken(token) ? token.toLowerCase() : token))
+    .join(" ");
+
+/** Quantidade de nomes significativos (ignorando preposições) numa string. */
+const significantNameCount = (formatted: string): number =>
+  formatted
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((t) => !isPrefixToken(t)).length;
+
+/**
+ * Pega os primeiros `count` nomes SIGNIFICATIVOS de uma string formatada.
+ * Preposições (de, da, do, das, dos, e) são incluídas mas não contam no total,
+ * então "Kelvin Da Silva Teixeira" com count=2 -> "Kelvin Da Silva".
+ */
 const takeFirstNames = (formatted: string, count: number): string => {
   if (!formatted) return "";
-  return formatted.trim().split(/\s+/).filter(Boolean).slice(0, count).join(" ");
+  const tokens = formatted.trim().split(/\s+/).filter(Boolean);
+  const out: string[] = [];
+  let sig = 0;
+  for (const token of tokens) {
+    if (sig >= count) break;
+    out.push(token);
+    if (!isPrefixToken(token)) sig++;
+  }
+  // Remove preposição solta no fim (ex: "Maria Da")
+  while (out.length && isPrefixToken(out[out.length - 1])) out.pop();
+  return out.join(" ");
 };
 
 /**
  * Constrói um mapa `nomeOriginal -> nomeExibido` para a tabela.
  *
  * Regra:
- *  1. Por padrão exibe os 2 primeiros nomes.
- *  2. Se 2+ funcionários compartilham a mesma versão de 2 nomes, todos
- *     ganham o 3º nome para diferenciar.
- *  3. Se ainda assim houver empate (mesma versão de 3 nomes), caímos para
- *     o nome completo formatado — fica longo mas pelo menos correto.
+ *  1. Por padrão exibe os 2 primeiros nomes significativos (preposições como
+ *     "da", "de", "dos" não contam, mas continuam aparecendo).
+ *  2. Se 2+ funcionários compartilham a mesma versão exibida, vai adicionando
+ *     o próximo nome até que fiquem diferentes (ou até o nome completo).
  */
 const buildDisplayNameMap = (
   rows: { employee_name: string }[],
@@ -324,41 +378,28 @@ const buildDisplayNameMap = (
 
   const uniqueFormatted = new Map<string, string>(); // original -> formatted
   for (const r of rows) {
-    const formatted = formatEmployeeName(r.employee_name);
     if (!uniqueFormatted.has(r.employee_name)) {
-      uniqueFormatted.set(r.employee_name, formatted);
+      uniqueFormatted.set(r.employee_name, formatEmployeeName(r.employee_name));
     }
   }
 
-  const twoNameCounts = new Map<string, number>();
-  for (const formatted of uniqueFormatted.values()) {
-    const two = takeFirstNames(formatted, 2);
-    twoNameCounts.set(two, (twoNameCounts.get(two) ?? 0) + 1);
-  }
-
-  // Apenas para os nomes em colisão, conta quantos compartilham a versão
-  // de 3 nomes — se mais de um, cai para o nome completo.
-  const threeNameCounts = new Map<string, number>();
-  for (const formatted of uniqueFormatted.values()) {
-    const two = takeFirstNames(formatted, 2);
-    if ((twoNameCounts.get(two) ?? 0) > 1) {
-      const three = takeFirstNames(formatted, 3);
-      threeNameCounts.set(three, (threeNameCounts.get(three) ?? 0) + 1);
-    }
-  }
+  const formattedList = [...uniqueFormatted.values()];
 
   for (const [original, formatted] of uniqueFormatted) {
-    const two = takeFirstNames(formatted, 2);
-    if ((twoNameCounts.get(two) ?? 0) <= 1) {
-      map.set(original, two);
-      continue;
+    const maxSig = Math.max(significantNameCount(formatted), 2);
+    let display = takeFirstNames(formatted, 2);
+
+    for (let count = 2; count <= maxSig; count++) {
+      const candidate = takeFirstNames(formatted, count);
+      display = candidate;
+      const colisao = formattedList.some(
+        (other) =>
+          other !== formatted && takeFirstNames(other, count) === candidate
+      );
+      if (!colisao) break;
     }
-    const three = takeFirstNames(formatted, 3);
-    if ((threeNameCounts.get(three) ?? 0) <= 1) {
-      map.set(original, three);
-      continue;
-    }
-    map.set(original, formatted);
+
+    map.set(original, lowercasePrefixes(display));
   }
 
   return map;
@@ -431,9 +472,11 @@ export const BoletimPDF: React.FC<BoletimPDFProps> = ({
   endDate,
   data,
   logoBase64,
+  dispensadoKeys,
 }) => {
   const totals = calculateTotals(data);
   const displayNameByEmployee = buildDisplayNameMap(data);
+  const dispensaSet = new Set(dispensadoKeys ?? []);
 
   // Render flat list of rows, inserting a "day bar" each time the date
   // changes. Index parity is tracked separately so alternating row stripes
@@ -471,9 +514,29 @@ export const BoletimPDF: React.FC<BoletimPDFProps> = ({
       );
     }
 
+    const isEmptyTime = (t?: string) => !t || t === "-";
     const hasNoPunch =
-      !row.entry1 && !row.exit1 && !row.entry2 && !row.exit2;
+      isEmptyTime(row.entry1) &&
+      isEmptyTime(row.exit1) &&
+      isEmptyTime(row.entry2) &&
+      isEmptyTime(row.exit2);
+    const hasFirstPair =
+      !isEmptyTime(row.entry1) && !isEmptyTime(row.exit1);
+    const hasSecondPair =
+      !isEmptyTime(row.entry2) && !isEmptyTime(row.exit2);
     const shouldHighlight = hasNoPunch && !isNoCompany(row.work_company);
+    const isDispensado = dispensaSet.has(
+      `${normalizeDispensaName(row.employee_name)}|${row.date.slice(0, 10)}`
+    );
+    // Dispensado no dia todo (sem nenhuma batida) vs só no 2º período
+    // (tem 1ª entrada/saída, mas falta a 2ª).
+    const dispensadoDiaTodo =
+      isDispensado && shouldHighlight;
+    const dispensadoSegundoPeriodo =
+      isDispensado &&
+      !isNoCompany(row.work_company) &&
+      hasFirstPair &&
+      !hasSecondPair;
     const rowStyle =
       rowParity % 2 === 1
         ? [styles.tableRow, styles.tableRowAlt]
@@ -514,42 +577,73 @@ export const BoletimPDF: React.FC<BoletimPDFProps> = ({
         <Text style={[styles.col_data, styles.cellCenter]}>
           {formatDate(row.date)}
         </Text>
-        <Text
-          style={
-            shouldHighlight
-              ? [styles.col_e1, styles.cellCenter, styles.punchEdgeLeft, styles.missingCell]
-              : [styles.col_e1, styles.cellCenter, styles.punchEdgeLeft]
-          }
-        >
-          {row.entry1 || "-"}
-        </Text>
-        <Text
-          style={
-            shouldHighlight
-              ? [styles.col_s1, styles.cellCenter, styles.missingCell]
-              : [styles.col_s1, styles.cellCenter]
-          }
-        >
-          {row.exit1 || "-"}
-        </Text>
-        <Text
-          style={
-            shouldHighlight
-              ? [styles.col_e2, styles.cellCenter, styles.missingCell]
-              : [styles.col_e2, styles.cellCenter]
-          }
-        >
-          {row.entry2 || "-"}
-        </Text>
-        <Text
-          style={
-            shouldHighlight
-              ? [styles.col_s2, styles.cellCenter, styles.punchEdgeRight, styles.missingCell]
-              : [styles.col_s2, styles.cellCenter, styles.punchEdgeRight]
-          }
-        >
-          {row.exit2 || "-"}
-        </Text>
+        {dispensadoDiaTodo ? (
+          <Text
+            style={[
+              styles.col_dispensado,
+              styles.cellCenter,
+              styles.punchEdgeLeft,
+              styles.punchEdgeRight,
+              styles.missingCellDispensa,
+            ]}
+          >
+            Dispensado
+          </Text>
+        ) : (
+          <>
+            <Text
+              style={
+                shouldHighlight
+                  ? [styles.col_e1, styles.cellCenter, styles.punchEdgeLeft, styles.missingCell]
+                  : [styles.col_e1, styles.cellCenter, styles.punchEdgeLeft]
+              }
+            >
+              {row.entry1 || "-"}
+            </Text>
+            <Text
+              style={
+                shouldHighlight
+                  ? [styles.col_s1, styles.cellCenter, styles.missingCell]
+                  : [styles.col_s1, styles.cellCenter]
+              }
+            >
+              {row.exit1 || "-"}
+            </Text>
+            {dispensadoSegundoPeriodo ? (
+              <Text
+                style={[
+                  styles.col_dispensado2,
+                  styles.cellCenter,
+                  styles.punchEdgeRight,
+                  styles.missingCellDispensa,
+                ]}
+              >
+                Dispensado
+              </Text>
+            ) : (
+              <>
+                <Text
+                  style={
+                    shouldHighlight
+                      ? [styles.col_e2, styles.cellCenter, styles.missingCell]
+                      : [styles.col_e2, styles.cellCenter]
+                  }
+                >
+                  {row.entry2 || "-"}
+                </Text>
+                <Text
+                  style={
+                    shouldHighlight
+                      ? [styles.col_s2, styles.cellCenter, styles.punchEdgeRight, styles.missingCell]
+                      : [styles.col_s2, styles.cellCenter, styles.punchEdgeRight]
+                  }
+                >
+                  {row.exit2 || "-"}
+                </Text>
+              </>
+            )}
+          </>
+        )}
         <Text style={[styles.col_total, styles.cellCenter]}>
           {row.total_hours}
         </Text>
