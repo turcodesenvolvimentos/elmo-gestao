@@ -72,6 +72,7 @@ import { useCompanies, useCompanyEmployees } from "@/hooks/use-companies";
 import { useEmployees } from "@/hooks/use-employees";
 import { useShifts } from "@/hooks/use-shifts";
 import { fetchShiftVacancies } from "@/services/shift-vacancies.service";
+import { fetchPunchesToday } from "@/services/punches-today.service";
 import {
   useDispensas,
   useCreateDispensa,
@@ -136,7 +137,7 @@ function formatTime(time: string): string {
 }
 
 function buildLinhasPorSetor(
-  pessoas: { nome: string; setor: string | null }[],
+  pessoas: { nome: string; setor: string | null; marca?: string }[],
   contadorInicial: number
 ): { linhas: string[]; proximoContador: number } {
   const linhas: string[] = [];
@@ -146,19 +147,19 @@ function buildLinhasPorSetor(
     .filter((p) => !p.setor)
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 
-  const porSetor = new Map<string, { nome: string }[]>();
+  const porSetor = new Map<string, { nome: string; marca?: string }[]>();
   pessoas
     .filter((p) => p.setor)
     .forEach((p) => {
       const setor = p.setor!;
       if (!porSetor.has(setor)) porSetor.set(setor, []);
-      porSetor.get(setor)!.push({ nome: p.nome });
+      porSetor.get(setor)!.push({ nome: p.nome, marca: p.marca });
     });
 
   if (semSetor.length > 0) {
     linhas.push(" (Sem setor)");
-    semSetor.forEach(({ nome }) => {
-      linhas.push(`  ${contador} - ${toTitleCase(nome)}`);
+    semSetor.forEach(({ nome, marca }) => {
+      linhas.push(`  ${contador} - ${toTitleCase(nome)}${marca ?? ""}`);
       contador++;
     });
   }
@@ -170,8 +171,8 @@ function buildLinhasPorSetor(
       porSetor
         .get(setor)!
         .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
-        .forEach(({ nome }) => {
-          linhas.push(`  ${contador} - ${toTitleCase(nome)}`);
+        .forEach(({ nome, marca }) => {
+          linhas.push(`  ${contador} - ${toTitleCase(nome)}${marca ?? ""}`);
           contador++;
         });
     });
@@ -525,7 +526,12 @@ export default function EscalaPage() {
         exit2: string | null;
         pessoas: Map<
           string,
-          { nome: string; cargo: string | null; setor: string | null }
+          {
+            nome: string;
+            cargo: string | null;
+            setor: string | null;
+            solidesId: number | null;
+          }
         >;
       };
 
@@ -559,6 +565,7 @@ export default function EscalaPage() {
             nome: e.employee?.name ?? "Funcionário não encontrado",
             cargo: e.employee?.position_name ?? null,
             setor: e.employee?.department_name ?? null,
+            solidesId: e.employee?.solides_id ?? null,
           });
         }
       });
@@ -566,6 +573,24 @@ export default function EscalaPage() {
       const blocosOrdenados = [...blocos.values()].sort((a, b) =>
         a.entry1.localeCompare(b.entry1)
       );
+
+      const agora = new Date();
+      const horaAtual = `${String(agora.getHours()).padStart(2, "0")}:${String(
+        agora.getMinutes()
+      ).padStart(2, "0")}`;
+      const algumBlocoJaIniciou = blocosOrdenados.some(
+        (b) => formatTime(b.entry1) <= horaAtual
+      );
+
+      let batidasHoje: Set<number> | null = null;
+      if (algumBlocoJaIniciou) {
+        try {
+          const res = await fetchPunchesToday(hoje);
+          batidasHoje = new Set(res.employeeIds);
+        } catch {
+          // Sem dados de ponto, segue a cópia sem os marcadores
+        }
+      }
 
       const vagasPorShift = new Map<string, Map<string, number>>();
       await Promise.all(
@@ -597,16 +622,24 @@ export default function EscalaPage() {
           )}${horariosExtra}`
         );
 
+        const blocoJaIniciou = formatTime(bloco.entry1) <= horaAtual;
+        const verificarPonto = blocoJaIniciou && batidasHoje !== null;
+
         const porCargo = new Map<
           string,
-          { nome: string; setor: string | null }[]
+          { nome: string; setor: string | null; marca?: string }[]
         >();
         [...bloco.pessoas.values()]
           .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
           .forEach((p) => {
             const cargo = p.cargo || "Sem cargo";
             if (!porCargo.has(cargo)) porCargo.set(cargo, []);
-            porCargo.get(cargo)!.push({ nome: p.nome, setor: p.setor });
+            const marca = verificarPonto
+              ? p.solidesId != null && batidasHoje!.has(p.solidesId)
+                ? " ✅"
+                : " ❌"
+              : undefined;
+            porCargo.get(cargo)!.push({ nome: p.nome, setor: p.setor, marca });
           });
 
         const cargosOrdenados = [...porCargo.keys()].sort((a, b) =>
