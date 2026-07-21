@@ -161,8 +161,9 @@ export async function GET() {
       (companies || []).map(async (company) => {
         const { count, error: countError } = await supabaseAdmin
           .from("employee_companies")
-          .select("*", { count: "exact", head: true })
-          .eq("company_id", company.id);
+          .select("*, employees!inner(fired)", { count: "exact", head: true })
+          .eq("company_id", company.id)
+          .eq("employees.fired", false);
 
         if (countError) {
           console.error(

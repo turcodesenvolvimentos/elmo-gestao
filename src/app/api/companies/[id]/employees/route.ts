@@ -37,14 +37,16 @@ export async function GET(
         .select(
           `
         employee_id,
-        employees (
+        employees!inner (
           id,
           name,
-          solides_id
+          solides_id,
+          fired
         )
       `
         )
-        .eq("company_id", id);
+        .eq("company_id", id)
+        .eq("employees.fired", false);
 
     if (employeeCompaniesError) {
       throw employeeCompaniesError;

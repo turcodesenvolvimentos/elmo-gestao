@@ -125,8 +125,9 @@ export async function PUT(
     // Buscar contagem de funcionários
     const { count } = await supabaseAdmin
       .from("employee_companies")
-      .select("*", { count: "exact", head: true })
-      .eq("company_id", id);
+      .select("*, employees!inner(fired)", { count: "exact", head: true })
+      .eq("company_id", id)
+      .eq("employees.fired", false);
 
     return NextResponse.json({
       ...company,

@@ -216,13 +216,6 @@ async function saveEmployee(employee: any) {
 
   if (error) throw error;
 
-  if (employeeData.fired) {
-    await supabaseAdmin
-      .from("employee_companies")
-      .delete()
-      .eq("employee_id", data.id);
-  }
-
   return data.id;
 }
 
