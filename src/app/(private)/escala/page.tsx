@@ -135,6 +135,50 @@ function formatTime(time: string): string {
   return time.slice(0, 5);
 }
 
+function buildLinhasPorSetor(
+  pessoas: { nome: string; setor: string | null }[],
+  contadorInicial: number
+): { linhas: string[]; proximoContador: number } {
+  const linhas: string[] = [];
+  let contador = contadorInicial;
+
+  const semSetor = pessoas
+    .filter((p) => !p.setor)
+    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+
+  const porSetor = new Map<string, { nome: string }[]>();
+  pessoas
+    .filter((p) => p.setor)
+    .forEach((p) => {
+      const setor = p.setor!;
+      if (!porSetor.has(setor)) porSetor.set(setor, []);
+      porSetor.get(setor)!.push({ nome: p.nome });
+    });
+
+  if (semSetor.length > 0) {
+    linhas.push(" (Sem setor)");
+    semSetor.forEach(({ nome }) => {
+      linhas.push(`  ${contador} - ${toTitleCase(nome)}`);
+      contador++;
+    });
+  }
+
+  [...porSetor.keys()]
+    .sort((a, b) => a.localeCompare(b, "pt-BR"))
+    .forEach((setor) => {
+      linhas.push(` (${setor})`);
+      porSetor
+        .get(setor)!
+        .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
+        .forEach(({ nome }) => {
+          linhas.push(`  ${contador} - ${toTitleCase(nome)}`);
+          contador++;
+        });
+    });
+
+  return { linhas, proximoContador: contador };
+}
+
 export default function EscalaPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterEmployeeCompany, setFilterEmployeeCompany] = useState(""); // filtro de empresas por funcionário
@@ -169,6 +213,9 @@ export default function EscalaPage() {
   const [filterEmployeeName, setFilterEmployeeName] = useState(""); // filtro por nome
   const [openEmployeeFilter, setOpenEmployeeFilter] = useState(false);
   const [editingGroup, setEditingGroup] = useState<EscalaAgrupada | null>(null);
+  const [copyingDiaCompanyId, setCopyingDiaCompanyId] = useState<string | null>(
+    null
+  );
   const viewDialogContentRef = useRef<HTMLDivElement>(null);
 
   // Hooks
@@ -409,13 +456,12 @@ export default function EscalaPage() {
         } disponíve${restantes === 1 ? "l" : "is"})`;
       }
       linhasFuncionarios.push(cabecalho);
-      pessoas.forEach(({ nome, setor }) => {
-        const setorSuffix = setor ? ` - (${setor})` : "";
-        linhasFuncionarios.push(
-          ` ${contador} - ${toTitleCase(nome)}${setorSuffix}`
-        );
-        contador++;
-      });
+      const { linhas: linhasPessoas, proximoContador } = buildLinhasPorSetor(
+        pessoas,
+        contador
+      );
+      linhasFuncionarios.push(...linhasPessoas);
+      contador = proximoContador;
       linhasFuncionarios.push("");
     });
 
@@ -441,6 +487,181 @@ export default function EscalaPage() {
       }
     } catch {
       toast.error("Não foi possível copiar para a área de transferência.");
+    }
+  };
+
+  const handleCopyEscalaDoDia = async (companyId: string) => {
+    const hoje = new Date().toISOString().slice(0, 10);
+    const empresa =
+      companies.find((c) => c.id === companyId)?.name || "Não informada";
+
+    const doDia = escalas.filter(
+      (e) =>
+        e.shift?.company_id === companyId &&
+        e.start_date <= hoje &&
+        (!e.end_date || e.end_date >= hoje)
+    );
+
+    if (doDia.length === 0) {
+      toast.error("Nenhuma escala vigente hoje para esta empresa.");
+      return;
+    }
+
+    setCopyingDiaCompanyId(companyId);
+
+    try {
+      const normalizeCargo = (s: string) =>
+        s.normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
+
+      let menorInicio = doDia[0].start_date;
+      let maiorFim: string | null = doDia[0].end_date ?? null;
+      let temIndefinido = !doDia[0].end_date;
+
+      type Bloco = {
+        shiftId: string;
+        entry1: string;
+        exit1: string;
+        entry2: string | null;
+        exit2: string | null;
+        pessoas: Map<
+          string,
+          { nome: string; cargo: string | null; setor: string | null }
+        >;
+      };
+
+      const blocos = new Map<string, Bloco>();
+
+      doDia.forEach((e) => {
+        if (e.start_date < menorInicio) menorInicio = e.start_date;
+        if (!e.end_date) temIndefinido = true;
+        else if (!maiorFim || e.end_date > maiorFim) maiorFim = e.end_date;
+
+        const entry1 = e.shift?.entry1 ?? "";
+        const exit1 = e.shift?.exit1 ?? "";
+        const entry2 = e.shift?.entry2 ?? null;
+        const exit2 = e.shift?.exit2 ?? null;
+        const key = `${entry1}-${exit1}-${entry2 ?? ""}-${exit2 ?? ""}`;
+
+        if (!blocos.has(key)) {
+          blocos.set(key, {
+            shiftId: e.shift_id,
+            entry1,
+            exit1,
+            entry2,
+            exit2,
+            pessoas: new Map(),
+          });
+        }
+
+        const bloco = blocos.get(key)!;
+        if (!bloco.pessoas.has(e.employee_id)) {
+          bloco.pessoas.set(e.employee_id, {
+            nome: e.employee?.name ?? "Funcionário não encontrado",
+            cargo: e.employee?.position_name ?? null,
+            setor: e.employee?.department_name ?? null,
+          });
+        }
+      });
+
+      const blocosOrdenados = [...blocos.values()].sort((a, b) =>
+        a.entry1.localeCompare(b.entry1)
+      );
+
+      const vagasPorShift = new Map<string, Map<string, number>>();
+      await Promise.all(
+        blocosOrdenados.map(async (bloco) => {
+          try {
+            const vac = await fetchShiftVacancies(bloco.shiftId);
+            const map = new Map<string, number>();
+            vac.vacancies.forEach((v) => {
+              if (v.position_name != null)
+                map.set(normalizeCargo(v.position_name), v.vacancies);
+            });
+            vagasPorShift.set(bloco.shiftId, map);
+          } catch {
+            // sem vagas configuradas, segue sem exibir
+          }
+        })
+      );
+
+      const linhas: string[] = [];
+
+      blocosOrdenados.forEach((bloco) => {
+        const horariosExtra =
+          bloco.entry2 && bloco.exit2
+            ? ` | ${formatTime(bloco.entry2)} - ${formatTime(bloco.exit2)}`
+            : "";
+        linhas.push(
+          `Horários: ${formatTime(bloco.entry1)} - ${formatTime(
+            bloco.exit1
+          )}${horariosExtra}`
+        );
+
+        const porCargo = new Map<
+          string,
+          { nome: string; setor: string | null }[]
+        >();
+        [...bloco.pessoas.values()]
+          .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
+          .forEach((p) => {
+            const cargo = p.cargo || "Sem cargo";
+            if (!porCargo.has(cargo)) porCargo.set(cargo, []);
+            porCargo.get(cargo)!.push({ nome: p.nome, setor: p.setor });
+          });
+
+        const cargosOrdenados = [...porCargo.keys()].sort((a, b) =>
+          a.localeCompare(b, "pt-BR")
+        );
+
+        const vagasByCargo = vagasPorShift.get(bloco.shiftId);
+        let contador = 1;
+
+        cargosOrdenados.forEach((cargo) => {
+          const pessoas = porCargo.get(cargo)!;
+          const vagas = vagasByCargo?.get(normalizeCargo(cargo));
+          let cabecalho = cargo;
+          if (vagas != null) {
+            const restantes = Math.max(0, vagas - pessoas.length);
+            cabecalho = `${cargo} - (${restantes} vaga${
+              restantes === 1 ? "" : "s"
+            } disponíve${restantes === 1 ? "l" : "is"})`;
+          }
+          linhas.push(cabecalho);
+          const { linhas: linhasPessoas, proximoContador } =
+            buildLinhasPorSetor(pessoas, contador);
+          linhas.push(...linhasPessoas);
+          contador = proximoContador;
+        });
+
+        linhas.push("");
+      });
+
+      const fim = temIndefinido
+        ? "indefinido"
+        : maiorFim
+        ? formatDateLocal(maiorFim)
+        : "indefinido";
+
+      const mensagem = [
+        `Data: ${formatDateLocal(hoje)}`,
+        `Empresa: ${empresa}`,
+        `Período: ${formatDateLocal(menorInicio)} até ${fim}`,
+        "",
+        ...linhas,
+      ]
+        .join("\n")
+        .trimEnd();
+
+      if (typeof navigator !== "undefined" && navigator.clipboard) {
+        await navigator.clipboard.writeText(mensagem);
+        toast.success("Escala completa do dia copiada!");
+      } else {
+        throw new Error("Clipboard API não disponível");
+      }
+    } catch {
+      toast.error("Não foi possível copiar para a área de transferência.");
+    } finally {
+      setCopyingDiaCompanyId(null);
     }
   };
 
@@ -793,6 +1014,23 @@ export default function EscalaPage() {
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  handleCopyEscalaDoDia(company.id)
+                                }
+                                disabled={
+                                  copyingDiaCompanyId === company.id ||
+                                  escalasLoading
+                                }
+                                title="Copia todas as escalas vigentes hoje agrupadas por horário"
+                              >
+                                <Copy className="h-4 w-4 mr-2" />
+                                {copyingDiaCompanyId === company.id
+                                  ? "Copiando..."
+                                  : "Copiar Escala"}
+                              </Button>
                               <Button
                                 variant="outline"
                                 size="sm"
