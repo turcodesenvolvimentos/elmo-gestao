@@ -23,6 +23,8 @@ import {
   ChevronsUpDown,
   ChevronLeft,
   ChevronRight,
+  AlertTriangle,
+  CheckCircle2,
 } from "lucide-react";
 import {
   Table,
@@ -35,6 +37,11 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  validateDayPunches,
+  type PunchWarning,
+} from "@/lib/punch-validator";
 import { useEmployees } from "@/hooks/use-employees";
 import { useCustomHolidays } from "@/hooks/use-custom-holidays";
 import { useDispensas } from "@/hooks/use-dispensas";
@@ -1206,6 +1213,15 @@ export default function PontoPage() {
     return [...baseColumns, ...punchColumns, ...extraColumns];
   }, [maxPunchPairs]);
 
+  const gruposComAvisos = useMemo(() => {
+    return groupedPunches
+      .map((grupo) => ({
+        grupo,
+        avisos: validateDayPunches(grupo.punches),
+      }))
+      .filter((item) => item.avisos.length > 0);
+  }, [groupedPunches]);
+
   if (employeesLoading) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center">
@@ -1214,87 +1230,7 @@ export default function PontoPage() {
     );
   }
 
-  return (
-    <>
-  <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-    <div className="flex items-center gap-2">
-      <h1 className="text-xl font-semibold">Ponto</h1>
-    </div>
-  </header>
-
-  <div className="flex flex-1 flex-col gap-6 p-6 w-full min-h-0">
-    {hasAnyError && (
-      <Alert variant="destructive">
-        <AlertDescription>
-          Erro ao carregar dados. Tente atualizar os filtros ou recarregar
-          a página.
-        </AlertDescription>
-      </Alert>
-    )}
-
-    <Tabs
-      value={activeTab}
-      onValueChange={setActiveTab}
-      className="w-full"
-    >
-      <div className="flex items-center justify-between mb-6">
-        <TabsList>
-          <TabsTrigger
-            value="visualizar"
-            className="flex items-center gap-2"
-          >
-            <Eye className="h-4 w-4" />
-            Visualizar
-          </TabsTrigger>
-          <TabsTrigger
-            value="historico"
-            className="flex items-center gap-2"
-          >
-            <History className="h-4 w-4" />
-            Histórico
-          </TabsTrigger>
-        </TabsList>
-
-        <div className="flex items-center gap-2">
-          {lastSyncData && (
-            <span className="text-sm text-muted-foreground">
-              Última sincronização:{" "}
-              {new Date(lastSyncData.lastSyncAt).toLocaleString("pt-BR")}
-            </span>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => syncMutation.mutate()}
-            disabled={syncMutation.isPending}
-          >
-            {syncMutation.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Sincronizando...
-                {syncMutation.progress &&
-                  syncMutation.progress.total > 0 && (
-                    <span className="ml-2 font-medium">
-                      {syncMutation.progress.percent}%
-                      <span className="text-muted-foreground font-normal">
-                        {" "}
-                        ({syncMutation.progress.processed}/
-                        {syncMutation.progress.total})
-                      </span>
-                    </span>
-                  )}
-              </>
-            ) : (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Sincronizar
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
-
-      <TabsContent value="visualizar" className="space-y-6">
+  const filtrosCard = (
         <Card>
           <CardContent className="">
             <div className="flex flex-col gap-4 md:flex-row md:justify-between">
@@ -1597,6 +1533,105 @@ export default function PontoPage() {
             </div>
           </CardContent>
         </Card>
+  );
+
+  return (
+    <>
+  <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+    <div className="flex items-center gap-2">
+      <h1 className="text-xl font-semibold">Ponto</h1>
+    </div>
+  </header>
+
+  <div className="flex flex-1 flex-col gap-6 p-6 w-full min-h-0">
+    {hasAnyError && (
+      <Alert variant="destructive">
+        <AlertDescription>
+          Erro ao carregar dados. Tente atualizar os filtros ou recarregar
+          a página.
+        </AlertDescription>
+      </Alert>
+    )}
+
+    <Tabs
+      value={activeTab}
+      onValueChange={setActiveTab}
+      className="w-full"
+    >
+      <div className="flex items-center justify-between mb-6">
+        <TabsList>
+          <TabsTrigger
+            value="visualizar"
+            className="flex items-center gap-2"
+          >
+            <Eye className="h-4 w-4" />
+            Visualizar
+          </TabsTrigger>
+          <TabsTrigger
+            value="verificacao"
+            className="flex items-center gap-2"
+          >
+            <AlertTriangle className="h-4 w-4" />
+            Verificação
+            {gruposComAvisos.length > 0 && (
+              <Badge
+                variant="destructive"
+                className="ml-1 h-5 min-w-5 justify-center px-1.5"
+              >
+                {gruposComAvisos.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger
+            value="historico"
+            className="flex items-center gap-2"
+          >
+            <History className="h-4 w-4" />
+            Histórico
+          </TabsTrigger>
+        </TabsList>
+
+        <div className="flex items-center gap-2">
+          {lastSyncData && (
+            <span className="text-sm text-muted-foreground">
+              Última sincronização:{" "}
+              {new Date(lastSyncData.lastSyncAt).toLocaleString("pt-BR")}
+            </span>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => syncMutation.mutate()}
+            disabled={syncMutation.isPending}
+          >
+            {syncMutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Sincronizando...
+                {syncMutation.progress &&
+                  syncMutation.progress.total > 0 && (
+                    <span className="ml-2 font-medium">
+                      {syncMutation.progress.percent}%
+                      <span className="text-muted-foreground font-normal">
+                        {" "}
+                        ({syncMutation.progress.processed}/
+                        {syncMutation.progress.total})
+                      </span>
+                    </span>
+                  )}
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Sincronizar
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+
+      <TabsContent value="visualizar" className="space-y-6">
+        {filtrosCard}
 
         <Card className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <CardContent className="flex flex-col flex-1 min-h-0 pb-6">
@@ -1914,6 +1949,126 @@ export default function PontoPage() {
             )}
           </CardContent>
         </Card>
+      </TabsContent>
+
+      <TabsContent value="verificacao" className="mt-6 space-y-6">
+        {filtrosCard}
+
+        <Card>
+          <CardContent>
+            <div className="flex flex-col gap-1">
+              <h3 className="text-lg font-semibold">
+                Verificação de batidas
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Apenas leitura. Sinaliza possíveis inconsistências nas
+                batidas do período/funcionário filtrado para facilitar a
+                conferência manual. Nada é alterado automaticamente.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {!hasFilters ? (
+          <Alert>
+            <AlertDescription>
+              Selecione um funcionário e o período na aba Visualizar para
+              carregar as batidas a verificar.
+            </AlertDescription>
+          </Alert>
+        ) : gruposComAvisos.length === 0 ? (
+          <Alert>
+            <CheckCircle2 className="h-4 w-4" />
+            <AlertDescription>
+              Nenhuma inconsistência encontrada nas batidas carregadas.
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Funcionário</TableHead>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Batidas</TableHead>
+                    <TableHead>Avisos</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {gruposComAvisos.map(({ grupo, avisos }) => {
+                    const temErro = avisos.some(
+                      (a: PunchWarning) => a.severidade === "erro",
+                    );
+                    return (
+                      <TableRow
+                        key={grupo.key}
+                        className={
+                          temErro
+                            ? "bg-red-50 hover:bg-red-100/70"
+                            : "bg-yellow-50 hover:bg-yellow-100/70"
+                        }
+                      >
+                        <TableCell className="font-medium">
+                          {grupo.employeeName}
+                          <div className="text-xs text-muted-foreground">
+                            {grupo.company}
+                          </div>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {grupo.formattedDate}
+                          <div className="text-xs text-muted-foreground">
+                            {grupo.dayOfWeek}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-0.5 text-sm">
+                            {grupo.punches.map((p, i) => {
+                              const entrada = p.dateIn
+                                ? new Date(p.dateIn).toLocaleTimeString(
+                                    "pt-BR",
+                                    { hour: "2-digit", minute: "2-digit" },
+                                  )
+                                : "—";
+                              const saida = p.dateOut
+                                ? new Date(p.dateOut).toLocaleTimeString(
+                                    "pt-BR",
+                                    { hour: "2-digit", minute: "2-digit" },
+                                  )
+                                : "—";
+                              return (
+                                <span key={i} className="tabular-nums">
+                                  {entrada} – {saida}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-1">
+                            {avisos.map((a: PunchWarning, i: number) => (
+                              <Badge
+                                key={i}
+                                variant={
+                                  a.severidade === "erro"
+                                    ? "destructive"
+                                    : "secondary"
+                                }
+                                className="w-fit font-normal"
+                              >
+                                {a.mensagem}
+                              </Badge>
+                            ))}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
       </TabsContent>
 
       <TabsContent value="historico" className="mt-6">
