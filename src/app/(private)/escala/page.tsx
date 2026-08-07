@@ -84,7 +84,10 @@ import {
   useCreateAtestado,
   useDeleteAtestado,
 } from "@/hooks/use-atestados";
-import { expandAtestadoDates } from "@/lib/atestado";
+import {
+  expandAtestadoDates,
+  normalizeAtestadoName,
+} from "@/lib/atestado";
 import {
   useBatchCreateEscalas,
   useEscalas,
@@ -615,6 +618,28 @@ export default function EscalaPage() {
         }
       }
 
+      // Afastados de hoje (atestado ou dispensa): saem da numeracao da escala e
+      // vao para o fim da mensagem, com o motivo ao lado do nome.
+      const atestadoHojeIds = new Set<string>();
+      const atestadoHojeNomes = new Set<string>();
+      atestados.forEach((a) => {
+        if (expandAtestadoDates(a.start_date, a.days).includes(hoje)) {
+          atestadoHojeIds.add(String(a.employee_id));
+          atestadoHojeNomes.add(normalizeAtestadoName(a.employee_name));
+        }
+      });
+
+      const dispensaHojeIds = new Set<string>();
+      const dispensaHojeNomes = new Set<string>();
+      dispensas.forEach((d) => {
+        if (d.date.slice(0, 10) === hoje) {
+          dispensaHojeIds.add(String(d.employee_id));
+          dispensaHojeNomes.add(normalizeAtestadoName(d.employee_name));
+        }
+      });
+
+      const afastados = new Map<string, { nome: string; motivo: string }>();
+
       const vagasPorShift = new Map<string, Map<string, number>>();
       await Promise.all(
         blocosOrdenados.map(async (bloco) => {
@@ -655,6 +680,22 @@ export default function EscalaPage() {
         [...bloco.pessoas.values()]
           .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
           .forEach((p) => {
+            const solidesKey = p.solidesId != null ? String(p.solidesId) : null;
+            const nomeKey = normalizeAtestadoName(p.nome);
+            const motivo =
+              (solidesKey && atestadoHojeIds.has(solidesKey)) ||
+              atestadoHojeNomes.has(nomeKey)
+                ? "Atestado"
+                : (solidesKey && dispensaHojeIds.has(solidesKey)) ||
+                    dispensaHojeNomes.has(nomeKey)
+                  ? "Dispensado"
+                  : null;
+
+            if (motivo) {
+              afastados.set(solidesKey ?? nomeKey, { nome: p.nome, motivo });
+              return;
+            }
+
             const cargo = p.cargo || "Sem cargo";
             if (!porCargo.has(cargo)) porCargo.set(cargo, []);
             const marca = verificarPonto
@@ -691,6 +732,14 @@ export default function EscalaPage() {
 
         linhas.push("");
       });
+
+      if (afastados.size > 0) {
+        [...afastados.values()]
+          .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
+          .forEach((f) => {
+            linhas.push(`${toTitleCase(f.nome)} - ${f.motivo}`);
+          });
+      }
 
       const fim = temIndefinido
         ? "indefinido"
