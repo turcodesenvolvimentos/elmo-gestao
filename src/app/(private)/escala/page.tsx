@@ -34,6 +34,7 @@ import {
   Check,
   ChevronsUpDown,
   UserMinus,
+  FileText,
 } from "lucide-react";
 import {
   Popover,
@@ -78,6 +79,12 @@ import {
   useCreateDispensa,
   useDeleteDispensa,
 } from "@/hooks/use-dispensas";
+import {
+  useAtestados,
+  useCreateAtestado,
+  useDeleteAtestado,
+} from "@/hooks/use-atestados";
+import { expandAtestadoDates } from "@/lib/atestado";
 import {
   useBatchCreateEscalas,
   useEscalas,
@@ -196,6 +203,14 @@ export default function EscalaPage() {
     new Date().toISOString().split("T")[0]
   );
   const [openDispensaEmpFilter, setOpenDispensaEmpFilter] = useState(false);
+  const [isAtestadosDialogOpen, setIsAtestadosDialogOpen] = useState(false);
+  const [atestadoEmployeeId, setAtestadoEmployeeId] = useState("");
+  const [atestadoEmployeeName, setAtestadoEmployeeName] = useState("");
+  const [atestadoStartDate, setAtestadoStartDate] = useState(
+    new Date().toISOString().split("T")[0]
+  );
+  const [atestadoDays, setAtestadoDays] = useState("1");
+  const [openAtestadoEmpFilter, setOpenAtestadoEmpFilter] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<string>>(
     new Set()
@@ -229,6 +244,9 @@ export default function EscalaPage() {
   const { data: dispensasData, isLoading: dispensasLoading } = useDispensas();
   const createDispensaMutation = useCreateDispensa();
   const deleteDispensaMutation = useDeleteDispensa();
+  const { data: atestadosData, isLoading: atestadosLoading } = useAtestados();
+  const createAtestadoMutation = useCreateAtestado();
+  const deleteAtestadoMutation = useDeleteAtestado();
   const { data: allEmployeesData, isLoading: allEmployeesLoading } =
     useEmployees({ page: 1, size: 1000, includeFired: false });
 
@@ -303,6 +321,11 @@ export default function EscalaPage() {
   const dispensas = useMemo(
     () => dispensasData?.dispensas ?? [],
     [dispensasData?.dispensas]
+  );
+
+  const atestados = useMemo(
+    () => atestadosData?.atestados ?? [],
+    [atestadosData?.atestados]
   );
 
   // Opções de funcionários (id + nome) para o filtro do modal de dispensas
@@ -730,6 +753,45 @@ export default function EscalaPage() {
     }
   };
 
+  const handleAddAtestado = async () => {
+    const dias = parseInt(atestadoDays, 10);
+    if (!atestadoEmployeeId || !atestadoStartDate) {
+      toast.error("Selecione um funcionário e o dia inicial");
+      return;
+    }
+    if (!Number.isInteger(dias) || dias < 1) {
+      toast.error("Informe uma quantidade de dias válida");
+      return;
+    }
+    try {
+      await createAtestadoMutation.mutateAsync({
+        employee_id: atestadoEmployeeId,
+        employee_name: atestadoEmployeeName,
+        start_date: atestadoStartDate,
+        days: dias,
+      });
+      toast.success("Atestado adicionado com sucesso!");
+      setAtestadoEmployeeId("");
+      setAtestadoEmployeeName("");
+      setAtestadoDays("1");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Erro ao adicionar atestado"
+      );
+    }
+  };
+
+  const handleRemoveAtestado = async (id: string) => {
+    try {
+      await deleteAtestadoMutation.mutateAsync(id);
+      toast.success("Atestado removido com sucesso!");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Erro ao remover atestado"
+      );
+    }
+  };
+
   const toggleDisponivel = (nome: string) => {
     setDeselectedDisponiveis((prev) => {
       const next = new Set(prev);
@@ -972,6 +1034,13 @@ export default function EscalaPage() {
               )}
 
               <div className="flex flex-col gap-2 sm:flex-row sm:ml-auto">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsAtestadosDialogOpen(true)}
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Atestados
+                </Button>
                 <Button
                   variant="outline"
                   onClick={() => setIsDispensadosDialogOpen(true)}
@@ -1293,6 +1362,193 @@ export default function EscalaPage() {
             </div>
           </div>
         )}
+      </DialogContent>
+    </Dialog>
+
+    {/* Modal de Atestados */}
+    <Dialog
+      open={isAtestadosDialogOpen}
+      onOpenChange={setIsAtestadosDialogOpen}
+    >
+      <DialogContent className="!max-w-2xl sm:!max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Atestados</DialogTitle>
+          <DialogDescription>
+            Escolha o dia inicial e quantos dias o atestado cobre (o primeiro
+            dia já conta). Em dia útil o ponto fecha completando 8h normais.
+            Sábado, domingo e feriado não geram horas.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="flex flex-col gap-1">
+              <Label>Funcionário</Label>
+              <Popover
+                open={openAtestadoEmpFilter}
+                onOpenChange={setOpenAtestadoEmpFilter}
+              >
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openAtestadoEmpFilter}
+                    className="w-full sm:w-[240px] justify-between font-normal"
+                  >
+                    <span className="truncate">
+                      {atestadoEmployeeName || "Selecione um funcionário..."}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[240px] p-0">
+                  <Command
+                    filter={(value, search) => {
+                      const normalize = (s: string) =>
+                        s
+                          .normalize("NFD")
+                          .replace(/[̀-ͯ]/g, "")
+                          .toLowerCase();
+                      return normalize(value).includes(normalize(search))
+                        ? 1
+                        : 0;
+                    }}
+                  >
+                    <CommandInput placeholder="Pesquisar funcionário..." />
+                    <CommandList className="max-h-60 overflow-y-auto">
+                      <CommandEmpty>
+                        Nenhum funcionário encontrado.
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {dispensaEmployeeOptions.map((emp) => (
+                          <CommandItem
+                            key={emp.id}
+                            value={emp.name}
+                            onSelect={() => {
+                              setAtestadoEmployeeId(emp.id);
+                              setAtestadoEmployeeName(emp.name);
+                              setOpenAtestadoEmpFilter(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                atestadoEmployeeId === emp.id
+                                  ? "opacity-100"
+                                  : "opacity-0"
+                              )}
+                            />
+                            {emp.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="atestado-start-date">Dia inicial</Label>
+              <Input
+                id="atestado-start-date"
+                type="date"
+                value={atestadoStartDate}
+                onChange={(e) => setAtestadoStartDate(e.target.value)}
+                className="w-full sm:w-[160px]"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="atestado-days">Dias</Label>
+              <Input
+                id="atestado-days"
+                type="number"
+                min={1}
+                value={atestadoDays}
+                onChange={(e) => setAtestadoDays(e.target.value)}
+                className="w-full sm:w-[90px]"
+              />
+            </div>
+
+            <Button
+              onClick={handleAddAtestado}
+              disabled={
+                !atestadoEmployeeId ||
+                !atestadoStartDate ||
+                createAtestadoMutation.isPending
+              }
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Adicionar
+            </Button>
+          </div>
+
+          {atestadoStartDate &&
+            parseInt(atestadoDays, 10) >= 1 &&
+            (() => {
+              const dias = expandAtestadoDates(
+                atestadoStartDate,
+                parseInt(atestadoDays, 10)
+              );
+              return (
+                <p className="text-sm text-muted-foreground">
+                  Cobre {dias.length} dia{dias.length > 1 ? "s" : ""}:{" "}
+                  {dias.map(formatDateLocal).join(", ")}
+                </p>
+              );
+            })()}
+
+          <div className="border-t pt-4">
+            <h4 className="font-semibold mb-2 text-sm">
+              Atestados cadastrados
+            </h4>
+            {atestadosLoading ? (
+              <div className="py-6 text-center text-muted-foreground">
+                Carregando...
+              </div>
+            ) : atestados.length === 0 ? (
+              <div className="py-6 text-center text-muted-foreground">
+                Nenhum atestado cadastrado
+              </div>
+            ) : (
+              <ul className="space-y-1 text-sm">
+                {atestados.map((a, i) => {
+                  const dias = expandAtestadoDates(a.start_date, a.days);
+                  const ultimoDia = dias[dias.length - 1];
+                  return (
+                    <li
+                      key={a.id}
+                      className={`flex items-center justify-between gap-2 rounded px-2 py-1.5 ${
+                        i % 2 === 1 ? "bg-muted/30" : ""
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{a.employee_name}</span>
+                        <span className="text-muted-foreground">
+                          — {formatDateLocal(a.start_date)}
+                          {a.days > 1
+                            ? ` até ${formatDateLocal(ultimoDia)}`
+                            : ""}{" "}
+                          ({a.days} dia{a.days > 1 ? "s" : ""})
+                        </span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => handleRemoveAtestado(a.id)}
+                        disabled={deleteAtestadoMutation.isPending}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
 

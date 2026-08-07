@@ -12,7 +12,7 @@ import {
 // PDF de resumo de ponto: uma linha por funcionario, com totais acumulados
 // no periodo filtrado. Colunas: Funcionario | Adicional Noturno |
 // Gratificacao | HE 50% D | HE 100% D | HE 50% N | HE 100% N |
-// Adiantamento | Hora Normal.
+// Adiantamento | Hora Normal | Atestado.
 
 export interface PontoResumoRow {
   employeeName: string;
@@ -24,6 +24,7 @@ export interface PontoResumoRow {
   extra50Noturno: string;
   extra100Noturno: string;
   horasNormais: string;
+  horasAtestado?: string;
 }
 
 interface PontoResumoPDFProps {
@@ -97,13 +98,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#f9fafb",
   },
   cellName: {
-    width: "16%",
+    width: "15%",
     paddingHorizontal: 6,
     fontSize: NAME_FONT,
     borderRight: "0.5px solid #e5e7eb",
   },
   cellDate: {
-    width: "7%",
+    width: "6.5%",
     paddingHorizontal: 2,
     fontSize: NUM_FONT,
     textAlign: "center",
@@ -120,14 +121,15 @@ const styles = StyleSheet.create({
     fontSize: NUM_FONT,
     textAlign: "center",
   },
-  col_adn: { width: "9%" },
-  col_grat: { width: "8%" },
-  col_50d: { width: "9%" },
-  col_100d: { width: "9%" },
-  col_50n: { width: "9%" },
-  col_100n: { width: "9%" },
-  col_adi: { width: "8%" },
+  col_adn: { width: "8%" },
+  col_grat: { width: "7.5%" },
+  col_50d: { width: "8%" },
+  col_100d: { width: "8%" },
+  col_50n: { width: "8%" },
+  col_100n: { width: "8%" },
+  col_adi: { width: "7.5%" },
   col_normal: { width: "9%" },
+  col_atestado: { width: "8%" },
   footer: {
     position: "absolute",
     bottom: 18,
@@ -205,8 +207,11 @@ export const PontoResumoPDF: React.FC<PontoResumoPDFProps> = ({
             <Text style={[styles.cellNum, styles.col_50n]}>HE 50% N</Text>
             <Text style={[styles.cellNum, styles.col_100n]}>HE 100% N</Text>
             <Text style={[styles.cellNum, styles.col_adi]}>Adiantamento</Text>
-            <Text style={[styles.cellLast, styles.col_normal]}>
+            <Text style={[styles.cellNum, styles.col_normal]}>
               Hora Normal
+            </Text>
+            <Text style={[styles.cellLast, styles.col_atestado]}>
+              Atestado
             </Text>
           </View>
 
@@ -242,8 +247,11 @@ export const PontoResumoPDF: React.FC<PontoResumoPDFProps> = ({
               </Text>
               {/* Adiantamento: coluna vazia para preenchimento manual */}
               <Text style={[styles.cellNum, styles.col_adi]}> </Text>
-              <Text style={[styles.cellLast, styles.col_normal]}>
+              <Text style={[styles.cellNum, styles.col_normal]}>
                 {dashIfZero(row.horasNormais)}
+              </Text>
+              <Text style={[styles.cellLast, styles.col_atestado]}>
+                {dashIfZero(row.horasAtestado)}
               </Text>
             </View>
           ))}

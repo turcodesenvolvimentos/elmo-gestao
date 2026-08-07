@@ -15,6 +15,10 @@ export interface PontoData {
   horasFictas: string;
   totalHoras: string;
   horasNormais: string;
+  /** Horas creditadas por atestado, contadas separadamente das horas normais. */
+  horasAtestado?: string;
+  /** Horários fictícios que representam o atestado (só exibição). */
+  atestadoPeriodos?: { entrada: string; saida: string }[];
   adicionalNoturno: string;
   extra50Diurno: string;
   extra50Noturno: string;
@@ -110,6 +114,7 @@ export interface PontoResumoRow {
   extra50Noturno: string;
   extra100Noturno: string;
   horasNormais: string;
+  horasAtestado?: string;
 }
 
 export interface ExportPontoResumoParams {

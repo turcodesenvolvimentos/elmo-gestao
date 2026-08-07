@@ -222,6 +222,11 @@ const styles = StyleSheet.create({
   },
   col_dispensado: { width: "18%", fontSize: NUM_FONT },
   col_dispensado2: { width: "9%", fontSize: NUM_FONT },
+  missingCellAtestado: {
+    backgroundColor: "#3B82F6",
+    color: "#FFFFFF",
+    fontWeight: "bold",
+  },
   companyBadge: {
     backgroundColor: "#FEF3C7",
     paddingHorizontal: 2,
@@ -265,6 +270,8 @@ interface BoletimData {
   exit2?: string;
   total_hours: string;
   normal_hours: string;
+  atestado_hours?: string;
+  atestado_periodos?: { entrada: string; saida: string }[];
   night_additional?: string;
   extra_50_day: string;
   extra_50_night: string;
@@ -528,12 +535,32 @@ export const BoletimPDF: React.FC<BoletimPDFProps> = ({
     const isDispensado = dispensaSet.has(
       `${normalizeDispensaName(row.employee_name)}|${row.date.slice(0, 10)}`
     );
+    // Dia coberto por atestado: os pares livres recebem os horarios ficticios
+    // do atestado, em azul no lugar do vermelho de falta.
+    const temAtestado =
+      !!row.atestado_hours && row.atestado_hours !== "00:00";
+    const periodosAtestado = row.atestado_periodos ?? [];
+    let proximoPeriodo = 0;
+    const slot1 =
+      isEmptyTime(row.entry1) &&
+      isEmptyTime(row.exit1) &&
+      periodosAtestado[proximoPeriodo]
+        ? periodosAtestado[proximoPeriodo++]
+        : undefined;
+    const slot2 =
+      isEmptyTime(row.entry2) &&
+      isEmptyTime(row.exit2) &&
+      periodosAtestado[proximoPeriodo]
+        ? periodosAtestado[proximoPeriodo++]
+        : undefined;
+    const faltaVermelha = shouldHighlight && !temAtestado;
     // Dispensado no dia todo (sem nenhuma batida) vs só no 2º período
     // (tem 1ª entrada/saída, mas falta a 2ª).
     const dispensadoDiaTodo =
-      isDispensado && shouldHighlight;
+      isDispensado && shouldHighlight && !temAtestado;
     const dispensadoSegundoPeriodo =
       isDispensado &&
+      !temAtestado &&
       !isNoCompany(row.work_company) &&
       hasFirstPair &&
       !hasSecondPair;
@@ -593,21 +620,25 @@ export const BoletimPDF: React.FC<BoletimPDFProps> = ({
           <>
             <Text
               style={
-                shouldHighlight
-                  ? [styles.col_e1, styles.cellCenter, styles.punchEdgeLeft, styles.missingCell]
-                  : [styles.col_e1, styles.cellCenter, styles.punchEdgeLeft]
+                slot1
+                  ? [styles.col_e1, styles.cellCenter, styles.punchEdgeLeft, styles.missingCellAtestado]
+                  : faltaVermelha
+                    ? [styles.col_e1, styles.cellCenter, styles.punchEdgeLeft, styles.missingCell]
+                    : [styles.col_e1, styles.cellCenter, styles.punchEdgeLeft]
               }
             >
-              {row.entry1 || "-"}
+              {slot1 ? slot1.entrada : row.entry1 || "-"}
             </Text>
             <Text
               style={
-                shouldHighlight
-                  ? [styles.col_s1, styles.cellCenter, styles.missingCell]
-                  : [styles.col_s1, styles.cellCenter]
+                slot1
+                  ? [styles.col_s1, styles.cellCenter, styles.missingCellAtestado]
+                  : faltaVermelha
+                    ? [styles.col_s1, styles.cellCenter, styles.missingCell]
+                    : [styles.col_s1, styles.cellCenter]
               }
             >
-              {row.exit1 || "-"}
+              {slot1 ? slot1.saida : row.exit1 || "-"}
             </Text>
             {dispensadoSegundoPeriodo ? (
               <Text
@@ -624,21 +655,25 @@ export const BoletimPDF: React.FC<BoletimPDFProps> = ({
               <>
                 <Text
                   style={
-                    shouldHighlight
-                      ? [styles.col_e2, styles.cellCenter, styles.missingCell]
-                      : [styles.col_e2, styles.cellCenter]
+                    slot2
+                      ? [styles.col_e2, styles.cellCenter, styles.missingCellAtestado]
+                      : faltaVermelha
+                        ? [styles.col_e2, styles.cellCenter, styles.missingCell]
+                        : [styles.col_e2, styles.cellCenter]
                   }
                 >
-                  {row.entry2 || "-"}
+                  {slot2 ? slot2.entrada : row.entry2 || "-"}
                 </Text>
                 <Text
                   style={
-                    shouldHighlight
-                      ? [styles.col_s2, styles.cellCenter, styles.punchEdgeRight, styles.missingCell]
-                      : [styles.col_s2, styles.cellCenter, styles.punchEdgeRight]
+                    slot2
+                      ? [styles.col_s2, styles.cellCenter, styles.punchEdgeRight, styles.missingCellAtestado]
+                      : faltaVermelha
+                        ? [styles.col_s2, styles.cellCenter, styles.punchEdgeRight, styles.missingCell]
+                        : [styles.col_s2, styles.cellCenter, styles.punchEdgeRight]
                   }
                 >
-                  {row.exit2 || "-"}
+                  {slot2 ? slot2.saida : row.exit2 || "-"}
                 </Text>
               </>
             )}

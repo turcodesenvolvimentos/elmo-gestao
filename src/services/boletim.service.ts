@@ -14,6 +14,14 @@ export interface BoletimData {
   exit2?: string;
   total_hours: string;
   normal_hours: string;
+  /**
+   * Horas creditadas por atestado nesse dia (ja somadas em normal_hours e
+   * total_hours). Vem preenchido — inclusive "00:00" — sempre que o dia esta
+   * coberto por um atestado; `undefined` quando nao ha atestado.
+   */
+  atestado_hours?: string;
+  /** Horários fictícios que representam o atestado (só exibição). */
+  atestado_periodos?: { entrada: string; saida: string }[];
   night_additional?: string;
   extra_50_day: string;
   extra_50_night: string;

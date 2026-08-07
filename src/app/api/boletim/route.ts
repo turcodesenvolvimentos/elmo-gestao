@@ -3,6 +3,11 @@ import { auth } from "@/auth";
 import { supabaseAdmin } from "@/lib/db/client";
 import { solidesApiClient } from "@/lib/axios/solides.client";
 import { calcularHorasPorPeriodo, formatarHoras } from "@/lib/ponto-calculator";
+import {
+  buildAtestadoKey,
+  buildAtestadoPeriodos,
+  calcularHorasAtestado,
+} from "@/lib/atestado";
 import { Permission } from "@/types/permissions";
 import { checkPermission } from "@/lib/auth/permissions";
 import type { BoletimData } from "@/services/boletim.service";
@@ -405,6 +410,45 @@ export async function GET(request: NextRequest) {
       )
     );
 
+    // Atestados: um registro cobre `days` dias corridos a partir de start_date
+    // (o primeiro dia ja conta). Aqui expandimos em chaves por dia. A chave usa
+    // solides_id quando o funcionario existe na tabela e tambem o nome
+    // normalizado, cobrindo cadastros feitos por nome.
+    const { data: atestadoRows } = await supabaseAdmin
+      .from("atestados")
+      .select("employee_id, employee_name, start_date, days")
+      .lte("start_date", endDate);
+
+    const atestadoDayKeys = new Set<string>();
+    // Datas de atestado por solides_id, usadas para trazer para o boletim
+    // funcionarios de atestado que nao foram convocados.
+    const atestadoDatesBySolidesId = new Map<string, Set<string>>();
+    for (const a of (atestadoRows || []) as {
+      employee_id: string;
+      employee_name: string;
+      start_date: string;
+      days: number;
+    }[]) {
+      const total = Math.max(1, Math.floor(a.days || 1));
+      const cursor = new Date(a.start_date.slice(0, 10) + "T12:00:00Z");
+      for (let i = 0; i < total; i += 1) {
+        const y = cursor.getUTCFullYear();
+        const m = String(cursor.getUTCMonth() + 1).padStart(2, "0");
+        const d = String(cursor.getUTCDate()).padStart(2, "0");
+        const dateStr = `${y}-${m}-${d}`;
+        if (dateStr >= startDate && dateStr <= endDate) {
+          const solidesKey = String(a.employee_id);
+          atestadoDayKeys.add(`id:${solidesKey}|${dateStr}`);
+          atestadoDayKeys.add(buildAtestadoKey(a.employee_name, dateStr));
+          if (!atestadoDatesBySolidesId.has(solidesKey)) {
+            atestadoDatesBySolidesId.set(solidesKey, new Set<string>());
+          }
+          atestadoDatesBySolidesId.get(solidesKey)!.add(dateStr);
+        }
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+      }
+    }
+
     const punchesByEmployee = new Map<number, Punch[]>();
 
     for (const raw of solidesPunches) {
@@ -547,11 +591,49 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Funcionario de atestado que nao esta escalado em lugar nenhum entra em
+    // todos os boletins como "Nao escalado" — mesmo tratamento de um dia batido
+    // sem escala —, servindo de aviso de que falta convoca-lo.
+    const atestadoDaysByEmployee = new Map<string, Set<string>>();
+
+    if (atestadoDatesBySolidesId.size > 0) {
+      const atestadoSolidesIds = Array.from(atestadoDatesBySolidesId.keys())
+        .map((id) => Number(id))
+        .filter((id) => Number.isFinite(id));
+
+      if (atestadoSolidesIds.length > 0) {
+        const { data: atestadoEmployees } = await supabaseAdmin
+          .from("employees")
+          .select("id, name, solides_id")
+          .in("solides_id", atestadoSolidesIds);
+
+        for (const emp of (atestadoEmployees || []) as {
+          id: string;
+          name: string;
+          solides_id: number;
+        }[]) {
+          const dates = atestadoDatesBySolidesId.get(String(emp.solides_id));
+          if (!dates || dates.size === 0) continue;
+          atestadoDaysByEmployee.set(emp.id, new Set(dates));
+          if (!employeeMap.has(emp.id)) {
+            employeeMap.set(emp.id, {
+              id: emp.id,
+              name: emp.name,
+              solidesId: emp.solides_id,
+            });
+          }
+        }
+      }
+    }
+
     const boletimData: BoletimData[] = [];
 
     for (const [employeeUuid, employee] of employeeMap.entries()) {
-      const scheduledDays = scheduledDaysByEmployee.get(employeeUuid);
-      if (!scheduledDays || scheduledDays.size === 0) continue;
+      const scheduledDays =
+        scheduledDaysByEmployee.get(employeeUuid) ?? new Set<string>();
+      const atestadoDays =
+        atestadoDaysByEmployee.get(employeeUuid) ?? new Set<string>();
+      if (scheduledDays.size === 0 && atestadoDays.size === 0) continue;
 
       const positionInfo = positionByEmployee.get(employeeUuid);
       // Se o funcionario nao tem cargo vinculado nesta empresa, usa a
@@ -791,6 +873,25 @@ export async function GET(request: NextRequest) {
       // apenas alguns dias de escala neste boletim apareceria como "Nao
       // escalado" nos dias da outra empresa.
       const allDaysSet = new Set<string>(scheduledDays);
+
+      // Dia de atestado sem escala aqui segue a mesma regra do dia batido sem
+      // escala: entra como "Nao escalado", a menos que o funcionario esteja
+      // escalado em OUTRA empresa nesse dia — ai o dia pertence aquele boletim.
+      for (const atestadoDay of atestadoDays) {
+        if (atestadoDay < startDate || atestadoDay > endDate) continue;
+        if (scheduledDays.has(atestadoDay)) {
+          allDaysSet.add(atestadoDay);
+          continue;
+        }
+        const escaladoEmOutraEmpresa =
+          otherCompanyScheduledDaysByEmployee
+            .get(employeeUuid)
+            ?.has(atestadoDay) ?? false;
+        if (!escaladoEmOutraEmpresa) {
+          allDaysSet.add(atestadoDay);
+        }
+      }
+
       for (const [workDate, dayPunches] of punchesByWorkDate.entries()) {
         if (workDate < startDate || workDate > endDate) continue;
 
@@ -904,7 +1005,29 @@ export async function GET(request: NextRequest) {
 
         const ADICIONAL_NOTURNO_EXTRA = 0.2;
 
-        const valorNormal = horasCalculadas.horasNormais * hourValue;
+        // Atestado: completa as horas normais ate 8h em dia util. Sabado,
+        // domingo e feriado nao geram credito. O trabalhado e mantido.
+        const temAtestado =
+          atestadoDayKeys.has(`id:${employee.solidesId}|${date}`) ||
+          atestadoDayKeys.has(buildAtestadoKey(employee.name, date));
+        const horasAtestado = temAtestado
+          ? calcularHorasAtestado(
+              date,
+              horasCalculadas.horasNormais,
+              customHolidaySet
+            )
+          : 0;
+        const horasNormaisComAtestado =
+          horasCalculadas.horasNormais + horasAtestado;
+
+        // Horarios ficticios do atestado: emendam apos a ultima saida real ou,
+        // se o dia nao teve batida, usam o padrao 08:00-12:00 / 13:00-17:00.
+        const atestadoPeriodos = buildAtestadoPeriodos(
+          horasAtestado,
+          exit2 || exit1
+        );
+
+        const valorNormal = horasNormaisComAtestado * hourValue;
         const valorAdicionalNoturno =
           horasCalculadas.adicionalNoturno *
           hourValue *
@@ -943,8 +1066,16 @@ export async function GET(request: NextRequest) {
           exit1,
           entry2,
           exit2,
-          total_hours: formatarHoras(horasCalculadas.totalHoras),
-          normal_hours: formatarHoras(horasCalculadas.horasNormais),
+          total_hours: formatarHoras(
+            horasCalculadas.totalHoras + horasAtestado
+          ),
+          normal_hours: formatarHoras(horasNormaisComAtestado),
+          atestado_hours: temAtestado
+            ? formatarHoras(horasAtestado)
+            : undefined,
+          atestado_periodos: atestadoPeriodos.length > 0
+            ? atestadoPeriodos
+            : undefined,
           night_additional: formatarHoras(horasCalculadas.adicionalNoturno),
           extra_50_day: formatarHoras(horasCalculadas.extra50Diurno),
           extra_50_night: formatarHoras(horasCalculadas.extra50Noturno),

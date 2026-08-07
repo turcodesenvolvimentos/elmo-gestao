@@ -68,6 +68,7 @@ import { BoletimHistory } from "./components/boletim-history";
 import { formatEmployeeName } from "@/utils/employee-name-format";
 import { formatCNPJ } from "@/utils/format-cnpj";
 import { calcularHorasPorPeriodo, formatarHoras } from "@/lib/ponto-calculator";
+import { calcularHorasAtestado } from "@/lib/atestado";
 
 // Importação dinâmica do PDFViewer (só funciona no client-side)
 const PDFViewer = dynamic(
@@ -624,10 +625,9 @@ export default function BoletimPage() {
       const updated = { ...prev, [field]: value };
 
       if (TIME_FIELDS.has(field)) {
-        const rowDate =
-          editingRow !== null
-            ? filteredBulletinData[editingRow]?.date
-            : undefined;
+        const editingRowData =
+          editingRow !== null ? filteredBulletinData[editingRow] : undefined;
+        const rowDate = editingRowData?.date;
         if (rowDate) {
           const punches = buildPunchesFromTimes(
             rowDate,
@@ -637,8 +637,17 @@ export default function BoletimPage() {
             updated.exit2
           );
           const h = calcularHorasPorPeriodo(punches, rowDate, customHolidaySet);
-          updated.total_hours = formatarHoras(h.totalHoras);
-          updated.normal_hours = formatarHoras(h.horasNormais);
+          // Dia coberto por atestado: recompoe o credito com base nas horas
+          // normais recalculadas, senao a edicao dos horarios apagaria o
+          // atestado ja embutido em normal_hours.
+          const horasAtestado =
+            editingRowData?.atestado_hours !== undefined
+              ? calcularHorasAtestado(rowDate, h.horasNormais, customHolidaySet)
+              : 0;
+          updated.total_hours = formatarHoras(h.totalHoras + horasAtestado);
+          updated.normal_hours = formatarHoras(
+            h.horasNormais + horasAtestado
+          );
           updated.night_additional = formatarHoras(h.adicionalNoturno);
           updated.extra_50_day = formatarHoras(h.extra50Diurno);
           updated.extra_50_night = formatarHoras(h.extra50Noturno);
@@ -1246,11 +1255,35 @@ export default function BoletimPage() {
                                 item.employee_name
                               )}|${item.date.slice(0, 10)}`
                             );
-                            const missingClass = shouldHighlight
-                              ? isDispensado
-                                ? "bg-yellow-300 text-yellow-900 font-semibold"
-                                : "bg-red-300 text-red-900 font-semibold"
-                              : "";
+                            // Dia coberto por atestado: os pares livres recebem
+                            // os horários fictícios do atestado, em azul no
+                            // lugar do vermelho de falta.
+                            const temAtestado =
+                              !!item.atestado_hours &&
+                              item.atestado_hours !== "00:00";
+                            const periodosAtestado =
+                              item.atestado_periodos ?? [];
+                            let proximoPeriodo = 0;
+                            const slot1 =
+                              !item.entry1 &&
+                              !item.exit1 &&
+                              periodosAtestado[proximoPeriodo]
+                                ? periodosAtestado[proximoPeriodo++]
+                                : undefined;
+                            const slot2 =
+                              !item.entry2 &&
+                              !item.exit2 &&
+                              periodosAtestado[proximoPeriodo]
+                                ? periodosAtestado[proximoPeriodo++]
+                                : undefined;
+                            const atestadoCellClass =
+                              "bg-blue-500 text-white font-semibold";
+                            const missingClass =
+                              shouldHighlight && !temAtestado
+                                ? isDispensado
+                                  ? "bg-yellow-300 text-yellow-900 font-semibold"
+                                  : "bg-red-300 text-red-900 font-semibold"
+                                : "";
                             const hasFirstPair =
                               !!item.entry1 && !!item.exit1;
                             const hasSecondPair =
@@ -1260,9 +1293,10 @@ export default function BoletimPage() {
                               !isNoCompany(item.work_company) &&
                               hasFirstPair &&
                               !hasSecondPair;
-                            const secondPairClass = dispensadoSegundoPeriodo
-                              ? "bg-yellow-300 text-yellow-900 font-semibold"
-                              : missingClass;
+                            const secondPairClass =
+                              dispensadoSegundoPeriodo && !temAtestado
+                                ? "bg-yellow-300 text-yellow-900 font-semibold"
+                                : missingClass;
 
                             return (
                               <tr
@@ -1300,17 +1334,33 @@ export default function BoletimPage() {
                                 <td className="p-3 align-middle whitespace-nowrap">
                                   {formatDate(item.date)}
                                 </td>
-                                <td className={`p-3 align-middle whitespace-nowrap ${missingClass}`}>
-                                  {item.entry1 || "-"}
+                                <td
+                                  className={`p-3 align-middle whitespace-nowrap ${
+                                    slot1 ? atestadoCellClass : missingClass
+                                  }`}
+                                >
+                                  {slot1 ? slot1.entrada : item.entry1 || "-"}
                                 </td>
-                                <td className={`p-3 align-middle whitespace-nowrap ${missingClass}`}>
-                                  {item.exit1 || "-"}
+                                <td
+                                  className={`p-3 align-middle whitespace-nowrap ${
+                                    slot1 ? atestadoCellClass : missingClass
+                                  }`}
+                                >
+                                  {slot1 ? slot1.saida : item.exit1 || "-"}
                                 </td>
-                                <td className={`p-3 align-middle whitespace-nowrap ${secondPairClass}`}>
-                                  {item.entry2 || "-"}
+                                <td
+                                  className={`p-3 align-middle whitespace-nowrap ${
+                                    slot2 ? atestadoCellClass : secondPairClass
+                                  }`}
+                                >
+                                  {slot2 ? slot2.entrada : item.entry2 || "-"}
                                 </td>
-                                <td className={`p-3 align-middle whitespace-nowrap ${secondPairClass}`}>
-                                  {item.exit2 || "-"}
+                                <td
+                                  className={`p-3 align-middle whitespace-nowrap ${
+                                    slot2 ? atestadoCellClass : secondPairClass
+                                  }`}
+                                >
+                                  {slot2 ? slot2.saida : item.exit2 || "-"}
                                 </td>
                                 <td className="p-3 align-middle whitespace-nowrap font-medium">
                                   {item.total_hours}

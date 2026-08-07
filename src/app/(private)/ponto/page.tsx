@@ -45,6 +45,14 @@ import {
 import { useEmployees } from "@/hooks/use-employees";
 import { useCustomHolidays } from "@/hooks/use-custom-holidays";
 import { useDispensas } from "@/hooks/use-dispensas";
+import { useAtestados } from "@/hooks/use-atestados";
+import {
+  AtestadoPeriodo,
+  buildAtestadoKey,
+  buildAtestadoKeySet,
+  buildAtestadoPeriodos,
+  calcularHorasAtestado,
+} from "@/lib/atestado";
 import { usePunchesInfinite } from "@/hooks/use-punches";
 import {
   getMappedCompanies,
@@ -172,6 +180,9 @@ interface GroupedPunch {
   horasFictas: string;
   totalHoras: string;
   horasNormais: string;
+  horasAtestado: string;
+  /** Horários fictícios que representam as horas de atestado (só exibição). */
+  atestadoPeriodos: AtestadoPeriodo[];
   adicionalNoturno: string;
   extra50Diurno: string;
   extra50Noturno: string;
@@ -238,6 +249,12 @@ export default function PontoPage() {
         )
       ),
     [dispensasData?.dispensas]
+  );
+
+  const { data: atestadosData } = useAtestados();
+  const atestadoSet = useMemo(
+    () => buildAtestadoKeySet(atestadosData?.atestados ?? []),
+    [atestadosData?.atestados]
   );
 
   const [activeTab, setActiveTab] = useState("visualizar");
@@ -558,6 +575,8 @@ export default function PontoPage() {
           horasFictas: "00:00",
           totalHoras: "00:00",
           horasNormais: "00:00",
+          horasAtestado: "00:00",
+          atestadoPeriodos: [],
           adicionalNoturno: "00:00",
           extra50Diurno: "00:00",
           extra50Noturno: "00:00",
@@ -713,6 +732,7 @@ export default function PontoPage() {
       horasFictas: 0,
       totalHoras: 0,
       horasNormais: 0,
+      horasAtestado: 0,
       adicionalNoturno: 0,
       extra50Diurno: 0,
       extra50Noturno: 0,
@@ -768,6 +788,31 @@ export default function PontoPage() {
       group.horasFictas = formatarHoras(calculoHoras.horasFictas);
       group.totalHoras = formatarHoras(calculoHoras.totalHoras);
       group.horasNormais = formatarHoras(calculoHoras.horasNormais);
+      // Atestado: completa 8h em dia util (sabado, domingo e feriado nao geram
+      // credito) sem mexer nas horas efetivamente trabalhadas.
+      const horasAtestadoDoDia = atestadoSet.has(
+        buildAtestadoKey(group.employeeName, group.date),
+      )
+        ? calcularHorasAtestado(
+            group.date,
+            calculoHoras.horasNormais,
+            customHolidaySet,
+          )
+        : 0;
+      group.horasAtestado = formatarHoras(horasAtestadoDoDia);
+      // Ultima saida real do dia: o bloco de atestado emenda a partir dela.
+      const ultimaSaidaReal = [...group.punches]
+        .reverse()
+        .find((p) => !!p.dateOut)?.dateOut;
+      group.atestadoPeriodos = buildAtestadoPeriodos(
+        horasAtestadoDoDia,
+        ultimaSaidaReal
+          ? new Date(ultimaSaidaReal).toLocaleTimeString("pt-BR", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : undefined,
+      );
       group.adicionalNoturno = formatarHoras(calculoHoras.adicionalNoturno);
       group.extra50Diurno = formatarHoras(calculoHoras.extra50Diurno);
       group.extra50Noturno = formatarHoras(calculoHoras.extra50Noturno);
@@ -821,6 +866,11 @@ export default function PontoPage() {
             timeZone: "UTC",
           });
           const dayOfWeekNumber = date.getDay();
+          const horasAtestadoDiaVazio = atestadoSet.has(
+            buildAtestadoKey(employeeName, dateStr),
+          )
+            ? calcularHorasAtestado(dateStr, 0, customHolidaySet)
+            : 0;
 
           const company = resolveWorkCompanyName({
             employeeSolidesId: resolveSolidesId(employeeName),
@@ -845,6 +895,8 @@ export default function PontoPage() {
             horasFictas: "00:00",
             totalHoras: "00:00",
             horasNormais: "00:00",
+            horasAtestado: formatarHoras(horasAtestadoDiaVazio),
+            atestadoPeriodos: buildAtestadoPeriodos(horasAtestadoDiaVazio),
             adicionalNoturno: "00:00",
             extra50Diurno: "00:00",
             extra50Noturno: "00:00",
@@ -901,7 +953,20 @@ export default function PontoPage() {
 
     let maxPairs = 1;
     groupedPunchesFiltered.forEach((group) => {
-      maxPairs = Math.max(maxPairs, group.punches.length);
+      maxPairs = Math.max(
+        maxPairs,
+        group.punches.length + group.atestadoPeriodos.length,
+      );
+    });
+
+    // Atestado e somado aqui (e nao no loop de calculo) porque tambem incide
+    // sobre os dias sem batida, que so passam a existir depois do preenchimento
+    // do intervalo.
+    groupedPunchesFiltered.forEach((group) => {
+      const [h, m] = (group.horasAtestado || "00:00").split(":").map(Number);
+      if (!isNaN(h) && !isNaN(m)) {
+        totalsNumeric.horasAtestado += h + m / 60;
+      }
     });
 
     return {
@@ -913,6 +978,7 @@ export default function PontoPage() {
         horasFictas: formatarHoras(totalsNumeric.horasFictas),
         totalHoras: formatarHoras(totalsNumeric.totalHoras),
         horasNormais: formatarHoras(totalsNumeric.horasNormais),
+        horasAtestado: formatarHoras(totalsNumeric.horasAtestado),
         adicionalNoturno: formatarHoras(totalsNumeric.adicionalNoturno),
         extra50Diurno: formatarHoras(totalsNumeric.extra50Diurno),
         extra50Noturno: formatarHoras(totalsNumeric.extra50Noturno),
@@ -929,6 +995,7 @@ export default function PontoPage() {
     filter.employeeId,
     shouldSendDates,
     customHolidaySet,
+    atestadoSet,
     escalaEntries,
     employees,
   ]);
@@ -977,6 +1044,8 @@ export default function PontoPage() {
         horasFictas: group.horasFictas || "00:00",
         totalHoras: group.totalHoras || "00:00",
         horasNormais: group.horasNormais || "00:00",
+        horasAtestado: group.horasAtestado || "00:00",
+        atestadoPeriodos: group.atestadoPeriodos,
         adicionalNoturno: group.adicionalNoturno || "00:00",
         extra50Diurno: group.extra50Diurno || "00:00",
         extra50Noturno: group.extra50Noturno || "00:00",
@@ -1069,6 +1138,7 @@ export default function PontoPage() {
       e50n: number;
       e100n: number;
       normal: number;
+      atestado: number;
       // primeiro/ultimo dia com batida (YYYY-MM-DD), comparáveis lexicograficamente
       firstDate: string | null;
       lastDate: string | null;
@@ -1084,6 +1154,7 @@ export default function PontoPage() {
         e50n: 0,
         e100n: 0,
         normal: 0,
+        atestado: 0,
         firstDate: null,
         lastDate: null,
       };
@@ -1093,6 +1164,7 @@ export default function PontoPage() {
       prev.e50n += parseHm(g.extra50Noturno);
       prev.e100n += parseHm(g.extra100Noturno);
       prev.normal += parseHm(g.horasNormais);
+      prev.atestado += parseHm(g.horasAtestado);
       // Considera apenas dias que tenham batida de ponto.
       if (g.punches.length > 0) {
         if (!prev.firstDate || g.date < prev.firstDate) prev.firstDate = g.date;
@@ -1113,6 +1185,7 @@ export default function PontoPage() {
         extra50Noturno: fmtHm(r.e50n),
         extra100Noturno: fmtHm(r.e100n),
         horasNormais: fmtHm(r.normal),
+        horasAtestado: fmtHm(r.atestado),
       }));
 
     exportResumoMutation.mutate({
@@ -1203,6 +1276,7 @@ export default function PontoPage() {
       "Horas fictas",
       "Total de horas",
       "Horas normais",
+      "Atestado",
       "Adicional noturno",
       "50% diurno",
       "50% noturno",
@@ -1776,6 +1850,9 @@ export default function PontoPage() {
                                   group.employeeName,
                                 )}|${group.date.slice(0, 10)}`,
                               );
+                              // Dia coberto por atestado com horas creditadas:
+                              // a falta deixa de ser vermelha e vira azul.
+                              const isAtestado = group.horasAtestado !== "00:00";
                               const firstPunch = group.punches[0];
                               const hasFirstPair =
                                 !!firstPunch &&
@@ -1792,31 +1869,46 @@ export default function PontoPage() {
                                   const punch = group.punches[index];
                                   const pairIncomplete =
                                     !punch || !punch.dateIn || !punch.dateOut;
-                                  const cellHighlight = dispensadoSegundoPeriodo
-                                    ? pairIncomplete
-                                      ? "bg-yellow-300 text-yellow-900 font-semibold"
-                                      : ""
-                                    : highlightDay
-                                      ? isDispensado
-                                        ? "bg-yellow-300 text-yellow-900 font-semibold"
-                                        : "bg-red-300 text-red-900 font-semibold"
-                                      : "";
-                                  const entryTime = punch?.dateIn
-                                    ? new Date(
-                                        punch.dateIn,
-                                      ).toLocaleTimeString("pt-BR", {
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                      })
-                                    : "-";
-                                  const exitTime = punch?.dateOut
-                                    ? new Date(
-                                        punch.dateOut,
-                                      ).toLocaleTimeString("pt-BR", {
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                      })
-                                    : "-";
+                                  // Slots livres depois das batidas reais
+                                  // recebem os horarios ficticios do atestado.
+                                  const periodoAtestado = !punch
+                                    ? group.atestadoPeriodos[
+                                        index - group.punches.length
+                                      ]
+                                    : undefined;
+                                  const cellHighlight = periodoAtestado
+                                    ? "bg-blue-500 text-white font-semibold"
+                                    : isAtestado
+                                      ? ""
+                                      : dispensadoSegundoPeriodo
+                                        ? pairIncomplete
+                                          ? "bg-yellow-300 text-yellow-900 font-semibold"
+                                          : ""
+                                        : highlightDay
+                                          ? isDispensado
+                                            ? "bg-yellow-300 text-yellow-900 font-semibold"
+                                            : "bg-red-300 text-red-900 font-semibold"
+                                          : "";
+                                  const entryTime = periodoAtestado
+                                    ? periodoAtestado.entrada
+                                    : punch?.dateIn
+                                      ? new Date(
+                                          punch.dateIn,
+                                        ).toLocaleTimeString("pt-BR", {
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })
+                                      : "-";
+                                  const exitTime = periodoAtestado
+                                    ? periodoAtestado.saida
+                                    : punch?.dateOut
+                                      ? new Date(
+                                          punch.dateOut,
+                                        ).toLocaleTimeString("pt-BR", {
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })
+                                      : "-";
 
                                   return (
                                     <Fragment
@@ -1852,6 +1944,9 @@ export default function PontoPage() {
                             </TableCell>
                             <TableCell className="px-4 py-3 border-r border-gray-200">
                               {group.horasNormais}
+                            </TableCell>
+                            <TableCell className="px-4 py-3 border-r border-gray-200">
+                              {group.horasAtestado}
                             </TableCell>
                             <TableCell className="px-4 py-3 border-r border-gray-200">
                               {group.adicionalNoturno}
@@ -1895,6 +1990,9 @@ export default function PontoPage() {
                           </TableCell>
                           <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
                             {totals.horasNormais}
+                          </TableCell>
+                          <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
+                            {totals.horasAtestado}
                           </TableCell>
                           <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
                             {totals.adicionalNoturno}

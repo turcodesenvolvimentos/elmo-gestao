@@ -105,8 +105,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
     textAlign: "center",
   },
-  col2: { width: "9%", fontSize: NUM_FONT },
-  col2Content: { width: "9%", paddingHorizontal: 3 },
+  col2: { width: "8%", fontSize: NUM_FONT },
+  col2Content: { width: "8%", paddingHorizontal: 3 },
   companyBadge: {
     backgroundColor: "#FEF3C7",
     paddingHorizontal: 1,
@@ -122,19 +122,20 @@ const styles = StyleSheet.create({
   companyText: {
     fontSize: NUM_FONT,
   },
-  col3: { width: "8%", fontSize: NUM_FONT },
-  col4: { width: "9%", fontSize: NUM_FONT },
-  col5: { width: "6.5%", fontSize: NUM_FONT },
-  col6: { width: "6.5%", fontSize: NUM_FONT },
-  col7: { width: "6.5%", fontSize: NUM_FONT },
-  col8: { width: "6.5%", fontSize: NUM_FONT },
+  col3: { width: "7%", fontSize: NUM_FONT },
+  col4: { width: "7.5%", fontSize: NUM_FONT },
+  col5: { width: "6%", fontSize: NUM_FONT },
+  col6: { width: "6%", fontSize: NUM_FONT },
+  col7: { width: "6%", fontSize: NUM_FONT },
+  col8: { width: "6%", fontSize: NUM_FONT },
   col12: { width: "7%", fontSize: NUM_FONT },
   col13: { width: "7%", fontSize: NUM_FONT },
+  col_atestado: { width: "6.5%", fontSize: NUM_FONT },
   col14: { width: "6.5%", fontSize: NUM_FONT },
   col15: { width: "6.5%", fontSize: NUM_FONT },
   col16: { width: "6.5%", fontSize: NUM_FONT },
   col17: { width: "6.5%", fontSize: NUM_FONT },
-  col18: { width: "8%", fontSize: NUM_FONT },
+  col18: { width: "7%", fontSize: NUM_FONT },
   missingCell: {
     backgroundColor: "#ff3f3d",
     color: "#991B1B",
@@ -145,8 +146,13 @@ const styles = StyleSheet.create({
     color: "#854D0E",
     fontWeight: "bold",
   },
-  col_dispensado: { width: "26%", fontSize: NUM_FONT },
-  col_dispensado2: { width: "13%", fontSize: NUM_FONT },
+  missingCellAtestado: {
+    backgroundColor: "#3B82F6",
+    color: "#FFFFFF",
+    fontWeight: "bold",
+  },
+  col_dispensado: { width: "24%", fontSize: NUM_FONT },
+  col_dispensado2: { width: "12%", fontSize: NUM_FONT },
   signatureSection: {
     marginTop: 14,
     paddingTop: 8,
@@ -211,6 +217,8 @@ interface PontoData {
   horasFictas: string;
   totalHoras: string;
   horasNormais: string;
+  horasAtestado?: string;
+  atestadoPeriodos?: { entrada: string; saida: string }[];
   adicionalNoturno: string;
   extra50Diurno: string;
   extra50Noturno: string;
@@ -301,6 +309,8 @@ const calculateTotals = (data: PontoData[]) => {
         horasFictas: acc.horasFictas + parseTime(item.horasFictas),
         totalHoras: acc.totalHoras + parseTime(item.totalHoras),
         horasNormais: acc.horasNormais + parseTime(item.horasNormais),
+        horasAtestado:
+          acc.horasAtestado + parseTime(item.horasAtestado || "00:00"),
         adicionalNoturno:
           acc.adicionalNoturno + parseTime(item.adicionalNoturno),
         extra50Diurno: acc.extra50Diurno + parseTime(item.extra50Diurno),
@@ -315,6 +325,7 @@ const calculateTotals = (data: PontoData[]) => {
       horasFictas: 0,
       totalHoras: 0,
       horasNormais: 0,
+      horasAtestado: 0,
       adicionalNoturno: 0,
       extra50Diurno: 0,
       extra50Noturno: 0,
@@ -329,6 +340,7 @@ const calculateTotals = (data: PontoData[]) => {
     horasFictas: formatHours(totals.horasFictas),
     totalHoras: formatHours(totals.totalHoras),
     horasNormais: formatHours(totals.horasNormais),
+    horasAtestado: formatHours(totals.horasAtestado),
     adicionalNoturno: formatHours(totals.adicionalNoturno),
     extra50Diurno: formatHours(totals.extra50Diurno),
     extra50Noturno: formatHours(totals.extra50Noturno),
@@ -402,6 +414,7 @@ const PontoReportPage: React.FC<PontoPDFProps> = ({
             <Text style={[styles.col8, styles.cellCenter]}>Saí. 2</Text>
             <Text style={[styles.col12, styles.cellCenter]}>Total</Text>
             <Text style={[styles.col13, styles.cellCenter]}>Normal</Text>
+            <Text style={[styles.col_atestado, styles.cellCenter]}>Atest.</Text>
             <Text style={[styles.col14, styles.cellCenter]}>Ad. N.</Text>
             <Text style={[styles.col15, styles.cellCenter]}>50% D.</Text>
             <Text style={[styles.col16, styles.cellCenter]}>50% N.</Text>
@@ -428,9 +441,30 @@ const PontoReportPage: React.FC<PontoPDFProps> = ({
               dispensaSet.has(
                 `${normalizeDispensaName(rowName)}|${row.date.slice(0, 10)}`
               );
-            const dispensadoDiaTodo = isDispensado && shouldHighlight;
+            // Dia coberto por atestado: os pares livres recebem os horarios
+            // ficticios do atestado, em azul no lugar do vermelho de falta.
+            const isAtestadoRow =
+              !!row.horasAtestado && row.horasAtestado !== "00:00";
+            const pair1Real =
+              !isEmptyTime(row.entry1) || !isEmptyTime(row.exit1);
+            const pair2Real =
+              !isEmptyTime(row.entry2) || !isEmptyTime(row.exit2);
+            const periodosAtestado = row.atestadoPeriodos ?? [];
+            let proximoPeriodo = 0;
+            const slot1 =
+              !pair1Real && periodosAtestado[proximoPeriodo]
+                ? periodosAtestado[proximoPeriodo++]
+                : undefined;
+            const slot2 =
+              !pair2Real && periodosAtestado[proximoPeriodo]
+                ? periodosAtestado[proximoPeriodo++]
+                : undefined;
+            const missingStyle = styles.missingCell;
+            const dispensadoDiaTodo =
+              isDispensado && shouldHighlight && !isAtestadoRow;
             const dispensadoSegundoPeriodo =
               isDispensado &&
+              !isAtestadoRow &&
               !isNoCompany(row.company) &&
               hasFirstPair &&
               !hasSecondPair;
@@ -457,11 +491,11 @@ const PontoReportPage: React.FC<PontoPDFProps> = ({
                 </Text>
               ) : (
                 <>
-                  <Text style={shouldHighlight ? [styles.col5, styles.cellCenter, styles.missingCell] : [styles.col5, styles.cellCenter]}>
-                    {row.entry1 || "-"}
+                  <Text style={slot1 ? [styles.col5, styles.cellCenter, styles.missingCellAtestado] : shouldHighlight && !isAtestadoRow ? [styles.col5, styles.cellCenter, missingStyle] : [styles.col5, styles.cellCenter]}>
+                    {slot1 ? slot1.entrada : row.entry1 || "-"}
                   </Text>
-                  <Text style={shouldHighlight ? [styles.col6, styles.cellCenter, styles.missingCell] : [styles.col6, styles.cellCenter]}>
-                    {row.exit1 || "-"}
+                  <Text style={slot1 ? [styles.col6, styles.cellCenter, styles.missingCellAtestado] : shouldHighlight && !isAtestadoRow ? [styles.col6, styles.cellCenter, missingStyle] : [styles.col6, styles.cellCenter]}>
+                    {slot1 ? slot1.saida : row.exit1 || "-"}
                   </Text>
                   {dispensadoSegundoPeriodo ? (
                     <Text style={[styles.col_dispensado2, styles.cellCenter, styles.missingCellDispensa]}>
@@ -469,11 +503,11 @@ const PontoReportPage: React.FC<PontoPDFProps> = ({
                     </Text>
                   ) : (
                     <>
-                      <Text style={shouldHighlight ? [styles.col7, styles.cellCenter, styles.missingCell] : [styles.col7, styles.cellCenter]}>
-                        {row.entry2 || "-"}
+                      <Text style={slot2 ? [styles.col7, styles.cellCenter, styles.missingCellAtestado] : shouldHighlight && !isAtestadoRow ? [styles.col7, styles.cellCenter, missingStyle] : [styles.col7, styles.cellCenter]}>
+                        {slot2 ? slot2.entrada : row.entry2 || "-"}
                       </Text>
-                      <Text style={shouldHighlight ? [styles.col8, styles.cellCenter, styles.missingCell] : [styles.col8, styles.cellCenter]}>
-                        {row.exit2 || "-"}
+                      <Text style={slot2 ? [styles.col8, styles.cellCenter, styles.missingCellAtestado] : shouldHighlight && !isAtestadoRow ? [styles.col8, styles.cellCenter, missingStyle] : [styles.col8, styles.cellCenter]}>
+                        {slot2 ? slot2.saida : row.exit2 || "-"}
                       </Text>
                     </>
                   )}
@@ -481,6 +515,9 @@ const PontoReportPage: React.FC<PontoPDFProps> = ({
               )}
               <Text style={[styles.col12, styles.cellCenter]}>{row.totalHoras}</Text>
               <Text style={[styles.col13, styles.cellCenter]}>{row.horasNormais}</Text>
+              <Text style={[styles.col_atestado, styles.cellCenter]}>
+                {row.horasAtestado || "00:00"}
+              </Text>
               <Text style={[styles.col14, styles.cellCenter]}>{row.adicionalNoturno}</Text>
               <Text style={[styles.col15, styles.cellCenter]}>{row.extra50Diurno}</Text>
               <Text style={[styles.col16, styles.cellCenter]}>{row.extra50Noturno}</Text>
@@ -500,6 +537,7 @@ const PontoReportPage: React.FC<PontoPDFProps> = ({
             <Text style={[styles.col8, styles.cellCenter]}></Text>
             <Text style={[styles.col12, styles.cellCenter]}>{totals.totalHoras}</Text>
             <Text style={[styles.col13, styles.cellCenter]}>{totals.horasNormais}</Text>
+            <Text style={[styles.col_atestado, styles.cellCenter]}>{totals.horasAtestado}</Text>
             <Text style={[styles.col14, styles.cellCenter]}>{totals.adicionalNoturno}</Text>
             <Text style={[styles.col15, styles.cellCenter]}>{totals.extra50Diurno}</Text>
             <Text style={[styles.col16, styles.cellCenter]}>{totals.extra50Noturno}</Text>
