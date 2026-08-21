@@ -47,11 +47,19 @@ import { useCustomHolidays } from "@/hooks/use-custom-holidays";
 import { useDispensas } from "@/hooks/use-dispensas";
 import { useAtestados } from "@/hooks/use-atestados";
 import {
+  useAvisosIgnorados,
+  useCreateAvisoIgnorado,
+  useDeleteAvisoIgnorado,
+} from "@/hooks/use-avisos-ignorados";
+import type { AvisoIgnorado } from "@/types/avisos-ignorados";
+import {
   AtestadoPeriodo,
   buildAtestadoKey,
   buildAtestadoKeySet,
   buildAtestadoPeriodos,
   calcularHorasAtestado,
+  expandAtestadoDates,
+  normalizeAtestadoName,
 } from "@/lib/atestado";
 import { usePunchesInfinite } from "@/hooks/use-punches";
 import {
@@ -59,10 +67,20 @@ import {
   NO_MAPPED_COMPANY_LABEL,
 } from "@/utils/company-mapping";
 import { formatEmployeeName } from "@/utils/employee-name-format";
-import { resolveWorkCompanyName } from "@/lib/punch-company-resolution";
+import {
+  pickEscalaCompanyName,
+  resolveWorkCompanyName,
+} from "@/lib/punch-company-resolution";
 import { usePontoEscalaCompanies } from "@/hooks/use-ponto-escala-companies";
 import { useSyncPunches, useLastSyncDate } from "@/hooks/use-sync";
-import { RefreshCw, Download, Loader2, X } from "lucide-react";
+import {
+  RefreshCw,
+  Download,
+  Loader2,
+  X,
+  EyeOff,
+  Undo2,
+} from "lucide-react";
 import { PontoHistory } from "./components/ponto-history";
 import {
   useExportPontoPDF,
@@ -257,6 +275,51 @@ export default function PontoPage() {
     [atestadosData?.atestados]
   );
 
+  const dispensaDatesByEmployee = useMemo(() => {
+    const map = new Map<string, string[]>();
+    (dispensasData?.dispensas || []).forEach((d) => {
+      const name = normalizeDispensaName(d.employee_name);
+      const list = map.get(name) ?? [];
+      list.push(d.date.slice(0, 10));
+      map.set(name, list);
+    });
+    return map;
+  }, [dispensasData?.dispensas]);
+
+  const atestadoDatesByEmployee = useMemo(() => {
+    const map = new Map<string, string[]>();
+    (atestadosData?.atestados ?? []).forEach((a) => {
+      const name = normalizeAtestadoName(a.employee_name);
+      const list = map.get(name) ?? [];
+      expandAtestadoDates(a.start_date, a.days).forEach((d) => list.push(d));
+      map.set(name, list);
+    });
+    return map;
+  }, [atestadosData?.atestados]);
+
+  const { data: avisosIgnoradosData } = useAvisosIgnorados();
+  const createAvisoIgnorado = useCreateAvisoIgnorado();
+  const deleteAvisoIgnorado = useDeleteAvisoIgnorado();
+
+  const avisoIgnoradoSet = useMemo(
+    () =>
+      new Set<string>(
+        (avisosIgnoradosData?.avisos || []).map(
+          (a) =>
+            `${normalizeDispensaName(a.employee_name)}|${a.date.slice(0, 10)}`
+        )
+      ),
+    [avisosIgnoradosData?.avisos]
+  );
+
+  const todayStr = useMemo(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }, []);
+
   const [activeTab, setActiveTab] = useState("visualizar");
   const [openEmployee, setOpenEmployee] = useState(false);
   const [filter, setFilter] = useState<{
@@ -288,6 +351,14 @@ export default function PontoPage() {
         name: formatEmployeeName(emp.name),
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
+  }, [employees]);
+
+  const solidesIdByEmployeeName = useMemo(() => {
+    const map = new Map<string, number>();
+    employees?.content?.forEach((emp) => {
+      map.set(formatEmployeeName(emp.name), emp.id);
+    });
+    return map;
   }, [employees]);
 
   const selectedEmployeeName = useMemo(() => {
@@ -445,12 +516,6 @@ export default function PontoPage() {
       return dateA.localeCompare(dateB);
     });
 
-    const solidesIdByEmployeeName = new Map<string, number>();
-    if (employees?.content) {
-      for (const emp of employees.content) {
-        solidesIdByEmployeeName.set(formatEmployeeName(emp.name), emp.id);
-      }
-    }
     const resolveSolidesId = (name: string): number =>
       filter.employeeId > 0
         ? filter.employeeId
@@ -834,82 +899,137 @@ export default function PontoPage() {
     const endDateForFill =
       shouldSendDates && filter.endDate ? filter.endDate : null;
 
+    const createEmptyGroup = (
+      employeeName: string,
+      dateStr: string,
+    ): GroupedPunch => {
+      const [year, month, day] = dateStr.split("-");
+      const formattedDate = `${day}/${month}/${year}`;
+      const date = new Date(dateStr + "T12:00:00Z");
+      const dayOfWeek = date.toLocaleDateString("pt-BR", {
+        weekday: "long",
+        timeZone: "UTC",
+      });
+      const dayOfWeekNumber = date.getDay();
+      const horasAtestadoDiaVazio = atestadoSet.has(
+        buildAtestadoKey(employeeName, dateStr),
+      )
+        ? calcularHorasAtestado(dateStr, 0, customHolidaySet)
+        : 0;
+
+      const company = resolveWorkCompanyName({
+        employeeSolidesId: resolveSolidesId(employeeName),
+        workDate: dateStr,
+        locationInAddress: null,
+        locationOutAddress: null,
+        escalaEntries,
+      });
+
+      return {
+        key: `${employeeName}-${dateStr}`,
+        employeeName,
+        company,
+        isHoliday: isHolidayForDisplay(dateStr, customHolidaySet),
+        date: dateStr,
+        formattedDate,
+        dayOfWeek,
+        dayOfWeekNumber,
+        punches: [],
+        horasDiurnas: "00:00",
+        horasNoturnas: "00:00",
+        horasFictas: "00:00",
+        totalHoras: "00:00",
+        horasNormais: "00:00",
+        horasAtestado: formatarHoras(horasAtestadoDiaVazio),
+        atestadoPeriodos: buildAtestadoPeriodos(horasAtestadoDiaVazio),
+        adicionalNoturno: "00:00",
+        extra50Diurno: "00:00",
+        extra50Noturno: "00:00",
+        extra100Diurno: "00:00",
+        extra100Noturno: "00:00",
+        heDomEFer: "00:00",
+      };
+    };
+
+    const collectExtraDates = (employeeName: string): string[] => {
+      if (shouldSendDates || filter.employeeId <= 0) return [];
+
+      const monthStart = `${todayStr.slice(0, 7)}-01`;
+      const dates = new Set<string>();
+      const nameKey = normalizeDispensaName(employeeName);
+      const addIfInCurrentMonth = (d: string) => {
+        if (d >= monthStart && d <= todayStr) dates.add(d);
+      };
+      (dispensaDatesByEmployee.get(nameKey) || []).forEach(addIfInCurrentMonth);
+      (atestadoDatesByEmployee.get(nameKey) || []).forEach(addIfInCurrentMonth);
+
+      const solidesId = resolveSolidesId(employeeName);
+      if (solidesId > 0) {
+        const cursor = new Date(monthStart + "T12:00:00Z");
+        const limit = new Date(todayStr + "T12:00:00Z");
+        while (cursor <= limit) {
+          const y = cursor.getUTCFullYear();
+          const m = String(cursor.getUTCMonth() + 1).padStart(2, "0");
+          const d = String(cursor.getUTCDate()).padStart(2, "0");
+          const dateStr = `${y}-${m}-${d}`;
+          if (pickEscalaCompanyName(escalaEntries, solidesId, dateStr)) {
+            dates.add(dateStr);
+          }
+          cursor.setUTCDate(cursor.getUTCDate() + 1);
+        }
+      }
+
+      return Array.from(dates);
+    };
+
+    if (
+      !shouldSendDates &&
+      filter.employeeId > 0 &&
+      selectedEmployeeName &&
+      !groupedByEmployee.has(selectedEmployeeName)
+    ) {
+      groupedByEmployee.set(selectedEmployeeName, []);
+    }
+
     groupedByEmployee.forEach((groups, employeeName) => {
       groups.sort((a, b) => a.date.localeCompare(b.date));
 
-      const firstDate = startDateForFill || groups[0].date;
-      const lastDate = endDateForFill || groups[groups.length - 1].date;
-
       const existingDates = new Set(groups.map((g) => g.date));
+      const datesToCreate = new Set<string>();
 
-      const [startYear, startMonth, startDay] = firstDate
-        .split("-")
-        .map(Number);
-      const [endYear, endMonth, endDay] = lastDate.split("-").map(Number);
-      const startDateObj = new Date(
-        Date.UTC(startYear, startMonth - 1, startDay),
-      );
-      const endDateObj = new Date(Date.UTC(endYear, endMonth - 1, endDay));
+      collectExtraDates(employeeName).forEach((d) => {
+        if (!existingDates.has(d)) datesToCreate.add(d);
+      });
 
-      const currentDate = new Date(startDateObj);
-      while (currentDate <= endDateObj) {
-        const year = currentDate.getUTCFullYear();
-        const month = String(currentDate.getUTCMonth() + 1).padStart(2, "0");
-        const day = String(currentDate.getUTCDate()).padStart(2, "0");
-        const dateStr = `${year}-${month}-${day}`;
+      if (groups.length > 0) {
+        const firstDate = startDateForFill || groups[0].date;
+        const lastDate = endDateForFill || groups[groups.length - 1].date;
 
-        if (!existingDates.has(dateStr)) {
-          const formattedDate = `${day}/${month}/${year}`;
-          const date = new Date(dateStr + "T12:00:00Z");
-          const dayOfWeek = date.toLocaleDateString("pt-BR", {
-            weekday: "long",
-            timeZone: "UTC",
-          });
-          const dayOfWeekNumber = date.getDay();
-          const horasAtestadoDiaVazio = atestadoSet.has(
-            buildAtestadoKey(employeeName, dateStr),
-          )
-            ? calcularHorasAtestado(dateStr, 0, customHolidaySet)
-            : 0;
+        const [startYear, startMonth, startDay] = firstDate
+          .split("-")
+          .map(Number);
+        const [endYear, endMonth, endDay] = lastDate.split("-").map(Number);
+        const startDateObj = new Date(
+          Date.UTC(startYear, startMonth - 1, startDay),
+        );
+        const endDateObj = new Date(Date.UTC(endYear, endMonth - 1, endDay));
 
-          const company = resolveWorkCompanyName({
-            employeeSolidesId: resolveSolidesId(employeeName),
-            workDate: dateStr,
-            locationInAddress: null,
-            locationOutAddress: null,
-            escalaEntries,
-          });
+        const currentDate = new Date(startDateObj);
+        while (currentDate <= endDateObj) {
+          const year = currentDate.getUTCFullYear();
+          const month = String(currentDate.getUTCMonth() + 1).padStart(2, "0");
+          const day = String(currentDate.getUTCDate()).padStart(2, "0");
+          const dateStr = `${year}-${month}-${day}`;
 
-          const emptyGroup: GroupedPunch = {
-            key: `${employeeName}-${dateStr}`,
-            employeeName,
-            company,
-            isHoliday: isHolidayForDisplay(dateStr, customHolidaySet),
-            date: dateStr,
-            formattedDate,
-            dayOfWeek,
-            dayOfWeekNumber,
-            punches: [],
-            horasDiurnas: "00:00",
-            horasNoturnas: "00:00",
-            horasFictas: "00:00",
-            totalHoras: "00:00",
-            horasNormais: "00:00",
-            horasAtestado: formatarHoras(horasAtestadoDiaVazio),
-            atestadoPeriodos: buildAtestadoPeriodos(horasAtestadoDiaVazio),
-            adicionalNoturno: "00:00",
-            extra50Diurno: "00:00",
-            extra50Noturno: "00:00",
-            extra100Diurno: "00:00",
-            extra100Noturno: "00:00",
-            heDomEFer: "00:00",
-          };
+          if (!existingDates.has(dateStr)) datesToCreate.add(dateStr);
 
-          groups.push(emptyGroup);
+          currentDate.setUTCDate(currentDate.getUTCDate() + 1);
         }
-
-        currentDate.setUTCDate(currentDate.getUTCDate() + 1);
       }
+
+      datesToCreate.forEach((dateStr) => {
+        groups.push(createEmptyGroup(employeeName, dateStr));
+      });
 
       groups.sort((a, b) => a.date.localeCompare(b.date));
     });
@@ -997,7 +1117,11 @@ export default function PontoPage() {
     customHolidaySet,
     atestadoSet,
     escalaEntries,
-    employees,
+    solidesIdByEmployeeName,
+    dispensaDatesByEmployee,
+    atestadoDatesByEmployee,
+    selectedEmployeeName,
+    todayStr,
   ]);
 
   const prepareExportData = (): PontoData[] => {
@@ -1289,12 +1413,47 @@ export default function PontoPage() {
 
   const gruposComAvisos = useMemo(() => {
     return groupedPunches
+      .filter((grupo) => {
+        const dateKey = grupo.date.slice(0, 10);
+        const nameKey = normalizeDispensaName(grupo.employeeName);
+        if (dispensaSet.has(`${nameKey}|${dateKey}`)) return false;
+        if (atestadoSet.has(buildAtestadoKey(grupo.employeeName, dateKey))) {
+          return false;
+        }
+        if (avisoIgnoradoSet.has(`${nameKey}|${dateKey}`)) return false;
+        return true;
+      })
       .map((grupo) => ({
         grupo,
         avisos: validateDayPunches(grupo.punches),
       }))
       .filter((item) => item.avisos.length > 0);
-  }, [groupedPunches]);
+  }, [groupedPunches, dispensaSet, atestadoSet, avisoIgnoradoSet]);
+
+  const avisosIgnoradosLista = useMemo(
+    () =>
+      [...(avisosIgnoradosData?.avisos || [])].sort((a, b) => {
+        const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+        if (aTime !== bTime) return bTime - aTime;
+        const dateCompare = b.date.localeCompare(a.date);
+        if (dateCompare !== 0) return dateCompare;
+        return a.employee_name.localeCompare(b.employee_name);
+      }),
+    [avisosIgnoradosData?.avisos]
+  );
+
+  const ignorarAvisosDoDia = (employeeName: string, date: string) => {
+    const employeeId =
+      solidesIdByEmployeeName.get(employeeName) ??
+      (filter.employeeId > 0 ? filter.employeeId : 0);
+    if (!employeeId) return;
+    createAvisoIgnorado.mutate({
+      employee_id: String(employeeId),
+      employee_name: employeeName,
+      date: date.slice(0, 10),
+    });
+  };
 
   if (employeesLoading) {
     return (
@@ -1653,6 +1812,21 @@ export default function PontoPage() {
                 className="ml-1 h-5 min-w-5 justify-center px-1.5"
               >
                 {gruposComAvisos.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger
+            value="ignorados"
+            className="flex items-center gap-2"
+          >
+            <EyeOff className="h-4 w-4" />
+            Ignorados
+            {avisosIgnoradosLista.length > 0 && (
+              <Badge
+                variant="secondary"
+                className="ml-1 h-5 min-w-5 justify-center px-1.5"
+              >
+                {avisosIgnoradosLista.length}
               </Badge>
             )}
           </TabsTrigger>
@@ -2091,6 +2265,7 @@ export default function PontoPage() {
                     <TableHead>Data</TableHead>
                     <TableHead>Batidas</TableHead>
                     <TableHead>Avisos</TableHead>
+                    <TableHead className="w-[1%]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -2158,6 +2333,84 @@ export default function PontoPage() {
                               </Badge>
                             ))}
                           </div>
+                        </TableCell>
+                        <TableCell className="align-top">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="whitespace-nowrap"
+                            disabled={createAvisoIgnorado.isPending}
+                            onClick={() =>
+                              ignorarAvisosDoDia(
+                                grupo.employeeName,
+                                grupo.date,
+                              )
+                            }
+                          >
+                            <EyeOff className="mr-2 h-4 w-4" />
+                            Ignorar
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
+      </TabsContent>
+
+      <TabsContent value="ignorados" className="mt-6 space-y-6">
+        {avisosIgnoradosLista.length === 0 ? (
+          <Alert>
+            <CheckCircle2 className="h-4 w-4" />
+            <AlertDescription>
+              Nenhum aviso ignorado. Use o botão &quot;Ignorar&quot; na aba
+              Verificação para ocultar um dia daqui.
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Funcionário</TableHead>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Ignorado em</TableHead>
+                    <TableHead className="w-[1%]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {avisosIgnoradosLista.map((aviso: AvisoIgnorado) => {
+                    const [ano, mes, dia] = aviso.date.slice(0, 10).split("-");
+                    return (
+                      <TableRow key={aviso.id}>
+                        <TableCell className="font-medium">
+                          {aviso.employee_name}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {`${dia}/${mes}/${ano}`}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                          {aviso.created_at
+                            ? new Date(aviso.created_at).toLocaleString("pt-BR")
+                            : "—"}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="whitespace-nowrap"
+                            disabled={deleteAvisoIgnorado.isPending}
+                            onClick={() =>
+                              deleteAvisoIgnorado.mutate(aviso.id)
+                            }
+                          >
+                            <Undo2 className="mr-2 h-4 w-4" />
+                            Restaurar
+                          </Button>
                         </TableCell>
                       </TableRow>
                     );
