@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/db/client";
+import { FILTRO_ATIVOS } from "@/lib/employees";
 
 // GET - Listar funcionários de uma empresa
 export async function GET(
@@ -41,12 +42,13 @@ export async function GET(
           id,
           name,
           solides_id,
-          fired
+          fired,
+          ativo_override
         )
       `
         )
         .eq("company_id", id)
-        .eq("employees.fired", false);
+        .or(FILTRO_ATIVOS, { referencedTable: "employees" });
 
     if (employeeCompaniesError) {
       throw employeeCompaniesError;

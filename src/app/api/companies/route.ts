@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { supabaseAdmin } from "@/lib/db/client";
+import { FILTRO_ATIVOS } from "@/lib/employees";
 import { Permission } from "@/types/permissions";
 import { checkPermission, checkAnyPermission } from "@/lib/auth/permissions";
 import { ensureDefaultPositionForCompany } from "@/lib/default-position";
@@ -183,7 +184,7 @@ export async function GET() {
       await supabaseAdmin
         .from("employees")
         .select("*", { count: "exact", head: true })
-        .eq("fired", false);
+        .or(FILTRO_ATIVOS);
 
     if (employeesCountError) {
       console.error(

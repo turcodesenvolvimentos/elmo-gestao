@@ -1,43 +1,20 @@
 interface Employee {
+  /** Matrícula. Vem da Sólides ou é gerada pelo sistema (a partir de 900.000.000). */
   id: number;
-  externalId: string;
   name: string;
-  socialName: string;
-  cpf: string;
-  email: string;
-  phone: string;
-  pis: string;
-  admissionDate: string;
-  resignationDate: string;
+  cpf?: string;
+  admissionDate?: string;
   fired: boolean;
-  status: number;
-  gender: "FEMININO" | "MASCULINO";
+  origem?: "SOLIDES" | "MANUAL";
 
-  company: {
-    id: number;
-    fantasyName: string;
-    descriptionName: string;
-    externalId: string;
-    accountStatus: "PAGANTE" | "TRIAL";
-  };
-
-  jobRoleDTO?: {
-    id: number;
-    description: string;
-    cbo: string;
-  };
-
-  currentWorkplaceDTO?: {
-    id: number;
-    name: string;
-    externalId: string;
-  };
-
-  currentWorkSchedule?: {
-    id: number;
-    name: string;
-    externalId: string | number;
-  };
+  externalId?: string | null;
+  socialName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  pis?: string | null;
+  resignationDate?: string | null;
+  status?: number | null;
+  gender?: string | null;
 
   companies?: {
     id: string;
@@ -67,11 +44,30 @@ interface FindAllEmployeesParams {
   page?: number;
   size?: number;
   showFired?: number;
-  /** Incluir funcionários inativos/demitidos na lista (mesmo que sync). */
+  /** Incluir funcionários inativos/demitidos na lista. */
   includeFired?: boolean;
   lastUpdate?: number;
   managerExternalId?: string;
   branchExternalId?: string;
 }
 
-export type { Employee, TangerinoEmployeesResponse, FindAllEmployeesParams };
+interface CreateEmployeeData {
+  name: string;
+  cpf: string;
+  admission_date?: string | null;
+}
+
+interface UpdateEmployeeData {
+  name?: string;
+  cpf?: string;
+  admission_date?: string | null;
+  ativo?: boolean;
+}
+
+export type {
+  Employee,
+  TangerinoEmployeesResponse,
+  FindAllEmployeesParams,
+  CreateEmployeeData,
+  UpdateEmployeeData,
+};

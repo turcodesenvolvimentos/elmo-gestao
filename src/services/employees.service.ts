@@ -1,6 +1,9 @@
 import {
+  CreateEmployeeData,
+  Employee,
   FindAllEmployeesParams,
   TangerinoEmployeesResponse,
+  UpdateEmployeeData,
 } from "@/types/employees";
 
 export async function fetchEmployees(
@@ -85,4 +88,39 @@ export async function removeCompanyFromEmployee(
     const error = await response.json();
     throw new Error(error.error || "Erro ao remover empresa do funcionário");
   }
+}
+
+export async function createEmployee(
+  data: CreateEmployeeData
+): Promise<Employee> {
+  const response = await fetch("/api/employees", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || "Erro ao cadastrar funcionário");
+  }
+
+  return response.json();
+}
+
+export async function updateEmployee(
+  solidesId: number,
+  data: UpdateEmployeeData
+): Promise<Employee> {
+  const response = await fetch(`/api/employees/${solidesId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || "Erro ao editar funcionário");
+  }
+
+  return response.json();
 }

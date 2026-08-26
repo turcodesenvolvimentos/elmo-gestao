@@ -10,10 +10,15 @@ import {
   addCompanyToEmployee,
   updateEmployeeCompanyPosition,
   removeCompanyFromEmployee,
+  createEmployee,
+  updateEmployee,
 } from "@/services/employees.service";
 import {
+  CreateEmployeeData,
+  Employee,
   FindAllEmployeesParams,
   TangerinoEmployeesResponse,
+  UpdateEmployeeData,
 } from "@/types/employees";
 
 export function useEmployees(
@@ -95,6 +100,37 @@ export function useRemoveCompanyFromEmployee(): UseMutationResult<
       // Invalidar e fazer refetch da lista de empresas para atualizar contadores
       await queryClient.invalidateQueries({ queryKey: ["companies"] });
       await queryClient.refetchQueries({ queryKey: ["companies"] });
+    },
+  });
+}
+
+export function useCreateEmployee(): UseMutationResult<
+  Employee,
+  Error,
+  CreateEmployeeData
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: createEmployee,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["employees"] });
+    },
+  });
+}
+
+export function useUpdateEmployee(): UseMutationResult<
+  Employee,
+  Error,
+  { solidesId: number; data: UpdateEmployeeData }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ solidesId, data }) => updateEmployee(solidesId, data),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["employees"] });
+      await queryClient.invalidateQueries({ queryKey: ["companies"] });
     },
   });
 }

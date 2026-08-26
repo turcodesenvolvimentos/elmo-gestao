@@ -3,6 +3,15 @@ import { auth } from "@/auth";
 import { supabaseAdmin } from "@/lib/db/client";
 import { Permission } from "@/types/permissions";
 import { checkAnyPermission } from "@/lib/auth/permissions";
+import {
+  FILTRO_ATIVOS,
+  FILTRO_DEMITIDOS,
+  cpfValido,
+  dataValida,
+  estaDemitido,
+  normalizarCpf,
+  type OrigemFuncionario,
+} from "@/lib/employees";
 
 interface EmployeeRow {
   id: string;
@@ -19,6 +28,8 @@ interface EmployeeRow {
   resignation_date: string | null;
   fired: boolean | null;
   status: number | null;
+  origem: OrigemFuncionario;
+  ativo_override: boolean | null;
 }
 
 interface CompanyRef {
@@ -72,7 +83,8 @@ export async function GET(request: NextRequest) {
       searchParams.get("includeFired") === "true";
 
     const colunas = `id, solides_id, external_id, name, social_name, cpf, email,
-      phone, pis, gender, admission_date, resignation_date, fired, status`;
+      phone, pis, gender, admission_date, resignation_date, fired, status,
+      origem, ativo_override`;
 
     const montaQuery = () => {
       let query = supabaseAdmin
@@ -82,7 +94,7 @@ export async function GET(request: NextRequest) {
         .order("solides_id", { ascending: true });
 
       if (!includeFired) {
-        query = query.eq("fired", showFired === 1);
+        query = query.or(showFired === 1 ? FILTRO_DEMITIDOS : FILTRO_ATIVOS);
       }
 
       return query;
@@ -180,15 +192,16 @@ export async function GET(request: NextRequest) {
       externalId: row.external_id,
       name: row.name,
       socialName: row.social_name,
-      cpf: row.cpf,
+      cpf: row.cpf ?? undefined,
       email: row.email,
       phone: row.phone,
       pis: row.pis,
       gender: row.gender,
-      admissionDate: row.admission_date,
+      admissionDate: row.admission_date ?? undefined,
       resignationDate: row.resignation_date,
-      fired: row.fired ?? false,
+      fired: estaDemitido(row),
       status: row.status,
+      origem: row.origem,
       companies: vinculosPorEmployee.get(row.id) ?? [],
     }));
 
@@ -211,6 +224,112 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         error: "Erro ao buscar funcionários",
+        details: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  const session = await auth();
+
+  if (!session?.user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
+  if (!checkAnyPermission(session, [Permission.EMPLOYEES])) {
+    return NextResponse.json(
+      { error: "Sem permissão para cadastrar funcionários" },
+      { status: 403 }
+    );
+  }
+
+  try {
+    const body = await request.json();
+    const nome = typeof body.name === "string" ? body.name.trim() : "";
+    const cpf = normalizarCpf(body.cpf);
+    const admissao = body.admission_date;
+
+    if (nome.length < 3) {
+      return NextResponse.json(
+        { error: "Informe o nome completo do funcionário" },
+        { status: 400 }
+      );
+    }
+
+    if (!cpf) {
+      return NextResponse.json({ error: "CPF é obrigatório" }, { status: 400 });
+    }
+
+    if (!cpfValido(cpf)) {
+      return NextResponse.json({ error: "CPF inválido" }, { status: 400 });
+    }
+
+    if (admissao !== undefined && admissao !== null && admissao !== "") {
+      if (!dataValida(admissao)) {
+        return NextResponse.json(
+          { error: "Data de admissão deve estar no formato YYYY-MM-DD" },
+          { status: 400 }
+        );
+      }
+    }
+
+    const { data: jaExiste } = await supabaseAdmin
+      .from("employees")
+      .select("solides_id, name")
+      .eq("cpf", cpf)
+      .maybeSingle();
+
+    if (jaExiste) {
+      return NextResponse.json(
+        { error: `Já existe funcionário com este CPF: ${jaExiste.name}` },
+        { status: 409 }
+      );
+    }
+
+    const { data: matricula, error: matriculaError } = await supabaseAdmin.rpc(
+      "proxima_matricula_manual"
+    );
+
+    if (matriculaError || typeof matricula !== "number") {
+      throw matriculaError ?? new Error("Não foi possível gerar a matrícula");
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("employees")
+      .insert({
+        solides_id: matricula,
+        name: nome,
+        cpf,
+        admission_date: dataValida(admissao) ? admissao : null,
+        fired: false,
+        ativo_override: true,
+        origem: "MANUAL",
+      })
+      .select("id, solides_id, name, cpf, admission_date, origem")
+      .single();
+
+    if (error) throw error;
+
+    return NextResponse.json(
+      {
+        id: data.solides_id,
+        uuid: data.id,
+        name: data.name,
+        cpf: data.cpf,
+        admissionDate: data.admission_date,
+        origem: data.origem,
+        fired: false,
+        companies: [],
+      },
+      { status: 201 }
+    );
+  } catch (error: unknown) {
+    console.error("Erro ao cadastrar funcionário:", error);
+    return NextResponse.json(
+      {
+        error: "Erro ao cadastrar funcionário",
         details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 }
