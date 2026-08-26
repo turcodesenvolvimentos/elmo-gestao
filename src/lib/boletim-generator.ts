@@ -8,6 +8,7 @@ import {
 } from "@/lib/atestado";
 import type { BoletimData } from "@/services/boletim.service";
 import { NO_MAPPED_COMPANY_LABEL } from "@/utils/company-mapping";
+import { aplicarPrioridadeManual } from "@/lib/punches";
 
 const DAYS_OF_WEEK = [
   "Domingo",
@@ -178,14 +179,23 @@ async function fetchPunchesFromBanco(
   endDate: string,
 ): Promise<SolidesPunchRaw[]> {
   const PAGE = 1000;
-  const collected: SolidesPunchRaw[] = [];
+  const linhas: Array<{
+    solides_id: number | null;
+    employee_id: number;
+    employee_name: string | null;
+    date: string;
+    date_in: string | null;
+    date_out: string | null;
+    status: string;
+    origem: string | null;
+  }> = [];
   let from = 0;
 
   while (true) {
     const { data, error } = await supabaseAdmin
       .from("punches")
       .select(
-        "solides_id, employee_id, employee_name, date, date_in, date_out, status",
+        "solides_id, employee_id, employee_name, date, date_in, date_out, status, origem",
       )
       .eq("status", "APPROVED")
       .gte("date", startDate)
@@ -198,22 +208,23 @@ async function fetchPunchesFromBanco(
     if (error) throw error;
     if (!data || data.length === 0) break;
 
-    for (const row of data) {
-      collected.push({
-        id: row.solides_id ?? undefined,
-        date: row.date,
-        dateIn: row.date_in,
-        dateOut: row.date_out,
-        employee: { id: row.employee_id, name: row.employee_name },
-        status: row.status,
-      });
-    }
+    linhas.push(...(data as typeof linhas));
 
     if (data.length < PAGE) break;
     from += PAGE;
   }
 
-  return collected;
+  // A regra de conflito é aplicada sobre o período inteiro, depois de juntar
+  // todas as páginas: uma batida manual da última página precisa esconder a da
+  // Sólides que veio na primeira.
+  return aplicarPrioridadeManual(linhas).map((row) => ({
+    id: row.solides_id ?? undefined,
+    date: row.date,
+    dateIn: row.date_in,
+    dateOut: row.date_out,
+    employee: { id: row.employee_id, name: row.employee_name },
+    status: row.status,
+  }));
 }
 
 export function compararBoletins(

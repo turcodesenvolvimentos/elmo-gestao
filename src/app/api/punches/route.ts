@@ -3,6 +3,12 @@ import { auth } from "@/auth";
 import { supabaseAdmin } from "@/lib/db/client";
 import { Permission } from "@/types/permissions";
 import { checkAnyPermission } from "@/lib/auth/permissions";
+import {
+  dataValida,
+  diasComBatidaManual,
+  horaValida,
+  montarPeriodo,
+} from "@/lib/punches";
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -48,6 +54,7 @@ function intervaloOuMesCorrente(
 }
 
 interface PunchRow {
+  id: string;
   solides_id: number | null;
   employee_id: number;
   employee_name: string | null;
@@ -60,6 +67,7 @@ interface PunchRow {
   status: string;
   adjust: boolean | null;
   adjustment_reason_description: string | null;
+  origem: string | null;
 }
 
 export async function GET(request: NextRequest) {
@@ -105,9 +113,9 @@ export async function GET(request: NextRequest) {
     let query = supabaseAdmin
       .from("punches")
       .select(
-        `solides_id, employee_id, employee_name, employer_name, date,
+        `id, solides_id, employee_id, employee_name, employer_name, date,
          date_in, date_out, location_in_address, location_out_address,
-         status, adjust, adjustment_reason_description`,
+         status, adjust, adjustment_reason_description, origem`,
         { count: "exact" }
       );
 
@@ -126,12 +134,40 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
-    const rows = (data || []) as PunchRow[];
-    const totalElements = count ?? rows.length;
+    const rowsBrutas = (data || []) as PunchRow[];
+    const totalElements = count ?? rowsBrutas.length;
     const totalPages = Math.max(1, Math.ceil(totalElements / size));
+
+    // Os dias com lançamento manual são consultados sobre o período inteiro,
+    // não sobre a página: uma batida manual na página 2 precisa esconder a da
+    // Sólides que caiu na página 1.
+    let consultaManuais = supabaseAdmin
+      .from("punches")
+      .select("employee_id, date")
+      .eq("origem", "MANUAL")
+      .gte("date", periodo.inicio)
+      .lte("date", periodo.fim);
+
+    if (employeeId !== undefined && !Number.isNaN(employeeId)) {
+      consultaManuais = consultaManuais.eq("employee_id", employeeId);
+    }
+
+    const { data: manuais, error: manuaisError } = await consultaManuais;
+    if (manuaisError) throw manuaisError;
+
+    const diasManuais = diasComBatidaManual(
+      (manuais || []).map((m) => ({ ...m, origem: "MANUAL" }))
+    );
+
+    const rows = rowsBrutas.filter(
+      (row) =>
+        row.origem === "MANUAL" ||
+        !diasManuais.has(`${row.employee_id ?? ""}|${(row.date ?? "").slice(0, 10)}`)
+    );
 
     const content = rows.map((row) => ({
       id: row.solides_id,
+      uuid: row.id,
       date: row.date,
       dateIn: row.date_in,
       dateOut: row.date_out,
@@ -148,6 +184,7 @@ export async function GET(request: NextRequest) {
       adjustmentReason: row.adjustment_reason_description
         ? { description: row.adjustment_reason_description }
         : undefined,
+      origem: row.origem ?? "SOLIDES",
     }));
 
     return NextResponse.json({
@@ -157,13 +194,118 @@ export async function GET(request: NextRequest) {
       size,
       number: page,
       first: page === 0,
-      last: from + rows.length >= totalElements,
+      last: from + rowsBrutas.length >= totalElements,
     });
   } catch (error: unknown) {
     console.error("Erro ao buscar pontos:", error);
     return NextResponse.json(
       {
         error: "Erro ao buscar pontos",
+        details: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 }
+    );
+  }
+}
+
+interface CorpoBatida {
+  employeeId?: unknown;
+  date?: unknown;
+  entrada?: unknown;
+  saida?: unknown;
+}
+
+async function validarCorpo(body: CorpoBatida) {
+  const employeeId =
+    typeof body.employeeId === "number"
+      ? body.employeeId
+      : parseInt(String(body.employeeId ?? ""), 10);
+
+  if (Number.isNaN(employeeId)) {
+    return { erro: "Funcionário é obrigatório" };
+  }
+
+  if (!dataValida(body.date)) {
+    return { erro: "Data deve estar no formato YYYY-MM-DD" };
+  }
+
+  if (!horaValida(body.entrada)) {
+    return { erro: "Entrada deve estar no formato HH:MM" };
+  }
+
+  const saida =
+    body.saida === null || body.saida === undefined || body.saida === ""
+      ? null
+      : body.saida;
+
+  if (saida !== null && !horaValida(saida)) {
+    return { erro: "Saída deve estar no formato HH:MM" };
+  }
+
+  const { data: funcionario } = await supabaseAdmin
+    .from("employees")
+    .select("id, name")
+    .eq("solides_id", employeeId)
+    .maybeSingle();
+
+  if (!funcionario) {
+    return { erro: "Funcionário não encontrado" };
+  }
+
+  const periodo = montarPeriodo(body.date, body.entrada, saida);
+
+  return {
+    linha: {
+      solides_id: null,
+      date: body.date,
+      date_in: periodo.dateIn,
+      date_out: periodo.dateOut,
+      employee_id: employeeId,
+      employee_uuid: funcionario.id,
+      employee_name: funcionario.name,
+      status: "APPROVED",
+      adjust: false,
+      origem: "MANUAL",
+    },
+  };
+}
+
+export async function POST(request: NextRequest) {
+  const session = await auth();
+
+  if (!session?.user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
+  if (!checkAnyPermission(session, [Permission.PONTO])) {
+    return NextResponse.json(
+      { error: "Sem permissão para lançar batidas" },
+      { status: 403 }
+    );
+  }
+
+  try {
+    const body = (await request.json()) as CorpoBatida;
+    const validado = await validarCorpo(body);
+
+    if ("erro" in validado) {
+      return NextResponse.json({ error: validado.erro }, { status: 400 });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("punches")
+      .insert(validado.linha)
+      .select("id, date, date_in, date_out, employee_id, employee_name, origem")
+      .single();
+
+    if (error) throw error;
+
+    return NextResponse.json(data, { status: 201 });
+  } catch (error: unknown) {
+    console.error("Erro ao lançar batida:", error);
+    return NextResponse.json(
+      {
+        error: "Erro ao lançar batida",
         details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 }
