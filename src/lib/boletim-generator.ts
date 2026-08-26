@@ -563,6 +563,12 @@ export async function gerarBoletim(
     // escalados aqui que, na verdade, pertencem a escala de outra empresa.
     const otherCompanyScheduledDaysByEmployee = new Map<string, Set<string>>();
 
+    // Dias com batida que nao estao cobertos por escala em NENHUMA empresa.
+    // Entram no boletim de todas elas como "Nao escalado": sem escala nao da
+    // para saber onde a pessoa trabalhou, entao o aviso precisa chegar a todos
+    // os gestores, nao so ao da empresa onde ela costuma ser escalada.
+    const diasSemEscalaByEmployee = new Map<string, Set<string>>();
+
     if (solidesIdsWithPunches.length > 0) {
       const { data: allEscalasInPeriod } = await supabaseAdmin
         .from("escalas")
@@ -617,34 +623,59 @@ export async function gerarBoletim(
         synced_at: string | null;
       };
 
-      const orphanEmployees = ((employeesWithPunches || []) as EmpInfo[]).filter(
-        (emp) => !scheduledEmployeeUuids.has(emp.id)
-      );
+      for (const emp of (employeesWithPunches || []) as EmpInfo[]) {
+        const isOrphan = !scheduledEmployeeUuids.has(emp.id);
 
-      for (const orphan of orphanEmployees) {
-        if (!employeeMap.has(orphan.id)) {
-          employeeMap.set(orphan.id, {
-            id: orphan.id,
-            name: orphan.name,
-            solidesId: orphan.solides_id,
-            isOrphan: true,
-          });
-        }
-
-        if (!scheduledDaysByEmployee.has(orphan.id)) {
-          scheduledDaysByEmployee.set(orphan.id, new Set<string>());
-        }
-        const orphanDays = scheduledDaysByEmployee.get(orphan.id)!;
-
-        const orphanPunches = punchesByEmployee.get(orphan.solides_id) || [];
-        for (const p of orphanPunches) {
+        const punchDays = new Set<string>();
+        for (const p of punchesByEmployee.get(emp.solides_id) || []) {
           const day =
             toLocalDateKey(p.date_in) ??
             toLocalDateKey(p.date_out) ??
             toLocalDateKey(p.date);
           if (day && day >= startDate && day <= endDate) {
-            orphanDays.add(day);
+            punchDays.add(day);
           }
+        }
+
+        if (isOrphan) {
+          if (!employeeMap.has(emp.id)) {
+            employeeMap.set(emp.id, {
+              id: emp.id,
+              name: emp.name,
+              solidesId: emp.solides_id,
+              isOrphan: true,
+            });
+          }
+
+          if (!scheduledDaysByEmployee.has(emp.id)) {
+            scheduledDaysByEmployee.set(emp.id, new Set<string>());
+          }
+          const orphanDays = scheduledDaysByEmployee.get(emp.id)!;
+          for (const day of punchDays) orphanDays.add(day);
+          continue;
+        }
+
+        const escaladoAqui =
+          scheduledDaysByEmployee.get(emp.id) ?? new Set<string>();
+        const escaladoEmOutra =
+          otherCompanyScheduledDaysByEmployee.get(emp.id) ?? new Set<string>();
+
+        const semEscala = new Set<string>();
+        for (const day of punchDays) {
+          if (escaladoAqui.has(day) || escaladoEmOutra.has(day)) continue;
+          semEscala.add(day);
+        }
+
+        if (semEscala.size === 0) continue;
+
+        diasSemEscalaByEmployee.set(emp.id, semEscala);
+
+        if (!employeeMap.has(emp.id)) {
+          employeeMap.set(emp.id, {
+            id: emp.id,
+            name: emp.name,
+            solidesId: emp.solides_id,
+          });
         }
       }
     }
@@ -691,7 +722,15 @@ export async function gerarBoletim(
         scheduledDaysByEmployee.get(employeeUuid) ?? new Set<string>();
       const atestadoDays =
         atestadoDaysByEmployee.get(employeeUuid) ?? new Set<string>();
-      if (scheduledDays.size === 0 && atestadoDays.size === 0) continue;
+      const diasSemEscala =
+        diasSemEscalaByEmployee.get(employeeUuid) ?? new Set<string>();
+      if (
+        scheduledDays.size === 0 &&
+        atestadoDays.size === 0 &&
+        diasSemEscala.size === 0
+      ) {
+        continue;
+      }
 
       const positionInfo = positionByEmployee.get(employeeUuid);
       // Se o funcionario nao tem cargo vinculado nesta empresa, usa a
