@@ -24,9 +24,12 @@ export function useSyncPunches() {
     mutationFn,
     onSuccess: (data) => {
       if (data.success && data.stats) {
-        const { saved, processed, duration } = data.stats;
+        const { savedPunches, removedPunches, employees, duration } =
+          data.stats;
+        const removidas =
+          removedPunches > 0 ? `, ${removedPunches} removidas` : "";
         toast.success(
-          `Sincronização concluída! ${saved} pontos salvos de ${processed} funcionários processados em ${duration}s`
+          `Sincronização concluída! ${savedPunches} batidas de ${employees} funcionários${removidas} em ${duration}s`
         );
 
         queryClient.invalidateQueries({ queryKey: ["punches"] });

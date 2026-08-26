@@ -1,11 +1,16 @@
 export interface SyncStats {
-  processed: number;
-  saved: number;
+  savedPunches: number;
+  removedPunches: number;
+  employees: number;
   errors: number;
-  failedEmployees?: Array<{ id: number; name: string; error: string }>;
   duration: number;
   startDate: string;
   endDate: string;
+}
+
+export interface SyncPeriod {
+  startDate?: string;
+  endDate?: string;
 }
 
 export interface SyncResponse {
@@ -28,11 +33,20 @@ export interface LastSyncResponse {
 
 /** Sincroniza pontos consumindo o stream SSE e reporta progresso via onProgress. */
 export async function syncPunches(
-  onProgress?: (progress: SyncProgress) => void
+  onProgress?: (progress: SyncProgress) => void,
+  period?: SyncPeriod
 ): Promise<SyncResponse> {
-  const response = await fetch("/api/sync/punches", {
-    method: "POST",
-  });
+  const searchParams = new URLSearchParams();
+  if (period?.startDate) searchParams.append("startDate", period.startDate);
+  if (period?.endDate) searchParams.append("endDate", period.endDate);
+  const query = searchParams.toString();
+
+  const response = await fetch(
+    query ? `/api/sync/punches?${query}` : "/api/sync/punches",
+    {
+      method: "POST",
+    }
+  );
 
   if (!response.ok || !response.body) {
     const errorData = await response.json().catch(() => ({}));
