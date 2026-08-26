@@ -33,6 +33,7 @@ import {
   Edit,
   Loader2,
   History,
+  AlertTriangle,
 } from "lucide-react";
 import {
   Dialog,
@@ -69,6 +70,8 @@ import { formatEmployeeName } from "@/utils/employee-name-format";
 import { formatCNPJ } from "@/utils/format-cnpj";
 import { calcularHorasPorPeriodo, formatarHoras } from "@/lib/ponto-calculator";
 import { calcularHorasAtestado } from "@/lib/atestado";
+import { NO_MAPPED_COMPANY_LABEL } from "@/utils/company-mapping";
+import { UltimaSincronizacao } from "@/components/ultima-sincronizacao";
 
 // Importação dinâmica do PDFViewer (só funciona no client-side)
 const PDFViewer = dynamic(
@@ -130,7 +133,10 @@ function buildPunchesFromTimes(
 }
 
 function isNoCompany(value?: string | null): boolean {
-  return (value || "").trim().toLowerCase() === "sem empresa";
+  return (
+    (value || "").trim().toLowerCase() ===
+    NO_MAPPED_COMPANY_LABEL.trim().toLowerCase()
+  );
 }
 
 export default function BoletimPage() {
@@ -367,6 +373,28 @@ export default function BoletimPage() {
     departmentFilter,
     dateFilter,
   ]);
+
+  const semEscalaResumo = useMemo(() => {
+    const diasPorFuncionario = new Map<string, Set<string>>();
+
+    for (const item of filteredBulletinData) {
+      if (!isNoCompany(item.work_company)) continue;
+      const nome = formatEmployeeName(item.employee_name);
+      if (!diasPorFuncionario.has(nome)) {
+        diasPorFuncionario.set(nome, new Set());
+      }
+      diasPorFuncionario.get(nome)!.add(item.date);
+    }
+
+    const funcionarios = [...diasPorFuncionario.entries()]
+      .map(([nome, datas]) => ({ nome, dias: datas.size }))
+      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+
+    return {
+      funcionarios,
+      totalDias: funcionarios.reduce((acc, f) => acc + f.dias, 0),
+    };
+  }, [filteredBulletinData]);
 
   // Calcular totais
   const totals = useMemo(() => {
@@ -826,6 +854,9 @@ export default function BoletimPage() {
       </TabsList>
 
       <TabsContent value="gerar" className="space-y-6 mt-6">
+    <div className="flex justify-end">
+      <UltimaSincronizacao />
+    </div>
     <Card>
       <CardHeader>
         <CardTitle>Filtros do Boletim</CardTitle>
@@ -1163,6 +1194,34 @@ export default function BoletimPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {semEscalaResumo.totalDias > 0 && (
+              <div className="rounded-lg border border-yellow-300 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-950/30">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 shrink-0 text-yellow-700 dark:text-yellow-400" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-yellow-900 dark:text-yellow-200">
+                      {semEscalaResumo.funcionarios.length === 1
+                        ? "1 funcionário"
+                        : `${semEscalaResumo.funcionarios.length} funcionários`}{" "}
+                      {semEscalaResumo.totalDias === 1
+                        ? "com 1 dia sem escala"
+                        : `com ${semEscalaResumo.totalDias} dias sem escala`}
+                    </p>
+                    <p className="text-sm text-yellow-800 dark:text-yellow-300">
+                      Esses dias entraram como &ldquo;{NO_MAPPED_COMPANY_LABEL}
+                      &rdquo; porque não há escala cadastrada para a data.
+                      Confira a escala antes de fechar o boletim.
+                    </p>
+                    <p className="text-sm text-yellow-800 dark:text-yellow-300">
+                      {semEscalaResumo.funcionarios
+                        .map((f) => `${f.nome} (${f.dias})`)
+                        .join(", ")}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Tabela do boletim */}
             <Card className="flex-1 overflow-hidden flex flex-col">
