@@ -18,6 +18,8 @@ import {
   Layers,
   Check,
   ChevronsUpDown,
+  UserCheck,
+  UserX,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -67,6 +69,8 @@ import {
   useAddCompanyToEmployee,
   useUpdateEmployeeCompanyPosition,
   useRemoveCompanyFromEmployee,
+  useCreateEmployee,
+  useUpdateEmployee,
 } from "@/hooks/use-employees";
 import {
   usePositions,
@@ -1034,8 +1038,20 @@ function CompanyDepartmentSelect({
   );
 }
 
+const FORM_FUNCIONARIO_VAZIO = {
+  name: "",
+  cpf: "",
+  admission_date: "",
+};
+
 function CompaniesEmployeesTab() {
   const [showInactiveEmployees, setShowInactiveEmployees] = useState(false);
+  const [isEmployeeFormOpen, setIsEmployeeFormOpen] = useState(false);
+  const [employeeBeingEdited, setEmployeeBeingEdited] =
+    useState<Employee | null>(null);
+  const [employeeForm, setEmployeeForm] = useState(FORM_FUNCIONARIO_VAZIO);
+  const createEmployeeMutation = useCreateEmployee();
+  const updateEmployeeMutation = useUpdateEmployee();
   const [openEmployeeFilter, setOpenEmployeeFilter] = useState(false);
   const [employeeFilterId, setEmployeeFilterId] = useState<string>("");
   const {
@@ -1241,6 +1257,73 @@ function CompaniesEmployeesTab() {
     }
   };
 
+  const abrirNovoFuncionario = () => {
+    setEmployeeBeingEdited(null);
+    setEmployeeForm(FORM_FUNCIONARIO_VAZIO);
+    setIsEmployeeFormOpen(true);
+  };
+
+  const abrirEdicaoFuncionario = (employee: Employee) => {
+    setEmployeeBeingEdited(employee);
+    setEmployeeForm({
+      name: employee.name ?? "",
+      cpf: employee.cpf ?? "",
+      admission_date: employee.admissionDate ?? "",
+    });
+    setIsEmployeeFormOpen(true);
+  };
+
+  const salvarFuncionario = async () => {
+    const payload = {
+      name: employeeForm.name.trim(),
+      cpf: employeeForm.cpf.replace(/\D/g, ""),
+      admission_date: employeeForm.admission_date || null,
+    };
+
+    try {
+      if (employeeBeingEdited) {
+        await updateEmployeeMutation.mutateAsync({
+          solidesId: employeeBeingEdited.id,
+          data: payload,
+        });
+        toast.success("Funcionário atualizado");
+      } else {
+        await createEmployeeMutation.mutateAsync({
+          name: payload.name,
+          cpf: payload.cpf,
+          admission_date: payload.admission_date,
+        });
+        toast.success("Funcionário cadastrado");
+      }
+      setIsEmployeeFormOpen(false);
+      setEmployeeBeingEdited(null);
+      setEmployeeForm(FORM_FUNCIONARIO_VAZIO);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Erro ao salvar funcionário"
+      );
+    }
+  };
+
+  const alternarSituacao = async (employee: Employee) => {
+    const ativar = employee.fired;
+    try {
+      await updateEmployeeMutation.mutateAsync({
+        solidesId: employee.id,
+        data: { ativo: ativar },
+      });
+      toast.success(
+        ativar
+          ? `${formatEmployeeName(employee.name)} reativado`
+          : `${formatEmployeeName(employee.name)} inativado`
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Erro ao alterar situação"
+      );
+    }
+  };
+
   const formatDate = (dateString?: string) => {
     if (!dateString) return "-";
     const date = new Date(dateString);
@@ -1310,15 +1393,21 @@ function CompaniesEmployeesTab() {
               <CardTitle className="text-lg sm:text-xl">
                 Lista de Funcionários
               </CardTitle>
-              <label className="flex items-center gap-2 cursor-pointer text-sm text-muted-foreground">
-                <Checkbox
-                  checked={showInactiveEmployees}
-                  onCheckedChange={(checked) =>
-                    setShowInactiveEmployees(checked === true)
-                  }
-                />
-                Exibir inativos
-              </label>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 cursor-pointer text-sm text-muted-foreground">
+                  <Checkbox
+                    checked={showInactiveEmployees}
+                    onCheckedChange={(checked) =>
+                      setShowInactiveEmployees(checked === true)
+                    }
+                  />
+                  Exibir inativos
+                </label>
+                <Button size="sm" className="gap-2" onClick={abrirNovoFuncionario}>
+                  <Plus className="h-4 w-4" />
+                  Novo Funcionário
+                </Button>
+              </div>
             </div>
             <div className="mt-3">
               <Popover
@@ -1419,6 +1508,11 @@ function CompaniesEmployeesTab() {
                         <div className="flex items-center gap-2">
                           <User className="h-4 w-4 text-muted-foreground" />
                           {formatEmployeeName(employee.name)}
+                          {employee.origem === "MANUAL" && (
+                            <Badge variant="outline" className="text-xs">
+                              Manual
+                            </Badge>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
@@ -1482,6 +1576,29 @@ function CompaniesEmployeesTab() {
                             >
                               <Link2 className="h-4 w-4 mr-2" />
                               Gerenciar Empresas
+                            </DropdownMenuItem>
+                            {employee.origem === "MANUAL" && (
+                              <DropdownMenuItem
+                                onClick={() => abrirEdicaoFuncionario(employee)}
+                              >
+                                <Edit className="h-4 w-4 mr-2" />
+                                Editar Cadastro
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem
+                              onClick={() => alternarSituacao(employee)}
+                            >
+                              {employee.fired ? (
+                                <>
+                                  <UserCheck className="h-4 w-4 mr-2" />
+                                  Reativar
+                                </>
+                              ) : (
+                                <>
+                                  <UserX className="h-4 w-4 mr-2" />
+                                  Inativar
+                                </>
+                              )}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -1785,6 +1902,120 @@ function CompaniesEmployeesTab() {
               }
             >
               {addCompanyMutation.isPending || removeCompanyMutation.isPending
+                ? "Salvando..."
+                : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isEmployeeFormOpen}
+        onOpenChange={(aberto) => {
+          setIsEmployeeFormOpen(aberto);
+          if (!aberto) {
+            setEmployeeBeingEdited(null);
+            setEmployeeForm(FORM_FUNCIONARIO_VAZIO);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {employeeBeingEdited
+                ? "Editar Funcionário"
+                : "Cadastrar Novo Funcionário"}
+            </DialogTitle>
+            <DialogDescription>
+              {employeeBeingEdited
+                ? "Altere os dados do funcionário cadastrado no sistema."
+                : "O funcionário passa a existir só neste sistema, sem depender da Sólides."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <Field orientation="vertical">
+              <FieldLabel htmlFor="employee-name">
+                Nome completo <span className="text-destructive">*</span>
+              </FieldLabel>
+              <FieldContent>
+                <Input
+                  id="employee-name"
+                  value={employeeForm.name}
+                  onChange={(e) =>
+                    setEmployeeForm((atual) => ({
+                      ...atual,
+                      name: e.target.value,
+                    }))
+                  }
+                  placeholder="Nome como aparece no contrato"
+                />
+              </FieldContent>
+            </Field>
+
+            <Field orientation="vertical">
+              <FieldLabel htmlFor="employee-cpf">
+                CPF <span className="text-destructive">*</span>
+              </FieldLabel>
+              <FieldContent>
+                <Input
+                  id="employee-cpf"
+                  value={employeeForm.cpf}
+                  inputMode="numeric"
+                  maxLength={14}
+                  onChange={(e) =>
+                    setEmployeeForm((atual) => ({
+                      ...atual,
+                      cpf: e.target.value,
+                    }))
+                  }
+                  placeholder="000.000.000-00"
+                />
+              </FieldContent>
+            </Field>
+
+            <Field orientation="vertical">
+              <FieldLabel htmlFor="employee-admission">
+                Data de admissão
+              </FieldLabel>
+              <FieldContent>
+                <Input
+                  id="employee-admission"
+                  type="date"
+                  value={employeeForm.admission_date}
+                  onChange={(e) =>
+                    setEmployeeForm((atual) => ({
+                      ...atual,
+                      admission_date: e.target.value,
+                    }))
+                  }
+                />
+              </FieldContent>
+            </Field>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsEmployeeFormOpen(false)}
+              disabled={
+                createEmployeeMutation.isPending ||
+                updateEmployeeMutation.isPending
+              }
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={salvarFuncionario}
+              disabled={
+                createEmployeeMutation.isPending ||
+                updateEmployeeMutation.isPending
+              }
+            >
+              {createEmployeeMutation.isPending ||
+              updateEmployeeMutation.isPending
                 ? "Salvando..."
                 : "Salvar"}
             </Button>
@@ -2179,7 +2410,7 @@ export default function EmpresasPage() {
               )}
             </TabsList>
 
-            {effectiveTab !== "feriados" && (
+            {effectiveTab === "empresas" && (
             <Dialog
               open={isDialogOpen}
               onOpenChange={handleDialogOpenChange}
