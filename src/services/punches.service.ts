@@ -27,3 +27,54 @@ export async function fetchPunches(
 
   return response.json();
 }
+
+export interface BatidaManualPayload {
+  employeeId: number;
+  date: string;
+  entrada: string;
+  saida?: string | null;
+}
+
+export async function criarBatidaManual(payload: BatidaManualPayload) {
+  const response = await fetch("/api/punches", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const erro = await response.json().catch(() => ({}));
+    throw new Error(erro.error || "Erro ao lançar batida");
+  }
+
+  return response.json();
+}
+
+export async function editarBatidaManual(
+  uuid: string,
+  payload: Omit<BatidaManualPayload, "employeeId">
+) {
+  const response = await fetch(`/api/punches/${uuid}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const erro = await response.json().catch(() => ({}));
+    throw new Error(erro.error || "Erro ao editar batida");
+  }
+
+  return response.json();
+}
+
+export async function apagarBatidaManual(uuid: string) {
+  const response = await fetch(`/api/punches/${uuid}`, { method: "DELETE" });
+
+  if (!response.ok) {
+    const erro = await response.json().catch(() => ({}));
+    throw new Error(erro.error || "Erro ao apagar batida");
+  }
+
+  return response.json();
+}

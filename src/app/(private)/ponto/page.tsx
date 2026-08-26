@@ -61,7 +61,12 @@ import {
   expandAtestadoDates,
   normalizeAtestadoName,
 } from "@/lib/atestado";
-import { usePunchesInfinite } from "@/hooks/use-punches";
+import {
+  usePunchesInfinite,
+  useCriarBatidaManual,
+  useEditarBatidaManual,
+  useApagarBatidaManual,
+} from "@/hooks/use-punches";
 import { NO_MAPPED_COMPANY_LABEL } from "@/utils/company-mapping";
 import { useCompanies } from "@/hooks/use-companies";
 import { formatEmployeeName } from "@/utils/employee-name-format";
@@ -79,7 +84,17 @@ import {
   X,
   EyeOff,
   Undo2,
+  Pencil,
 } from "lucide-react";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { PontoHistory } from "./components/ponto-history";
 import {
   useExportPontoPDF,
@@ -185,6 +200,8 @@ interface GroupedPunch {
   dayOfWeek: string;
   dayOfWeekNumber: number;
   punches: Array<{
+    uuid?: string;
+    origem?: string;
     dateIn?: string;
     dateOut?: string;
     adjust?: boolean;
@@ -223,6 +240,8 @@ function getAdjustmentReasonDescription(
 
 interface PunchFromApi {
   id: number;
+  uuid?: string;
+  origem?: string;
   date?: string;
   dateIn?: string;
   dateOut?: string;
@@ -351,6 +370,17 @@ export default function PontoPage() {
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [employees]);
+
+  const [lancamento, setLancamento] = useState<{
+    employeeName: string;
+    employeeId: number;
+    date: string;
+    formattedDate: string;
+    pares: Array<{ uuid?: string; entrada: string; saida: string }>;
+  } | null>(null);
+  const criarBatida = useCriarBatidaManual();
+  const editarBatida = useEditarBatidaManual();
+  const apagarBatida = useApagarBatidaManual();
 
   const solidesIdByEmployeeName = useMemo(() => {
     const map = new Map<string, number>();
@@ -648,6 +678,8 @@ export default function PontoPage() {
       }
 
       grouped.get(key)!.punches.push({
+        uuid: punch.uuid,
+        origem: punch.origem,
         dateIn: punch.dateIn,
         dateOut: punch.dateOut,
         adjust: punch.adjust === true,
@@ -1385,6 +1417,82 @@ export default function PontoPage() {
     ];
   }, [companiesData]);
 
+  const horaLocal = (iso?: string): string => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  };
+
+  const abrirLancamento = (group: GroupedPunch) => {
+    const employeeId =
+      filter.employeeId > 0
+        ? filter.employeeId
+        : (solidesIdByEmployeeName.get(group.employeeName) ?? 0);
+
+    if (!employeeId) {
+      toast.error("Não foi possível identificar o funcionário deste dia");
+      return;
+    }
+
+    const manuais = group.punches.filter((p) => p.origem === "MANUAL");
+    const pares = manuais.slice(0, 2).map((p) => ({
+      uuid: p.uuid,
+      entrada: horaLocal(p.dateIn),
+      saida: horaLocal(p.dateOut),
+    }));
+
+    while (pares.length < 2) pares.push({ entrada: "", saida: "" });
+
+    setLancamento({
+      employeeName: group.employeeName,
+      employeeId,
+      date: group.date.slice(0, 10),
+      formattedDate: group.formattedDate,
+      pares,
+    });
+  };
+
+  const salvarLancamento = async () => {
+    if (!lancamento) return;
+
+    if (lancamento.pares.some((par) => !par.entrada && par.saida)) {
+      toast.error("Informe a entrada antes da saída");
+      return;
+    }
+
+    try {
+      for (const par of lancamento.pares) {
+        if (par.entrada) {
+          if (par.uuid) {
+            await editarBatida.mutateAsync({
+              uuid: par.uuid,
+              date: lancamento.date,
+              entrada: par.entrada,
+              saida: par.saida || null,
+            });
+          } else {
+            await criarBatida.mutateAsync({
+              employeeId: lancamento.employeeId,
+              date: lancamento.date,
+              entrada: par.entrada,
+              saida: par.saida || null,
+            });
+          }
+        } else if (par.uuid) {
+          await apagarBatida.mutateAsync(par.uuid);
+        }
+      }
+
+      toast.success("Batidas do dia atualizadas");
+      setLancamento(null);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Erro ao salvar as batidas",
+      );
+    }
+  };
+
   const dynamicColumns = useMemo(() => {
     const baseColumns = ["Funcionário", "Empresa", "Data", "Dia da semana"];
     const punchColumns: string[] = [];
@@ -1405,6 +1513,7 @@ export default function PontoPage() {
       "50% noturno",
       "100% diurno",
       "100% noturno",
+      "Ações",
     ];
 
     return [...baseColumns, ...punchColumns, ...extraColumns];
@@ -2128,8 +2237,19 @@ export default function PontoPage() {
                             <TableCell className="px-4 py-3 border-r border-gray-200">
                               {group.extra100Diurno}
                             </TableCell>
-                            <TableCell className="px-4 py-3">
+                            <TableCell className="px-4 py-3 border-r border-gray-200">
                               {group.extra100Noturno}
+                            </TableCell>
+                            <TableCell className="px-4 py-3 text-center whitespace-nowrap">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                title="Lançar batida manual neste dia"
+                                onClick={() => abrirLancamento(group)}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -2174,9 +2294,10 @@ export default function PontoPage() {
                           <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
                             {totals.extra100Diurno}
                           </TableCell>
-                          <TableCell className="px-4 py-3 font-semibold">
+                          <TableCell className="px-4 py-3 border-r border-gray-200 font-semibold">
                             {totals.extra100Noturno}
                           </TableCell>
+                          <TableCell className="px-4 py-3" />
                         </TableRow>
                         <TableRow ref={loadMoreRef}>
                           <TableCell
@@ -2421,6 +2542,105 @@ export default function PontoPage() {
       </TabsContent>
     </Tabs>
   </div>
+
+      <Dialog
+        open={!!lancamento}
+        onOpenChange={(aberto) => {
+          if (!aberto) setLancamento(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Batidas de {lancamento?.formattedDate}</DialogTitle>
+            <DialogDescription>
+              {lancamento?.employeeName}. O que for lançado aqui substitui as
+              batidas da Sólides neste dia.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {lancamento?.pares.map((par, indice) => (
+              <div key={indice} className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor={`entrada-${indice}`}>
+                    Entrada {indice + 1}
+                  </Label>
+                  <Input
+                    id={`entrada-${indice}`}
+                    type="time"
+                    value={par.entrada}
+                    onChange={(e) =>
+                      setLancamento((atual) =>
+                        atual
+                          ? {
+                              ...atual,
+                              pares: atual.pares.map((p, i) =>
+                                i === indice
+                                  ? { ...p, entrada: e.target.value }
+                                  : p,
+                              ),
+                            }
+                          : atual,
+                      )
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor={`saida-${indice}`}>Saída {indice + 1}</Label>
+                  <Input
+                    id={`saida-${indice}`}
+                    type="time"
+                    value={par.saida}
+                    onChange={(e) =>
+                      setLancamento((atual) =>
+                        atual
+                          ? {
+                              ...atual,
+                              pares: atual.pares.map((p, i) =>
+                                i === indice
+                                  ? { ...p, saida: e.target.value }
+                                  : p,
+                              ),
+                            }
+                          : atual,
+                      )
+                    }
+                  />
+                </div>
+              </div>
+            ))}
+            <p className="text-sm text-muted-foreground">
+              Deixe um par em branco para apagá-lo. Saída menor que a entrada é
+              entendida como turno que virou a noite.
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setLancamento(null)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={salvarLancamento}
+              disabled={
+                criarBatida.isPending ||
+                editarBatida.isPending ||
+                apagarBatida.isPending
+              }
+            >
+              {criarBatida.isPending ||
+              editarBatida.isPending ||
+              apagarBatida.isPending
+                ? "Salvando..."
+                : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

@@ -1,5 +1,16 @@
-import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
-import { fetchPunches } from "@/services/punches.service";
+import {
+  useQuery,
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
+import {
+  fetchPunches,
+  criarBatidaManual,
+  editarBatidaManual,
+  apagarBatidaManual,
+  type BatidaManualPayload,
+} from "@/services/punches.service";
 
 export function usePunches(
   page = 0,
@@ -62,5 +73,45 @@ export function usePunchesInfinite(
     initialPageParam: 0,
     staleTime: 2 * 60 * 1000,
     enabled,
+  });
+}
+
+export function useCriarBatidaManual() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: criarBatidaManual,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["punches-infinite"] });
+      await queryClient.invalidateQueries({ queryKey: ["punches"] });
+    },
+  });
+}
+
+export function useEditarBatidaManual() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      uuid,
+      ...payload
+    }: { uuid: string } & Omit<BatidaManualPayload, "employeeId">) =>
+      editarBatidaManual(uuid, payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["punches-infinite"] });
+      await queryClient.invalidateQueries({ queryKey: ["punches"] });
+    },
+  });
+}
+
+export function useApagarBatidaManual() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: apagarBatidaManual,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["punches-infinite"] });
+      await queryClient.invalidateQueries({ queryKey: ["punches"] });
+    },
   });
 }
