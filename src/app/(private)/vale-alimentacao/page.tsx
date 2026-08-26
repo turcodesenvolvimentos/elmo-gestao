@@ -449,8 +449,6 @@ export default function ValeAlimentacaoPage() {
           const company = resolveWorkCompanyName({
             employeeSolidesId: employeeId,
             workDate: baseDateStr,
-            locationInAddress: punch.locationIn?.address,
-            locationOutAddress: punch.locationOut?.address,
             escalaEntries,
           });
 

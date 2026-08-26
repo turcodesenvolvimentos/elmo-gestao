@@ -1,4 +1,4 @@
-import { getCompanyNameFromRawAddresses } from "@/utils/company-mapping";
+import { NO_MAPPED_COMPANY_LABEL } from "@/utils/company-mapping";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export interface EscalaCompanyEntry {
@@ -47,8 +47,6 @@ export function pickEscalaCompanyName(
 export function resolveWorkCompanyName(params: {
   employeeSolidesId: number;
   workDate: string;
-  locationInAddress?: string | null;
-  locationOutAddress?: string | null;
   escalaEntries: EscalaCompanyEntry[];
 }): string {
   const fromEscala = pickEscalaCompanyName(
@@ -56,11 +54,7 @@ export function resolveWorkCompanyName(params: {
     params.employeeSolidesId,
     params.workDate
   );
-  if (fromEscala) return fromEscala;
-  return getCompanyNameFromRawAddresses(
-    params.locationInAddress,
-    params.locationOutAddress
-  );
+  return fromEscala ?? NO_MAPPED_COMPANY_LABEL;
 }
 
 export async function fetchEscalaCompanyEntries(

@@ -62,17 +62,16 @@ import {
   normalizeAtestadoName,
 } from "@/lib/atestado";
 import { usePunchesInfinite } from "@/hooks/use-punches";
-import {
-  getMappedCompanies,
-  NO_MAPPED_COMPANY_LABEL,
-} from "@/utils/company-mapping";
+import { NO_MAPPED_COMPANY_LABEL } from "@/utils/company-mapping";
+import { useCompanies } from "@/hooks/use-companies";
 import { formatEmployeeName } from "@/utils/employee-name-format";
 import {
   pickEscalaCompanyName,
   resolveWorkCompanyName,
 } from "@/lib/punch-company-resolution";
 import { usePontoEscalaCompanies } from "@/hooks/use-ponto-escala-companies";
-import { useSyncPunches, useLastSyncDate } from "@/hooks/use-sync";
+import { useSyncPunches } from "@/hooks/use-sync";
+import { UltimaSincronizacao } from "@/components/ultima-sincronizacao";
 import {
   RefreshCw,
   Download,
@@ -441,8 +440,9 @@ export default function PontoPage() {
     enabled: canFetch && (shouldSendDates ? isDateRangeValid : true),
   });
 
+  const { data: companiesData } = useCompanies();
+
   const syncMutation = useSyncPunches();
-  const { data: lastSyncData } = useLastSyncDate();
 
   const exportPDFMutation = useExportPontoPDF();
   const exportResumoMutation = useExportPontoResumoPDF();
@@ -497,8 +497,6 @@ export default function PontoPage() {
         const company = resolveWorkCompanyName({
           employeeSolidesId: filter.employeeId,
           workDate: punchDateStr,
-          locationInAddress: punch.locationIn?.address,
-          locationOutAddress: punch.locationOut?.address,
           escalaEntries,
         });
         return company === filter.company;
@@ -625,8 +623,6 @@ export default function PontoPage() {
           company: resolveWorkCompanyName({
             employeeSolidesId: resolveSolidesId(employeeName),
             workDate: baseDateStr,
-            locationInAddress: punch.locationIn?.address,
-            locationOutAddress: punch.locationOut?.address,
             escalaEntries,
           }),
           isHoliday: isHolidayForDisplay(baseDateStr, customHolidaySet),
@@ -920,8 +916,6 @@ export default function PontoPage() {
       const company = resolveWorkCompanyName({
         employeeSolidesId: resolveSolidesId(employeeName),
         workDate: dateStr,
-        locationInAddress: null,
-        locationOutAddress: null,
         escalaEntries,
       });
 
@@ -1378,13 +1372,18 @@ export default function PontoPage() {
 
   const hasAnyError = !!punchesError;
 
-  const mappedCompanies = getMappedCompanies();
-  const companiesList = [
-    "Todos",
-    ...[...mappedCompanies, NO_MAPPED_COMPANY_LABEL]
-      .filter((v, i, arr) => arr.indexOf(v) === i)
-      .sort((a, b) => a.localeCompare(b)),
-  ];
+  const companiesList = useMemo(() => {
+    const nomes = (companiesData?.companies ?? [])
+      .map((c) => c.name?.trim())
+      .filter((name): name is string => !!name);
+
+    return [
+      "Todos",
+      ...[...nomes, NO_MAPPED_COMPANY_LABEL]
+        .filter((v, i, arr) => arr.indexOf(v) === i)
+        .sort((a, b) => a.localeCompare(b, "pt-BR")),
+    ];
+  }, [companiesData]);
 
   const dynamicColumns = useMemo(() => {
     const baseColumns = ["Funcionário", "Empresa", "Data", "Dia da semana"];
@@ -1840,12 +1839,7 @@ export default function PontoPage() {
         </TabsList>
 
         <div className="flex items-center gap-2">
-          {lastSyncData && (
-            <span className="text-sm text-muted-foreground">
-              Última sincronização:{" "}
-              {new Date(lastSyncData.lastSyncAt).toLocaleString("pt-BR")}
-            </span>
-          )}
+          <UltimaSincronizacao />
           <Button
             variant="outline"
             size="sm"
