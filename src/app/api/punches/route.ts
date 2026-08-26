@@ -25,6 +25,28 @@ function toDateKey(value: string | null): string | undefined {
     : parsed.toISOString().slice(0, 10);
 }
 
+function formatarDia(date: Date): string {
+  const ano = date.getFullYear();
+  const mes = String(date.getMonth() + 1).padStart(2, "0");
+  const dia = String(date.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+}
+
+function intervaloOuMesCorrente(
+  startDate: string | undefined,
+  endDate: string | undefined
+): { inicio: string; fim: string } {
+  if (startDate && endDate) return { inicio: startDate, fim: endDate };
+
+  const hoje = new Date();
+  const primeiroDoMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+
+  return {
+    inicio: startDate ?? formatarDia(primeiroDoMes),
+    fim: endDate ?? formatarDia(hoje),
+  };
+}
+
 interface PunchRow {
   solides_id: number | null;
   employee_id: number;
@@ -74,6 +96,12 @@ export async function GET(request: NextRequest) {
       : undefined;
     const status = searchParams.get("status") || undefined;
 
+    // Sem período escolhido, assume o mês corrente (dia 1 até hoje). A API do
+    // Solides devolvia zero registros nesse caso e a tela ficava só com as
+    // faltas do mês; ler do banco sem limite traria todos os dias desde a
+    // admissão da pessoa. Nenhum dos dois é o que se espera ver.
+    const periodo = intervaloOuMesCorrente(startDate, endDate);
+
     let query = supabaseAdmin
       .from("punches")
       .select(
@@ -83,8 +111,7 @@ export async function GET(request: NextRequest) {
         { count: "exact" }
       );
 
-    if (startDate) query = query.gte("date", startDate);
-    if (endDate) query = query.lte("date", endDate);
+    query = query.gte("date", periodo.inicio).lte("date", periodo.fim);
     if (employeeId !== undefined && !Number.isNaN(employeeId)) {
       query = query.eq("employee_id", employeeId);
     }
