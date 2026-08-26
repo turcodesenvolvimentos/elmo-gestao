@@ -1,22 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { solidesApiClient } from "@/lib/axios/solides.client";
-import { handleSolidesError } from "@/lib/axios/error-handler";
-import { AxiosError } from "axios";
+import { supabaseAdmin } from "@/lib/db/client";
 import { Permission } from "@/types/permissions";
 import { checkAnyPermission } from "@/lib/auth/permissions";
 
-interface SolidesPunchRaw {
-  id?: number;
-  date?: string | number | null;
-  dateIn?: string | number | null;
-  dateOut?: string | number | null;
-  employee?: { id?: number } | null;
-}
-
-function dateToTimestamp(dateStr: string, offsetDays = 0): number {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  return new Date(y, m - 1, d + offsetDays, 12, 0, 0, 0).getTime();
+interface PunchRow {
+  employee_id: number | null;
+  date: string | null;
+  date_in: string | null;
+  date_out: string | null;
 }
 
 function formatLocalDate(d: Date): string {
@@ -27,28 +19,24 @@ function formatLocalDate(d: Date): string {
   );
 }
 
+function shiftDate(dateStr: string, days: number): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return formatLocalDate(new Date(y, m - 1, d + days, 12, 0, 0, 0));
+}
+
 /**
  * Datas candidatas de uma batida. Alguns campos vem como string ISO em UTC e
  * outros como timestamp; perto da meia-noite as duas leituras divergem, entao
  * consideramos ambas ao decidir se a batida e do dia procurado.
  */
-function candidateDates(value: string | number | null | undefined): string[] {
+function candidateDates(value: string | null | undefined): string[] {
   if (value === null || value === undefined || value === "") return [];
 
   const out: string[] = [];
+  out.push(value.includes("T") ? value.split("T")[0] : value.substring(0, 10));
 
-  if (typeof value === "string") {
-    out.push(value.includes("T") ? value.split("T")[0] : value.substring(0, 10));
-    const parsed = new Date(value);
-    if (!Number.isNaN(parsed.getTime())) out.push(formatLocalDate(parsed));
-  } else {
-    const ms = value > 1e12 ? value : value * 1000;
-    const d = new Date(ms);
-    if (!Number.isNaN(d.getTime())) {
-      out.push(formatLocalDate(d));
-      out.push(d.toISOString().split("T")[0]);
-    }
-  }
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) out.push(formatLocalDate(parsed));
 
   return out;
 }
@@ -84,77 +72,48 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // A API do Solides filtra por instante, nao por dia. Consultar o dia
-    // inteiro com o mesmo timestamp (meio-dia) descartava as batidas da
-    // manha. Buscamos uma janela folgada de +-1 dia e filtramos localmente
-    // pela data canonica da batida.
-    const startTs = dateToTimestamp(date, -1).toString();
-    const endTs = dateToTimestamp(date, 1).toString();
-    const PAGE_SIZE = 1000;
     const employeeIds = new Set<number>();
+    const PAGE = 1000;
+    let from = 0;
 
-    let page = 1;
-    let hasMore = true;
+    while (true) {
+      const { data, error } = await supabaseAdmin
+        .from("punches")
+        .select("employee_id, date, date_in, date_out")
+        .gte("date", shiftDate(date, -1))
+        .lte("date", shiftDate(date, 1))
+        .order("date", { ascending: true })
+        .order("date_in", { ascending: true, nullsFirst: true })
+        .order("solides_id", { ascending: true, nullsFirst: true })
+        .range(from, from + PAGE - 1);
 
-    while (hasMore) {
-      try {
-        const response = await solidesApiClient.get("punch", {
-          params: {
-            page,
-            size: PAGE_SIZE,
-            startDate: startTs,
-            endDate: endTs,
-            showFired: true,
-          },
-        });
+      if (error) throw error;
+      if (!data || data.length === 0) break;
 
-        const data = response.data;
-        const content: SolidesPunchRaw[] = data?.content || [];
+      for (const row of data as PunchRow[]) {
+        if (typeof row.employee_id !== "number") continue;
 
-        for (const raw of content) {
-          const employeeId = raw.employee?.id;
-          if (typeof employeeId !== "number") continue;
+        const datas = [
+          ...candidateDates(row.date),
+          ...candidateDates(row.date_in),
+          ...candidateDates(row.date_out),
+        ];
 
-          const datas = [
-            ...candidateDates(raw.date),
-            ...candidateDates(raw.dateIn),
-            ...candidateDates(raw.dateOut),
-          ];
-
-          if (datas.includes(date)) employeeIds.add(employeeId);
-        }
-
-        page++;
-        hasMore =
-          content.length > 0 &&
-          !data?.last &&
-          page <= (data?.totalPages ?? Infinity);
-      } catch (err: unknown) {
-        const status =
-          err instanceof AxiosError
-            ? err.response?.status
-            : typeof err === "object" && err !== null && "status" in err
-            ? (err as { status?: number }).status
-            : undefined;
-        if (status === 404) {
-          hasMore = false;
-          break;
-        }
-        throw err;
+        if (datas.includes(date)) employeeIds.add(row.employee_id);
       }
+
+      if (data.length < PAGE) break;
+      from += PAGE;
     }
 
     return NextResponse.json({ date, employeeIds: [...employeeIds] });
   } catch (error: unknown) {
-    if (error instanceof AxiosError) {
-      const solidesError = handleSolidesError(error);
-      return NextResponse.json(
-        { error: solidesError.message },
-        { status: solidesError.status || 500 }
-      );
-    }
+    console.error("Erro ao buscar batidas do dia:", error);
     return NextResponse.json(
-      { error: "Erro ao buscar batidas do dia" },
+      {
+        error: "Erro ao buscar batidas do dia",
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }
