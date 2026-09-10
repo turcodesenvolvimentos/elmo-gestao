@@ -222,7 +222,7 @@ async function fetchPunchesFromBanco(
     date: row.date,
     dateIn: row.date_in,
     dateOut: row.date_out,
-    employee: { id: row.employee_id, name: row.employee_name },
+    employee: { id: row.employee_id, name: row.employee_name ?? undefined },
     status: row.status,
   }));
 }

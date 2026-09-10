@@ -1442,7 +1442,9 @@ export default function PontoPage() {
       saida: horaLocal(p.dateOut),
     }));
 
-    while (pares.length < 2) pares.push({ entrada: "", saida: "" });
+    while (pares.length < 2) {
+      pares.push({ uuid: undefined, entrada: "", saida: "" });
+    }
 
     setLancamento({
       employeeName: group.employeeName,

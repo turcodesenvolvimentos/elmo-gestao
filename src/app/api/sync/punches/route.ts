@@ -19,6 +19,30 @@ function sendSSE(
   controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
 }
 
+/**
+ * A Solides nao corrige uma batida no lugar: quando o ponto e ajustado ou
+ * reaprovado ela apaga os registros do dia e cria outros com IDs novos,
+ * inclusive para dias ja passados. Sincronizar so a partir da ultima execucao
+ * nunca enxerga essas correcoes e o banco fica com o pareamento antigo.
+ *
+ * Por isso a janela padrao volta ate o dia 1o do mes anterior, que cobre
+ * qualquer periodo de boletim ainda aberto. Se faz mais tempo que a ultima
+ * sincronizacao, vale a data mais antiga das duas.
+ */
+function inicioJanelaPadrao(ultimaSync: Date): string {
+  const hoje = new Date();
+  const primeiroDoMesAnterior = new Date(
+    hoje.getFullYear(),
+    hoje.getMonth() - 1,
+    1
+  );
+
+  const desdeUltimaSync = formatDate(ultimaSync);
+  const janelaMinima = formatDate(primeiroDoMesAnterior);
+
+  return desdeUltimaSync < janelaMinima ? desdeUltimaSync : janelaMinima;
+}
+
 export async function POST(request: NextRequest) {
   const session = await auth();
 
@@ -56,7 +80,7 @@ export async function POST(request: NextRequest) {
 
   const today = formatDate(new Date());
   const endDate = requestedEnd || today;
-  const startDate = requestedStart || formatDate(await getLastSyncDate());
+  const startDate = requestedStart || inicioJanelaPadrao(await getLastSyncDate());
 
   if (startDate > endDate) {
     return NextResponse.json(
