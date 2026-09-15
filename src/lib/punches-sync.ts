@@ -377,10 +377,25 @@ async function fetchPunchesInPeriod(
       await sleep(CONFIG.REQUEST_DELAY);
     } catch (error: any) {
       const httpStatus = error?.response?.status ?? error?.status;
-      if (httpStatus === 404) {
+
+      // A Solides devolve 404 quando se pede uma pagina alem da ultima, e por
+      // isso o 404 encerra a paginacao. Mas 404 ja na primeira pagina nao e
+      // "acabou": ou o modulo de batidas esta fora do ar, ou a rota mudou.
+      // Tratar esse caso como sucesso fazia a sincronizacao terminar dizendo
+      // "0 batidas" e o banco congelar sem ninguem perceber.
+      if (httpStatus === 404 && page > 1) {
         hasMore = false;
         break;
       }
+
+      if (httpStatus === 404) {
+        throw new Error(
+          "A API de batidas da Solides respondeu 404 (api.tangerino.com.br). " +
+            "O modulo de ponto esta indisponivel ou mudou de endereco. " +
+            "Nenhuma batida foi lida e o banco nao foi alterado."
+        );
+      }
+
       throw error;
     }
   }
