@@ -1455,6 +1455,66 @@ export default function PontoPage() {
     });
   };
 
+  /**
+   * Decide a que dia pertence cada par digitado na janelinha.
+   *
+   * Um turno partido exatamente na virada da meia-noite (19:01-00:00 e depois
+   * 01:01-07:02) tem o segundo par acontecendo no dia seguinte. Como a
+   * janelinha é de um dia só, esse par seria gravado às 01:01 da madrugada do
+   * próprio dia — 24h antes do que aconteceu — e apareceria na tela antes da
+   * entrada das 19:01, parecendo que a ordem "inverteu sozinha".
+   *
+   * A regra: se um par começaria antes do fim do par anterior, ele já está do
+   * outro lado da meia-noite e pertence ao dia seguinte. Jornada normal
+   * (08:00-12:00 e 13:00-17:00) não é afetada, porque a segunda entrada vem
+   * depois da primeira saída.
+   */
+  const datasDosPares = (
+    base: string,
+    pares: Array<{ entrada: string; saida: string }>,
+  ): string[] => {
+    const somarDias = (dia: string, quantos: number): string => {
+      const [ano, mes, d] = dia.split("-").map(Number);
+      const data = new Date(ano, mes - 1, d + quantos);
+      return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}-${String(data.getDate()).padStart(2, "0")}`;
+    };
+
+    const instante = (dia: string, hora: string): number => {
+      const [ano, mes, d] = dia.split("-").map(Number);
+      const [h, m] = hora.split(":").map(Number);
+      return new Date(ano, mes - 1, d, h, m).getTime();
+    };
+
+    const UM_DIA = 24 * 60 * 60 * 1000;
+    let deslocamento = 0;
+    let fimAnterior: number | null = null;
+    const datas: string[] = [];
+
+    for (const par of pares) {
+      if (!par.entrada) {
+        datas.push(somarDias(base, deslocamento));
+        continue;
+      }
+
+      let dia = somarDias(base, deslocamento);
+      let inicio = instante(dia, par.entrada);
+
+      if (fimAnterior !== null && inicio < fimAnterior) {
+        deslocamento += 1;
+        dia = somarDias(base, deslocamento);
+        inicio = instante(dia, par.entrada);
+      }
+
+      let fim = par.saida ? instante(dia, par.saida) : inicio;
+      if (par.saida && fim <= inicio) fim += UM_DIA;
+
+      datas.push(dia);
+      fimAnterior = fim;
+    }
+
+    return datas;
+  };
+
   const salvarLancamento = async () => {
     if (!lancamento) return;
 
@@ -1463,27 +1523,41 @@ export default function PontoPage() {
       return;
     }
 
+    const datas = datasDosPares(lancamento.date, lancamento.pares);
+    let acoes = 0;
+
     try {
-      for (const par of lancamento.pares) {
+      for (const [indice, par] of lancamento.pares.entries()) {
+        const dataDoPar = datas[indice];
+
         if (par.entrada) {
           if (par.uuid) {
             await editarBatida.mutateAsync({
               uuid: par.uuid,
-              date: lancamento.date,
+              date: dataDoPar,
               entrada: par.entrada,
               saida: par.saida || null,
             });
           } else {
             await criarBatida.mutateAsync({
               employeeId: lancamento.employeeId,
-              date: lancamento.date,
+              date: dataDoPar,
               entrada: par.entrada,
               saida: par.saida || null,
             });
           }
+          acoes++;
         } else if (par.uuid) {
           await apagarBatida.mutateAsync(par.uuid);
+          acoes++;
         }
+      }
+
+      // Sem nenhum horário preenchido não há o que gravar. Dizer "atualizadas"
+      // aqui seria um sucesso falso: nada é enviado e nada muda no banco.
+      if (acoes === 0) {
+        toast.error("Preencha pelo menos uma entrada para salvar");
+        return;
       }
 
       toast.success("Batidas do dia atualizadas");
