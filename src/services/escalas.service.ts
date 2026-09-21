@@ -2,7 +2,18 @@ import {
   EscalasResponse,
   Escala,
   BatchCreateEscalaData,
+  EscalaConflito,
 } from "@/types/escalas";
+
+export class EscalaConflitoError extends Error {
+  conflitos: EscalaConflito[];
+
+  constructor(message: string, conflitos: EscalaConflito[]) {
+    super(message);
+    this.name = "EscalaConflitoError";
+    this.conflitos = conflitos;
+  }
+}
 
 export async function fetchEscalas(params?: {
   employee_id?: string;
@@ -62,6 +73,14 @@ export async function batchCreateEscalas(
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
+
+    if (response.status === 409 && Array.isArray(errorData.conflitos)) {
+      throw new EscalaConflitoError(
+        errorData.error || "Funcionário já escalado no período",
+        errorData.conflitos
+      );
+    }
+
     throw new Error(errorData.error || "Erro ao aplicar escalas");
   }
 

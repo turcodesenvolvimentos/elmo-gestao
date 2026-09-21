@@ -38,6 +38,18 @@ export interface BatchCreateEscalaData {
   shift_id: string;
   start_date: string;
   end_date?: string; // formato "YYYY-MM-DD" (opcional)
+  force?: boolean;
+}
+
+export interface EscalaConflito {
+  employee_id: string;
+  employee_name: string;
+  company_id: string | null;
+  company_name: string | null;
+  shift_id: string;
+  shift_name: string | null;
+  start_date: string;
+  end_date: string | null;
 }
 
 export interface EscalasResponse {

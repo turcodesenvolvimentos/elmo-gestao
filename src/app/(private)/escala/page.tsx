@@ -93,6 +93,8 @@ import {
   useEscalas,
   useDeleteEscala,
 } from "@/hooks/use-escalas";
+import { EscalaConflitoError } from "@/services/escalas.service";
+import { EscalaConflito } from "@/types/escalas";
 import {
   Collapsible,
   CollapsibleContent,
@@ -223,6 +225,9 @@ export default function EscalaPage() {
     new Date().toISOString().split("T")[0]
   );
   const [endDate, setEndDate] = useState("");
+  const [conflitosPendentes, setConflitosPendentes] = useState<
+    EscalaConflito[] | null
+  >(null);
 
   // Estados para o modal de visualização/edição
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
@@ -263,6 +268,51 @@ export default function EscalaPage() {
     () => escalasData?.escalas || [],
     [escalasData?.escalas]
   );
+
+  const editingEscalaIds = useMemo(
+    () => new Set((editingGroup?.funcionarios ?? []).map((f) => f.escalaId)),
+    [editingGroup]
+  );
+
+  // Escalas vigentes que se sobrepõem ao período selecionado, por funcionário
+  const conflitosPorFuncionario = useMemo(() => {
+    const mapa = new Map<string, EscalaConflito[]>();
+    if (!startDate) return mapa;
+
+    const fimNovo = endDate || "9999-12-31";
+
+    escalas.forEach((e) => {
+      if (e.shift_id === selectedShiftId) return;
+      if (editingEscalaIds.has(e.id)) return;
+
+      const fimExistente = e.end_date || "9999-12-31";
+      if (e.start_date > fimNovo || fimExistente < startDate) return;
+
+      const companyId = e.shift?.company_id ?? null;
+      const lista = mapa.get(e.employee_id) ?? [];
+      lista.push({
+        employee_id: e.employee_id,
+        employee_name: e.employee?.name ?? "",
+        company_id: companyId,
+        company_name:
+          companies.find((c) => c.id === companyId)?.name ?? null,
+        shift_id: e.shift_id,
+        shift_name: e.shift?.name ?? null,
+        start_date: e.start_date,
+        end_date: e.end_date ?? null,
+      });
+      mapa.set(e.employee_id, lista);
+    });
+
+    return mapa;
+  }, [
+    escalas,
+    companies,
+    selectedShiftId,
+    startDate,
+    endDate,
+    editingEscalaIds,
+  ]);
 
   // Nomes únicos dos funcionários da empresa sendo visualizada (para o filtro)
   const employeeNamesForFilter = useMemo(() => {
@@ -906,7 +956,7 @@ export default function EscalaPage() {
     }
   };
 
-  const handleAssignShifts = async () => {
+  const handleAssignShifts = async (force = false) => {
     if (
       !selectedCompany ||
       selectedEmployeeIds.size === 0 ||
@@ -917,6 +967,17 @@ export default function EscalaPage() {
         "Selecione pelo menos um funcionário, uma escala e uma data inicial"
       );
       return;
+    }
+
+    if (!force) {
+      const conflitos = Array.from(selectedEmployeeIds).flatMap(
+        (id) => conflitosPorFuncionario.get(id) ?? []
+      );
+
+      if (conflitos.length > 0) {
+        setConflitosPendentes(conflitos);
+        return;
+      }
     }
 
     try {
@@ -934,6 +995,7 @@ export default function EscalaPage() {
         shift_id: selectedShiftId,
         start_date: startDate,
         end_date: endDate || undefined,
+        force: force || undefined,
       });
 
       const periodText = endDate
@@ -950,7 +1012,13 @@ export default function EscalaPage() {
       setSelectedEmployeeIds(new Set());
       setSelectedShiftId("");
       setEndDate("");
+      setConflitosPendentes(null);
     } catch (error) {
+      if (error instanceof EscalaConflitoError) {
+        setConflitosPendentes(error.conflitos);
+        return;
+      }
+
       toast.error(
         error instanceof Error ? error.message : "Erro ao processar escalas"
       );
@@ -1811,6 +1879,21 @@ export default function EscalaPage() {
                             <div className="font-medium">
                               {formatEmployeeName(employee.name)}
                             </div>
+                            {(conflitosPorFuncionario.get(employee.id)
+                              ?.length ?? 0) > 0 && (
+                              <div className="text-xs text-destructive">
+                                Já escalado no período em{" "}
+                                {[
+                                  ...new Set(
+                                    conflitosPorFuncionario
+                                      .get(employee.id)!
+                                      .map(
+                                        (c) => c.company_name ?? "outra empresa"
+                                      )
+                                  ),
+                                ].join(", ")}
+                              </div>
+                            )}
                           </Label>
                         </div>
                       ))}
@@ -1952,7 +2035,7 @@ export default function EscalaPage() {
                 Cancelar
               </Button>
               <Button
-                onClick={handleAssignShifts}
+                onClick={() => handleAssignShifts()}
                 disabled={
                   selectedEmployeeIds.size === 0 ||
                   !selectedShiftId ||
@@ -1969,6 +2052,65 @@ export default function EscalaPage() {
                   : "Aplicar Escala"}
               </Button>
             </DialogFooter>
+
+            <Dialog
+              open={!!conflitosPendentes}
+              onOpenChange={(open) => {
+                if (!open) setConflitosPendentes(null);
+              }}
+            >
+              <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Funcionário já escalado no período</DialogTitle>
+                  <DialogDescription>
+                    Os funcionários abaixo já possuem escala vigente que se
+                    sobrepõe ao período selecionado.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="max-h-[300px] overflow-y-auto space-y-2">
+                  {(conflitosPendentes ?? []).map((c, index) => (
+                    <div
+                      key={`${c.employee_id}-${c.shift_id}-${index}`}
+                      className="rounded-lg border p-3 text-sm"
+                    >
+                      <div className="font-medium">
+                        {formatEmployeeName(c.employee_name)}
+                      </div>
+                      <div className="text-muted-foreground">
+                        {c.company_name ?? "Empresa não identificada"} —{" "}
+                        {c.shift_name ?? "Escala"}
+                      </div>
+                      <div className="text-muted-foreground">
+                        {formatDateLocal(c.start_date)}
+                        {c.end_date
+                          ? ` até ${formatDateLocal(c.end_date)}`
+                          : " (indefinido)"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <DialogFooter className="gap-2 sm:gap-0">
+                  <Button
+                    variant="outline"
+                    onClick={() => setConflitosPendentes(null)}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => {
+                      setConflitosPendentes(null);
+                      handleAssignShifts(true);
+                    }}
+                    disabled={batchCreateEscalasMutation.isPending}
+                  >
+                    Aplicar mesmo assim
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </>
         )}
       </DialogContent>

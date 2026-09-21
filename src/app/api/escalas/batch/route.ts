@@ -4,6 +4,21 @@ import { supabaseAdmin } from "@/lib/db/client";
 import { Permission } from "@/types/permissions";
 import { checkPermission } from "@/lib/auth/permissions";
 
+type EscalaSobrepostaRow = {
+  id: string;
+  employee_id: string;
+  shift_id: string;
+  start_date: string;
+  end_date: string | null;
+  employee?: { id: string; name: string } | null;
+  shift?: {
+    id: string;
+    name: string;
+    company_id: string;
+    company?: { id: string; name: string } | null;
+  } | null;
+};
+
 // POST - Aplicar escala em lote para vários funcionários
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -24,7 +39,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { employee_ids, shift_id, start_date, end_date } = body;
+    const { employee_ids, shift_id, start_date, end_date, force } = body;
 
     // Validação
     if (
@@ -106,6 +121,57 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           { error: "Data final deve ser posterior à data inicial" },
           { status: 400 }
+        );
+      }
+    }
+
+    // Conferir se algum funcionário já tem escala vigente no mesmo período
+    if (!force) {
+      const limiteFim = end_date || "9999-12-31";
+
+      const { data: sobrepostas, error: sobrepostasError } = await supabaseAdmin
+        .from("escalas")
+        .select(
+          `
+          id,
+          employee_id,
+          shift_id,
+          start_date,
+          end_date,
+          employee:employees(id, name),
+          shift:shifts(id, name, company_id, company:companies(id, name))
+        `
+        )
+        .in("employee_id", employee_ids)
+        .neq("shift_id", shift_id)
+        .lte("start_date", limiteFim)
+        .or(`end_date.is.null,end_date.gte.${start_date}`);
+
+      if (sobrepostasError) {
+        throw sobrepostasError;
+      }
+
+      if (sobrepostas && sobrepostas.length > 0) {
+        const conflitos = (sobrepostas as unknown as EscalaSobrepostaRow[]).map(
+          (e) => ({
+            employee_id: e.employee_id,
+            employee_name: e.employee?.name ?? "",
+            company_id: e.shift?.company_id ?? null,
+            company_name: e.shift?.company?.name ?? null,
+            shift_id: e.shift_id,
+            shift_name: e.shift?.name ?? null,
+            start_date: e.start_date,
+            end_date: e.end_date ?? null,
+          })
+        );
+
+        return NextResponse.json(
+          {
+            error:
+              "Um ou mais funcionários já possuem escala vigente no período selecionado",
+            conflitos,
+          },
+          { status: 409 }
         );
       }
     }
