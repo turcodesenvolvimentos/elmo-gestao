@@ -435,6 +435,7 @@ export default function PontoPage() {
     shouldSendDates && isDateRangeValid && filter.startDate
       ? (() => {
           const date = new Date(filter.startDate + "T00:00:00Z");
+          date.setUTCDate(date.getUTCDate() - 1);
           return date.getTime().toString();
         })()
       : undefined;
