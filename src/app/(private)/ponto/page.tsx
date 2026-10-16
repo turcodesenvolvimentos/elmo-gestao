@@ -46,6 +46,8 @@ import { useEmployees } from "@/hooks/use-employees";
 import { useCustomHolidays } from "@/hooks/use-custom-holidays";
 import { useDispensas } from "@/hooks/use-dispensas";
 import { useAtestados } from "@/hooks/use-atestados";
+import { AtestadoForm } from "@/components/atestado-form";
+import { Atestado, getTipoAfastamentoLabel } from "@/types/atestados";
 import {
   useAvisosIgnorados,
   useCreateAvisoIgnorado,
@@ -54,6 +56,7 @@ import {
 import type { AvisoIgnorado } from "@/types/avisos-ignorados";
 import {
   AtestadoPeriodo,
+  buildAtestadoDayMap,
   buildAtestadoKey,
   buildAtestadoKeySet,
   buildAtestadoPeriodos,
@@ -85,6 +88,7 @@ import {
   EyeOff,
   Undo2,
   Pencil,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -291,6 +295,13 @@ export default function PontoPage() {
   const atestadoSet = useMemo(
     () => buildAtestadoKeySet(atestadosData?.atestados ?? []),
     [atestadosData?.atestados]
+  );
+  const atestadoDayMap = useMemo(
+    () => buildAtestadoDayMap(atestadosData?.atestados ?? []),
+    [atestadosData?.atestados]
+  );
+  const [atestadoEmEdicao, setAtestadoEmEdicao] = useState<Atestado | null>(
+    null
   );
 
   const dispensaDatesByEmployee = useMemo(() => {
@@ -749,6 +760,14 @@ export default function PontoPage() {
         const previousGroup = groups[i - 1];
         const currentGroup = groups[i];
 
+        const [py, pm, pd] = previousGroup.date.split("-").map(Number);
+        const [cy, cm, cd] = currentGroup.date.split("-").map(Number);
+        const diffDias = Math.round(
+          (Date.UTC(cy, cm - 1, cd) - Date.UTC(py, pm - 1, pd)) /
+            (1000 * 60 * 60 * 24),
+        );
+        if (diffDias !== 1) continue;
+
         // "Ultimo turno noturno" do dia anterior pode ser identificado por:
         //  (a) entrada >= 18h, OU
         //  (b) saida em dia diferente da entrada (cruzou meia-noite).
@@ -882,15 +901,21 @@ export default function PontoPage() {
       group.horasFictas = formatarHoras(calculoHoras.horasFictas);
       group.totalHoras = formatarHoras(calculoHoras.totalHoras);
       group.horasNormais = formatarHoras(calculoHoras.horasNormais);
-      // Atestado: completa 8h em dia util (sabado, domingo e feriado nao geram
-      // credito) sem mexer nas horas efetivamente trabalhadas.
-      const horasAtestadoDoDia = atestadoSet.has(
+      // Atestado: completa 8h em dia util (sabado, domingo e feriado so geram
+      // credito com "Considerar feriados e final de semana") sem mexer nas
+      // horas efetivamente trabalhadas.
+      const atestadoDoDia = atestadoDayMap.get(
         buildAtestadoKey(group.employeeName, group.date),
-      )
+      );
+      const horasAtestadoDoDia = atestadoDoDia
         ? calcularHorasAtestado(
             group.date,
-            calculoHoras.horasNormais,
+            {
+              horasNormais: calculoHoras.horasNormais,
+              totalHoras: calculoHoras.totalHoras,
+            },
             customHolidaySet,
+            !!atestadoDoDia.considerar_fds_feriado,
           )
         : 0;
       group.horasAtestado = formatarHoras(horasAtestadoDoDia);
@@ -940,10 +965,16 @@ export default function PontoPage() {
         timeZone: "UTC",
       });
       const dayOfWeekNumber = date.getDay();
-      const horasAtestadoDiaVazio = atestadoSet.has(
+      const atestadoDiaVazio = atestadoDayMap.get(
         buildAtestadoKey(employeeName, dateStr),
-      )
-        ? calcularHorasAtestado(dateStr, 0, customHolidaySet)
+      );
+      const horasAtestadoDiaVazio = atestadoDiaVazio
+        ? calcularHorasAtestado(
+            dateStr,
+            { horasNormais: 0, totalHoras: 0 },
+            customHolidaySet,
+            !!atestadoDiaVazio.considerar_fds_feriado,
+          )
         : 0;
 
       const company = resolveWorkCompanyName({
@@ -1142,7 +1173,7 @@ export default function PontoPage() {
     filter.employeeId,
     shouldSendDates,
     customHolidaySet,
-    atestadoSet,
+    atestadoDayMap,
     escalaEntries,
     solidesIdByEmployeeName,
     dispensaDatesByEmployee,
@@ -2299,7 +2330,24 @@ export default function PontoPage() {
                             <TableCell className="px-4 py-3 border-r border-gray-200">
                               {group.horasNormais}
                             </TableCell>
-                            <TableCell className="px-4 py-3 border-r border-gray-200">
+                            <TableCell
+                              className="px-4 py-3 border-r border-gray-200"
+                              title={(() => {
+                                const atestado = atestadoDayMap.get(
+                                  buildAtestadoKey(
+                                    group.employeeName,
+                                    group.date,
+                                  ),
+                                );
+                                if (!atestado) return undefined;
+                                const tipo = getTipoAfastamentoLabel(
+                                  atestado.tipo,
+                                );
+                                return atestado.nao_cobrar_cliente
+                                  ? `${tipo} (não cobrado do cliente)`
+                                  : tipo;
+                              })()}
+                            >
                               {group.horasAtestado}
                             </TableCell>
                             <TableCell className="px-4 py-3 border-r border-gray-200">
@@ -2327,6 +2375,28 @@ export default function PontoPage() {
                               >
                                 <Pencil className="h-3.5 w-3.5" />
                               </Button>
+                              {(() => {
+                                const atestado = atestadoDayMap.get(
+                                  buildAtestadoKey(
+                                    group.employeeName,
+                                    group.date,
+                                  ),
+                                );
+                                if (!atestado) return null;
+                                return (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-blue-600"
+                                    title={`Editar ${getTipoAfastamentoLabel(
+                                      atestado.tipo,
+                                    ).toLowerCase()}`}
+                                    onClick={() => setAtestadoEmEdicao(atestado)}
+                                  >
+                                    <FileText className="h-3.5 w-3.5" />
+                                  </Button>
+                                );
+                              })()}
                             </TableCell>
                           </TableRow>
                         ))}
@@ -2716,6 +2786,31 @@ export default function PontoPage() {
                 : "Salvar"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!atestadoEmEdicao}
+        onOpenChange={(open) => {
+          if (!open) setAtestadoEmEdicao(null);
+        }}
+      >
+        <DialogContent className="!max-w-3xl sm:!max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar atestado</DialogTitle>
+            <DialogDescription>
+              Alterações aqui valem para todos os dias cobertos por este
+              atestado.
+            </DialogDescription>
+          </DialogHeader>
+          <AtestadoForm
+            key={atestadoEmEdicao?.id ?? "novo"}
+            customHolidaySet={customHolidaySet}
+            editing={atestadoEmEdicao}
+            lockEmployee
+            onSaved={() => setAtestadoEmEdicao(null)}
+            onCancelEdit={() => setAtestadoEmEdicao(null)}
+          />
         </DialogContent>
       </Dialog>
     </>

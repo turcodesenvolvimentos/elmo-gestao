@@ -2,6 +2,7 @@ import {
   Atestado,
   CreateAtestadoData,
   AtestadosResponse,
+  UpdateAtestadoData,
 } from "@/types/atestados";
 
 export async function fetchAtestados(): Promise<AtestadosResponse> {
@@ -28,6 +29,26 @@ export async function createAtestado(
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.error || "Erro ao adicionar atestado");
+  }
+
+  return response.json();
+}
+
+export async function updateAtestado({
+  id,
+  ...data
+}: UpdateAtestadoData): Promise<Atestado> {
+  const response = await fetch(`/api/atestados/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || "Erro ao editar atestado");
   }
 
   return response.json();

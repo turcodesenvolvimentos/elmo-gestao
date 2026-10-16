@@ -69,7 +69,10 @@ import { BoletimHistory } from "./components/boletim-history";
 import { formatEmployeeName } from "@/utils/employee-name-format";
 import { formatCNPJ } from "@/utils/format-cnpj";
 import { calcularHorasPorPeriodo, formatarHoras } from "@/lib/ponto-calculator";
-import { calcularHorasAtestado } from "@/lib/atestado";
+import {
+  calcularHorasAtestado,
+  distribuirAtestadoBoletim,
+} from "@/lib/atestado";
 import { NO_MAPPED_COMPANY_LABEL } from "@/utils/company-mapping";
 import { UltimaSincronizacao } from "@/components/ultima-sincronizacao";
 
@@ -666,20 +669,46 @@ export default function BoletimPage() {
           );
           const h = calcularHorasPorPeriodo(punches, rowDate, customHolidaySet);
           // Dia coberto por atestado: recompoe o credito com base nas horas
-          // normais recalculadas, senao a edicao dos horarios apagaria o
-          // atestado ja embutido em normal_hours.
+          // recalculadas, senao a edicao dos horarios apagaria o atestado ja
+          // embutido nas colunas em que ele e cobrado.
+          const considerarFdsFeriado =
+            !!editingRowData?.atestado_considera_fds_feriado;
           const horasAtestado =
             editingRowData?.atestado_hours !== undefined
-              ? calcularHorasAtestado(rowDate, h.horasNormais, customHolidaySet)
+              ? calcularHorasAtestado(
+                  rowDate,
+                  { horasNormais: h.horasNormais, totalHoras: h.totalHoras },
+                  customHolidaySet,
+                  considerarFdsFeriado
+                )
               : 0;
-          updated.total_hours = formatarHoras(h.totalHoras + horasAtestado);
+          const atestadoCobrado = distribuirAtestadoBoletim(
+            rowDate,
+            horasAtestado,
+            h.horasNormais,
+            customHolidaySet,
+            {
+              considerarFdsFeriado,
+              naoCobrarCliente: !!editingRowData?.atestado_nao_cobrar_cliente,
+            }
+          );
+          updated.total_hours = formatarHoras(
+            h.totalHoras +
+              atestadoCobrado.normal +
+              atestadoCobrado.extra50Diurno +
+              atestadoCobrado.extra100Diurno
+          );
           updated.normal_hours = formatarHoras(
-            h.horasNormais + horasAtestado
+            h.horasNormais + atestadoCobrado.normal
           );
           updated.night_additional = formatarHoras(h.adicionalNoturno);
-          updated.extra_50_day = formatarHoras(h.extra50Diurno);
+          updated.extra_50_day = formatarHoras(
+            h.extra50Diurno + atestadoCobrado.extra50Diurno
+          );
           updated.extra_50_night = formatarHoras(h.extra50Noturno);
-          updated.extra_100_day = formatarHoras(h.extra100Diurno);
+          updated.extra_100_day = formatarHoras(
+            h.extra100Diurno + atestadoCobrado.extra100Diurno
+          );
           updated.extra_100_night = formatarHoras(h.extra100Noturno);
         }
       }

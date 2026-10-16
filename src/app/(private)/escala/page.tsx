@@ -79,15 +79,14 @@ import {
   useCreateDispensa,
   useDeleteDispensa,
 } from "@/hooks/use-dispensas";
-import {
-  useAtestados,
-  useCreateAtestado,
-  useDeleteAtestado,
-} from "@/hooks/use-atestados";
+import { useAtestados, useDeleteAtestado } from "@/hooks/use-atestados";
 import {
   expandAtestadoDates,
   normalizeAtestadoName,
 } from "@/lib/atestado";
+import { useCustomHolidays } from "@/hooks/use-custom-holidays";
+import { AtestadoForm } from "@/components/atestado-form";
+import { Atestado, getTipoAfastamentoLabel } from "@/types/atestados";
 import {
   useBatchCreateEscalas,
   useEscalas,
@@ -209,13 +208,11 @@ export default function EscalaPage() {
   );
   const [openDispensaEmpFilter, setOpenDispensaEmpFilter] = useState(false);
   const [isAtestadosDialogOpen, setIsAtestadosDialogOpen] = useState(false);
-  const [atestadoEmployeeId, setAtestadoEmployeeId] = useState("");
-  const [atestadoEmployeeName, setAtestadoEmployeeName] = useState("");
-  const [atestadoStartDate, setAtestadoStartDate] = useState(
-    new Date().toISOString().split("T")[0]
+  const [atestadoEmEdicao, setAtestadoEmEdicao] = useState<Atestado | null>(
+    null
   );
-  const [atestadoDays, setAtestadoDays] = useState("1");
-  const [openAtestadoEmpFilter, setOpenAtestadoEmpFilter] = useState(false);
+  const [atestadoConfirmandoExclusao, setAtestadoConfirmandoExclusao] =
+    useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<string>>(
     new Set()
@@ -253,8 +250,13 @@ export default function EscalaPage() {
   const createDispensaMutation = useCreateDispensa();
   const deleteDispensaMutation = useDeleteDispensa();
   const { data: atestadosData, isLoading: atestadosLoading } = useAtestados();
-  const createAtestadoMutation = useCreateAtestado();
   const deleteAtestadoMutation = useDeleteAtestado();
+  const { data: customHolidaysData } = useCustomHolidays();
+  const customHolidaySet = useMemo(() => {
+    const s = new Set<string>();
+    customHolidaysData?.holidays.forEach((h) => s.add(h.holiday_date));
+    return s;
+  }, [customHolidaysData?.holidays]);
   const { data: allEmployeesData, isLoading: allEmployeesLoading } =
     useEmployees({ page: 1, size: 1000, includeFired: false });
 
@@ -670,12 +672,19 @@ export default function EscalaPage() {
 
       // Afastados de hoje (atestado ou dispensa): saem da numeracao da escala e
       // vao para o fim da mensagem, com o motivo ao lado do nome.
-      const atestadoHojeIds = new Set<string>();
-      const atestadoHojeNomes = new Set<string>();
+      const atestadoHojeIds = new Map<string, string>();
+      const atestadoHojeNomes = new Map<string, string>();
       atestados.forEach((a) => {
         if (expandAtestadoDates(a.start_date, a.days).includes(hoje)) {
-          atestadoHojeIds.add(String(a.employee_id));
-          atestadoHojeNomes.add(normalizeAtestadoName(a.employee_name));
+          const motivoAtestado =
+            !a.tipo || a.tipo === "atestado_medico"
+              ? "Atestado"
+              : getTipoAfastamentoLabel(a.tipo);
+          atestadoHojeIds.set(String(a.employee_id), motivoAtestado);
+          atestadoHojeNomes.set(
+            normalizeAtestadoName(a.employee_name),
+            motivoAtestado
+          );
         }
       });
 
@@ -732,14 +741,15 @@ export default function EscalaPage() {
           .forEach((p) => {
             const solidesKey = p.solidesId != null ? String(p.solidesId) : null;
             const nomeKey = normalizeAtestadoName(p.nome);
+            const motivoAtestado =
+              (solidesKey && atestadoHojeIds.get(solidesKey)) ||
+              atestadoHojeNomes.get(nomeKey);
             const motivo =
-              (solidesKey && atestadoHojeIds.has(solidesKey)) ||
-              atestadoHojeNomes.has(nomeKey)
-                ? "Atestado"
-                : (solidesKey && dispensaHojeIds.has(solidesKey)) ||
-                    dispensaHojeNomes.has(nomeKey)
-                  ? "Dispensado"
-                  : null;
+              motivoAtestado ||
+              ((solidesKey && dispensaHojeIds.has(solidesKey)) ||
+              dispensaHojeNomes.has(nomeKey)
+                ? "Dispensado"
+                : null);
 
             if (motivo) {
               afastados.set(solidesKey ?? nomeKey, { nome: p.nome, motivo });
@@ -852,37 +862,11 @@ export default function EscalaPage() {
     }
   };
 
-  const handleAddAtestado = async () => {
-    const dias = parseInt(atestadoDays, 10);
-    if (!atestadoEmployeeId || !atestadoStartDate) {
-      toast.error("Selecione um funcionário e o dia inicial");
-      return;
-    }
-    if (!Number.isInteger(dias) || dias < 1) {
-      toast.error("Informe uma quantidade de dias válida");
-      return;
-    }
-    try {
-      await createAtestadoMutation.mutateAsync({
-        employee_id: atestadoEmployeeId,
-        employee_name: atestadoEmployeeName,
-        start_date: atestadoStartDate,
-        days: dias,
-      });
-      toast.success("Atestado adicionado com sucesso!");
-      setAtestadoEmployeeId("");
-      setAtestadoEmployeeName("");
-      setAtestadoDays("1");
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Erro ao adicionar atestado"
-      );
-    }
-  };
-
   const handleRemoveAtestado = async (id: string) => {
     try {
       await deleteAtestadoMutation.mutateAsync(id);
+      setAtestadoConfirmandoExclusao(null);
+      if (atestadoEmEdicao?.id === id) setAtestadoEmEdicao(null);
       toast.success("Atestado removido com sucesso!");
     } catch (error) {
       toast.error(
@@ -1485,136 +1469,36 @@ export default function EscalaPage() {
     {/* Modal de Atestados */}
     <Dialog
       open={isAtestadosDialogOpen}
-      onOpenChange={setIsAtestadosDialogOpen}
+      onOpenChange={(open) => {
+        setIsAtestadosDialogOpen(open);
+        if (!open) {
+          setAtestadoEmEdicao(null);
+          setAtestadoConfirmandoExclusao(null);
+        }
+      }}
     >
-      <DialogContent className="!max-w-2xl sm:!max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="!max-w-3xl sm:!max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Atestados</DialogTitle>
+          <DialogTitle>
+            {atestadoEmEdicao ? "Editar atestado" : "Atestados"}
+          </DialogTitle>
           <DialogDescription>
             Escolha o dia inicial e quantos dias o atestado cobre (o primeiro
             dia já conta). Em dia útil o ponto fecha completando 8h normais.
-            Sábado, domingo e feriado não geram horas.
+            Sábado, domingo e feriado só geram horas com a opção
+            &quot;Considerar feriados e final de semana&quot; marcada.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <div className="flex flex-col gap-1">
-              <Label>Funcionário</Label>
-              <Popover
-                open={openAtestadoEmpFilter}
-                onOpenChange={setOpenAtestadoEmpFilter}
-              >
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={openAtestadoEmpFilter}
-                    className="w-full sm:w-[240px] justify-between font-normal"
-                  >
-                    <span className="truncate">
-                      {atestadoEmployeeName || "Selecione um funcionário..."}
-                    </span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[240px] p-0">
-                  <Command
-                    filter={(value, search) => {
-                      const normalize = (s: string) =>
-                        s
-                          .normalize("NFD")
-                          .replace(/[̀-ͯ]/g, "")
-                          .toLowerCase();
-                      return normalize(value).includes(normalize(search))
-                        ? 1
-                        : 0;
-                    }}
-                  >
-                    <CommandInput placeholder="Pesquisar funcionário..." />
-                    <CommandList className="max-h-60 overflow-y-auto">
-                      <CommandEmpty>
-                        Nenhum funcionário encontrado.
-                      </CommandEmpty>
-                      <CommandGroup>
-                        {dispensaEmployeeOptions.map((emp) => (
-                          <CommandItem
-                            key={emp.id}
-                            value={emp.name}
-                            onSelect={() => {
-                              setAtestadoEmployeeId(emp.id);
-                              setAtestadoEmployeeName(emp.name);
-                              setOpenAtestadoEmpFilter(false);
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                atestadoEmployeeId === emp.id
-                                  ? "opacity-100"
-                                  : "opacity-0"
-                              )}
-                            />
-                            {emp.name}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="atestado-start-date">Dia inicial</Label>
-              <Input
-                id="atestado-start-date"
-                type="date"
-                value={atestadoStartDate}
-                onChange={(e) => setAtestadoStartDate(e.target.value)}
-                className="w-full sm:w-[160px]"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="atestado-days">Dias</Label>
-              <Input
-                id="atestado-days"
-                type="number"
-                min={1}
-                value={atestadoDays}
-                onChange={(e) => setAtestadoDays(e.target.value)}
-                className="w-full sm:w-[90px]"
-              />
-            </div>
-
-            <Button
-              onClick={handleAddAtestado}
-              disabled={
-                !atestadoEmployeeId ||
-                !atestadoStartDate ||
-                createAtestadoMutation.isPending
-              }
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Adicionar
-            </Button>
-          </div>
-
-          {atestadoStartDate &&
-            parseInt(atestadoDays, 10) >= 1 &&
-            (() => {
-              const dias = expandAtestadoDates(
-                atestadoStartDate,
-                parseInt(atestadoDays, 10)
-              );
-              return (
-                <p className="text-sm text-muted-foreground">
-                  Cobre {dias.length} dia{dias.length > 1 ? "s" : ""}:{" "}
-                  {dias.map(formatDateLocal).join(", ")}
-                </p>
-              );
-            })()}
+          <AtestadoForm
+            key={atestadoEmEdicao?.id ?? "novo"}
+            employeeOptions={dispensaEmployeeOptions}
+            customHolidaySet={customHolidaySet}
+            editing={atestadoEmEdicao}
+            onSaved={() => setAtestadoEmEdicao(null)}
+            onCancelEdit={() => setAtestadoEmEdicao(null)}
+          />
 
           <div className="border-t pt-4">
             <h4 className="font-semibold mb-2 text-sm">
@@ -1633,32 +1517,90 @@ export default function EscalaPage() {
                 {atestados.map((a, i) => {
                   const dias = expandAtestadoDates(a.start_date, a.days);
                   const ultimoDia = dias[dias.length - 1];
+                  const emEdicao = atestadoEmEdicao?.id === a.id;
+                  const confirmandoExclusao =
+                    atestadoConfirmandoExclusao === a.id;
                   return (
                     <li
                       key={a.id}
-                      className={`flex items-center justify-between gap-2 rounded px-2 py-1.5 ${
-                        i % 2 === 1 ? "bg-muted/30" : ""
-                      }`}
+                      className={cn(
+                        "flex items-center justify-between gap-2 rounded px-2 py-1.5",
+                        i % 2 === 1 && "bg-muted/30",
+                        emEdicao && "ring-1 ring-primary bg-primary/5"
+                      )}
                     >
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <span className="font-medium">{a.employee_name}</span>
                         <span className="text-muted-foreground">
-                          — {formatDateLocal(a.start_date)}
+                          {formatDateLocal(a.start_date)}
                           {a.days > 1
                             ? ` até ${formatDateLocal(ultimoDia)}`
                             : ""}{" "}
                           ({a.days} dia{a.days > 1 ? "s" : ""})
                         </span>
+                        <Badge variant="outline" className="font-normal">
+                          {getTipoAfastamentoLabel(a.tipo)}
+                        </Badge>
+                        {a.considerar_fds_feriado && (
+                          <Badge variant="secondary" className="font-normal">
+                            Conta fim de semana e feriado
+                          </Badge>
+                        )}
+                        {a.nao_cobrar_cliente && (
+                          <Badge variant="secondary" className="font-normal">
+                            Não cobrado do cliente
+                          </Badge>
+                        )}
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                        onClick={() => handleRemoveAtestado(a.id)}
-                        disabled={deleteAtestadoMutation.isPending}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {confirmandoExclusao ? (
+                        <div className="flex shrink-0 items-center gap-1">
+                          <span className="text-xs text-muted-foreground">
+                            Excluir?
+                          </span>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            className="h-7 px-2"
+                            onClick={() => handleRemoveAtestado(a.id)}
+                            disabled={deleteAtestadoMutation.isPending}
+                          >
+                            Sim
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2"
+                            onClick={() => setAtestadoConfirmandoExclusao(null)}
+                            disabled={deleteAtestadoMutation.isPending}
+                          >
+                            Não
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex shrink-0 items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-muted-foreground"
+                            title="Editar atestado"
+                            onClick={() => {
+                              setAtestadoConfirmandoExclusao(null);
+                              setAtestadoEmEdicao(a);
+                            }}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                            title="Excluir atestado"
+                            onClick={() => setAtestadoConfirmandoExclusao(a.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
                     </li>
                   );
                 })}

@@ -8,12 +8,14 @@ import {
 import {
   fetchAtestados,
   createAtestado,
+  updateAtestado,
   deleteAtestado,
 } from "@/services/atestados.service";
 import {
   Atestado,
   CreateAtestadoData,
   AtestadosResponse,
+  UpdateAtestadoData,
 } from "@/types/atestados";
 
 export function useAtestados(): UseQueryResult<AtestadosResponse, Error> {
@@ -33,6 +35,21 @@ export function useCreateAtestado(): UseMutationResult<
 
   return useMutation({
     mutationFn: createAtestado,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["atestados"] });
+    },
+  });
+}
+
+export function useUpdateAtestado(): UseMutationResult<
+  Atestado,
+  Error,
+  UpdateAtestadoData
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: updateAtestado,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["atestados"] });
     },

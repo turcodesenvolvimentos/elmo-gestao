@@ -15,13 +15,23 @@ export interface BoletimData {
   total_hours: string;
   normal_hours: string;
   /**
-   * Horas creditadas por atestado nesse dia (ja somadas em normal_hours e
-   * total_hours). Vem preenchido — inclusive "00:00" — sempre que o dia esta
+   * Horas creditadas por atestado nesse dia (ja somadas em total_hours e na
+   * coluna em que sao cobradas, ver `distribuirAtestadoBoletim`). Vem preenchido — inclusive "00:00" — sempre que o dia esta
    * coberto por um atestado; `undefined` quando nao ha atestado.
    */
   atestado_hours?: string;
   /** Horários fictícios que representam o atestado (só exibição). */
   atestado_periodos?: { entrada: string; saida: string }[];
+  /**
+   * Atestado lançado com "Considerar feriados e final de semana". A forma de
+   * cobrar fica em `distribuirAtestadoBoletim`.
+   */
+  atestado_considera_fds_feriado?: boolean;
+  /**
+   * Atestado que não é cobrado do cliente: atestado_hours continua preenchido
+   * (para marcar o dia em azul), mas nada entra nas horas nem no valor.
+   */
+  atestado_nao_cobrar_cliente?: boolean;
   night_additional?: string;
   extra_50_day: string;
   extra_50_night: string;

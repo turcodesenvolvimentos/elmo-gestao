@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/db/client";
+import {
+  ATESTADO_DUPLICADO_MSG,
+  isUniqueViolation,
+  parseAtestadoPayload,
+} from "@/lib/atestado-payload";
 
 // GET - Listar todos os atestados
 export async function GET() {
@@ -29,39 +34,24 @@ export async function GET() {
 // POST - Adicionar atestado
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { employee_id, employee_name, start_date, days } = body;
-
-    if (!employee_id || !employee_name || !start_date) {
-      return NextResponse.json(
-        { error: "Campos obrigatórios: employee_id, employee_name, start_date" },
-        { status: 400 }
-      );
-    }
-
-    const parsedDays = Number(days);
-    if (!Number.isInteger(parsedDays) || parsedDays < 1) {
-      return NextResponse.json(
-        { error: "Quantidade de dias deve ser um número inteiro maior que zero" },
-        { status: 400 }
-      );
+    const parsed = parseAtestadoPayload(await request.json());
+    if (!parsed.ok) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 });
     }
 
     const { data, error } = await supabaseAdmin
       .from("atestados")
-      .upsert(
-        {
-          employee_id: String(employee_id),
-          employee_name: String(employee_name),
-          start_date,
-          days: parsedDays,
-        },
-        { onConflict: "employee_id,start_date" }
-      )
+      .insert(parsed.payload)
       .select()
       .single();
 
     if (error) {
+      if (isUniqueViolation(error)) {
+        return NextResponse.json(
+          { error: ATESTADO_DUPLICADO_MSG },
+          { status: 409 }
+        );
+      }
       throw error;
     }
 

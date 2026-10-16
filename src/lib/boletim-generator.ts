@@ -5,6 +5,7 @@ import {
   buildAtestadoKey,
   buildAtestadoPeriodos,
   calcularHorasAtestado,
+  distribuirAtestadoBoletim,
 } from "@/lib/atestado";
 import type { BoletimData } from "@/services/boletim.service";
 import { NO_MAPPED_COMPANY_LABEL } from "@/utils/company-mapping";
@@ -489,10 +490,14 @@ export async function gerarBoletim(
     // normalizado, cobrindo cadastros feitos por nome.
     const { data: atestadoRows } = await supabaseAdmin
       .from("atestados")
-      .select("employee_id, employee_name, start_date, days")
+      .select(
+        "employee_id, employee_name, start_date, days, considerar_fds_feriado, nao_cobrar_cliente"
+      )
       .lte("start_date", endDate);
 
     const atestadoDayKeys = new Set<string>();
+    const atestadoFdsFeriadoDayKeys = new Set<string>();
+    const atestadoNaoCobrarDayKeys = new Set<string>();
     // Datas de atestado por solides_id, usadas para trazer para o boletim
     // funcionarios de atestado que nao foram convocados.
     const atestadoDatesBySolidesId = new Map<string, Set<string>>();
@@ -501,6 +506,8 @@ export async function gerarBoletim(
       employee_name: string;
       start_date: string;
       days: number;
+      considerar_fds_feriado?: boolean | null;
+      nao_cobrar_cliente?: boolean | null;
     }[]) {
       const total = Math.max(1, Math.floor(a.days || 1));
       const cursor = new Date(a.start_date.slice(0, 10) + "T12:00:00Z");
@@ -513,6 +520,18 @@ export async function gerarBoletim(
           const solidesKey = String(a.employee_id);
           atestadoDayKeys.add(`id:${solidesKey}|${dateStr}`);
           atestadoDayKeys.add(buildAtestadoKey(a.employee_name, dateStr));
+          if (a.considerar_fds_feriado) {
+            atestadoFdsFeriadoDayKeys.add(`id:${solidesKey}|${dateStr}`);
+            atestadoFdsFeriadoDayKeys.add(
+              buildAtestadoKey(a.employee_name, dateStr)
+            );
+          }
+          if (a.nao_cobrar_cliente) {
+            atestadoNaoCobrarDayKeys.add(`id:${solidesKey}|${dateStr}`);
+            atestadoNaoCobrarDayKeys.add(
+              buildAtestadoKey(a.employee_name, dateStr)
+            );
+          }
           if (!atestadoDatesBySolidesId.has(solidesKey)) {
             atestadoDatesBySolidesId.set(solidesKey, new Set<string>());
           }
@@ -1091,19 +1110,49 @@ export async function gerarBoletim(
         const ADICIONAL_NOTURNO_EXTRA = 0.2;
 
         // Atestado: completa as horas normais ate 8h em dia util. Sabado,
-        // domingo e feriado nao geram credito. O trabalhado e mantido.
+        // domingo e feriado so geram credito quando o atestado foi lancado com
+        // "Considerar feriados e final de semana". O trabalhado e mantido.
+        // A forma de cobrar no boletim fica em `distribuirAtestadoBoletim`.
         const temAtestado =
           atestadoDayKeys.has(`id:${employee.solidesId}|${date}`) ||
           atestadoDayKeys.has(buildAtestadoKey(employee.name, date));
+        const atestadoConsideraFdsFeriado =
+          atestadoFdsFeriadoDayKeys.has(`id:${employee.solidesId}|${date}`) ||
+          atestadoFdsFeriadoDayKeys.has(buildAtestadoKey(employee.name, date));
+        const atestadoNaoCobrarCliente =
+          atestadoNaoCobrarDayKeys.has(`id:${employee.solidesId}|${date}`) ||
+          atestadoNaoCobrarDayKeys.has(buildAtestadoKey(employee.name, date));
         const horasAtestado = temAtestado
           ? calcularHorasAtestado(
               date,
-              horasCalculadas.horasNormais,
-              customHolidaySet
+              {
+                horasNormais: horasCalculadas.horasNormais,
+                totalHoras: horasCalculadas.totalHoras,
+              },
+              customHolidaySet,
+              atestadoConsideraFdsFeriado
             )
           : 0;
+        const atestadoCobrado = distribuirAtestadoBoletim(
+          date,
+          horasAtestado,
+          horasCalculadas.horasNormais,
+          customHolidaySet,
+          {
+            considerarFdsFeriado: atestadoConsideraFdsFeriado,
+            naoCobrarCliente: atestadoNaoCobrarCliente,
+          }
+        );
+        const horasAtestadoCobradas =
+          atestadoCobrado.normal +
+          atestadoCobrado.extra50Diurno +
+          atestadoCobrado.extra100Diurno;
         const horasNormaisComAtestado =
-          horasCalculadas.horasNormais + horasAtestado;
+          horasCalculadas.horasNormais + atestadoCobrado.normal;
+        const extra50DiurnoComAtestado =
+          horasCalculadas.extra50Diurno + atestadoCobrado.extra50Diurno;
+        const extra100DiurnoComAtestado =
+          horasCalculadas.extra100Diurno + atestadoCobrado.extra100Diurno;
 
         // Horarios ficticios do atestado: emendam apos a ultima saida real ou,
         // se o dia nao teve batida, usam o padrao 08:00-12:00 / 13:00-17:00.
@@ -1118,13 +1167,13 @@ export async function gerarBoletim(
           hourValue *
           ADICIONAL_NOTURNO_NORMAL;
         const valorExtra50 =
-          horasCalculadas.extra50Diurno * hourValue * 1.5 +
+          extra50DiurnoComAtestado * hourValue * 1.5 +
           horasCalculadas.extra50Noturno *
             hourValue *
             1.5 *
             (1 + ADICIONAL_NOTURNO_EXTRA);
         const valorExtra100 =
-          horasCalculadas.extra100Diurno * hourValue * 2 +
+          extra100DiurnoComAtestado * hourValue * 2 +
           horasCalculadas.extra100Noturno *
             hourValue *
             2 *
@@ -1152,7 +1201,7 @@ export async function gerarBoletim(
           entry2,
           exit2,
           total_hours: formatarHoras(
-            horasCalculadas.totalHoras + horasAtestado
+            horasCalculadas.totalHoras + horasAtestadoCobradas
           ),
           normal_hours: formatarHoras(horasNormaisComAtestado),
           atestado_hours: temAtestado
@@ -1161,10 +1210,16 @@ export async function gerarBoletim(
           atestado_periodos: atestadoPeriodos.length > 0
             ? atestadoPeriodos
             : undefined,
+          atestado_considera_fds_feriado: temAtestado
+            ? atestadoConsideraFdsFeriado
+            : undefined,
+          atestado_nao_cobrar_cliente: temAtestado
+            ? atestadoNaoCobrarCliente
+            : undefined,
           night_additional: formatarHoras(horasCalculadas.adicionalNoturno),
-          extra_50_day: formatarHoras(horasCalculadas.extra50Diurno),
+          extra_50_day: formatarHoras(extra50DiurnoComAtestado),
           extra_50_night: formatarHoras(horasCalculadas.extra50Noturno),
-          extra_100_day: formatarHoras(horasCalculadas.extra100Diurno),
+          extra_100_day: formatarHoras(extra100DiurnoComAtestado),
           extra_100_night: formatarHoras(horasCalculadas.extra100Noturno),
           value: valorTotal,
         });

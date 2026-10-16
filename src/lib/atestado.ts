@@ -61,24 +61,59 @@ export function buildAtestadoKeySet(
   return set;
 }
 
-/**
- * Carga horária coberta pelo atestado: 8h de segunda a sexta. Sábado, domingo
- * e feriado não geram crédito — o atestado só vale em dia útil.
- */
-export function getCargaHorariaDia(
+export function buildAtestadoDayMap<
+  T extends {
+    employee_name: string;
+    start_date: string;
+    days: number;
+    considerar_fds_feriado?: boolean | null;
+  },
+>(atestados: ReadonlyArray<T>): Map<string, T> {
+  const map = new Map<string, T>();
+  for (const a of atestados) {
+    for (const date of expandAtestadoDates(a.start_date, a.days)) {
+      const key = buildAtestadoKey(a.employee_name, date);
+      const atual = map.get(key);
+      if (!atual || (!atual.considerar_fds_feriado && a.considerar_fds_feriado)) {
+        map.set(key, a);
+      }
+    }
+  }
+  return map;
+}
+
+export type TipoDiaAtestado = "util" | "fim_de_semana" | "feriado";
+
+export function getTipoDiaAtestado(
   dateYyyyMmDd: string,
   customHolidayDates?: ReadonlySet<string>
-): number {
+): TipoDiaAtestado {
   // Meio-dia local, mesma convencao do `calcularHorasPorPeriodo`, para que
   // sabado/domingo aqui coincidam com o que o calculo de horas enxerga.
   const [y, m, day] = dateYyyyMmDd.slice(0, 10).split("-").map(Number);
   const d = new Date(y, m - 1, day, 12, 0, 0, 0);
-  const dayOfWeek = d.getDay();
-  if (dayOfWeek === 0 || dayOfWeek === 6) return 0;
   if (isHolidayForDisplay(dateYyyyMmDd.slice(0, 10), customHolidayDates)) {
-    return 0;
+    return "feriado";
   }
-  return CARGA_HORARIA_DIA_UTIL;
+  const dayOfWeek = d.getDay();
+  if (dayOfWeek === 0 || dayOfWeek === 6) return "fim_de_semana";
+  return "util";
+}
+
+/**
+ * Carga horária coberta pelo atestado: 8h de segunda a sexta. Sábado, domingo
+ * e feriado só geram crédito quando o atestado foi lançado com a opção
+ * "Considerar feriados e final de semana".
+ */
+export function getCargaHorariaDia(
+  dateYyyyMmDd: string,
+  customHolidayDates?: ReadonlySet<string>,
+  considerarFdsFeriado = false
+): number {
+  if (considerarFdsFeriado) return CARGA_HORARIA_DIA_UTIL;
+  return getTipoDiaAtestado(dateYyyyMmDd, customHolidayDates) === "util"
+    ? CARGA_HORARIA_DIA_UTIL
+    : 0;
 }
 
 /**
@@ -159,11 +194,86 @@ export function buildAtestadoPeriodos(
   return periodos;
 }
 
+export function isDomingoOuFeriado(
+  dateYyyyMmDd: string,
+  customHolidayDates?: ReadonlySet<string>
+): boolean {
+  const [y, m, day] = dateYyyyMmDd.slice(0, 10).split("-").map(Number);
+  const d = new Date(y, m - 1, day, 12, 0, 0, 0);
+  return (
+    d.getDay() === 0 ||
+    isHolidayForDisplay(dateYyyyMmDd.slice(0, 10), customHolidayDates)
+  );
+}
+
+export const ATESTADO_SABADO_HORAS_NORMAIS = 4;
+
+export interface AtestadoNoBoletim {
+  normal: number;
+  extra50Diurno: number;
+  extra100Diurno: number;
+}
+
+/**
+ * Como as horas de atestado entram na cobrança do boletim. No ponto elas
+ * sempre aparecem como atestado; aqui só muda a forma de cobrar:
+ * - não cobrar do cliente: nada é cobrado (a linha segue marcada como atestado);
+ * - domingo e feriado (com a opção de fim de semana): tudo como 100%;
+ * - sábado (com a opção de fim de semana): até 4h normais e o resto como 50%;
+ * - demais dias: hora normal.
+ */
+export function distribuirAtestadoBoletim(
+  dateYyyyMmDd: string,
+  horasAtestado: number,
+  horasNormaisTrabalhadas: number,
+  customHolidayDates: ReadonlySet<string> | undefined,
+  opcoes: { considerarFdsFeriado?: boolean; naoCobrarCliente?: boolean }
+): AtestadoNoBoletim {
+  const resultado: AtestadoNoBoletim = {
+    normal: 0,
+    extra50Diurno: 0,
+    extra100Diurno: 0,
+  };
+  if (horasAtestado <= 0 || opcoes.naoCobrarCliente) return resultado;
+
+  if (opcoes.considerarFdsFeriado) {
+    if (isDomingoOuFeriado(dateYyyyMmDd, customHolidayDates)) {
+      resultado.extra100Diurno = horasAtestado;
+      return resultado;
+    }
+    if (getTipoDiaAtestado(dateYyyyMmDd, customHolidayDates) === "fim_de_semana") {
+      const normal = Math.min(
+        horasAtestado,
+        Math.max(0, ATESTADO_SABADO_HORAS_NORMAIS - (horasNormaisTrabalhadas || 0))
+      );
+      resultado.normal = normal;
+      resultado.extra50Diurno = horasAtestado - normal;
+      return resultado;
+    }
+  }
+
+  resultado.normal = horasAtestado;
+  return resultado;
+}
+
+/**
+ * Em domingo e feriado tudo o que foi trabalhado é 100% e não entra em normal,
+ * então o atestado completa a carga descontando o total trabalhado. Nos demais
+ * dias desconta só as horas normais.
+ */
 export function calcularHorasAtestado(
   dateYyyyMmDd: string,
-  horasNormaisTrabalhadas: number,
-  customHolidayDates?: ReadonlySet<string>
+  horasTrabalhadas: { horasNormais: number; totalHoras: number },
+  customHolidayDates?: ReadonlySet<string>,
+  considerarFdsFeriado = false
 ): number {
-  const carga = getCargaHorariaDia(dateYyyyMmDd, customHolidayDates);
-  return Math.max(0, carga - (horasNormaisTrabalhadas || 0));
+  const carga = getCargaHorariaDia(
+    dateYyyyMmDd,
+    customHolidayDates,
+    considerarFdsFeriado
+  );
+  const descontar = isDomingoOuFeriado(dateYyyyMmDd, customHolidayDates)
+    ? horasTrabalhadas.totalHoras
+    : horasTrabalhadas.horasNormais;
+  return Math.max(0, carga - (descontar || 0));
 }
