@@ -34,6 +34,8 @@ import {
   Loader2,
   History,
   AlertTriangle,
+  EyeOff,
+  Eye,
 } from "lucide-react";
 import {
   Dialog,
@@ -161,6 +163,8 @@ export default function BoletimPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingRow, setEditingRow] = useState<number | null>(null);
   const [showPDFPreview, setShowPDFPreview] = useState(false);
+  // Zera os valores em dinheiro na visualização e no PDF (para imprimir sem valores)
+  const [hideValues, setHideValues] = useState(false);
   const [logoBase64, setLogoBase64] = useState<string>("");
 
   // Carregar logo como base64
@@ -399,6 +403,15 @@ export default function BoletimPage() {
     };
   }, [filteredBulletinData]);
 
+  // Dados usados no PDF: com os valores zerados quando "Ocultar valores" está ativo
+  const pdfBulletinData = useMemo(
+    (): BoletimData[] =>
+      hideValues
+        ? filteredBulletinData.map((item) => ({ ...item, value: 0 }))
+        : filteredBulletinData,
+    [filteredBulletinData, hideValues]
+  );
+
   // Calcular totais
   const totals = useMemo(() => {
     const parseTime = (time: string): number => {
@@ -583,7 +596,7 @@ export default function BoletimPage() {
             companyCnpj: selectedCompanyCnpj,
             startDate,
             endDate,
-            data: filteredBulletinData,
+            data: pdfBulletinData,
             dispensadoKeys: Array.from(dispensaSet),
           });
         },
@@ -844,6 +857,9 @@ export default function BoletimPage() {
     }).format(value);
   };
 
+  const formatDisplayCurrency = (value: number) =>
+    formatCurrency(hideValues ? 0 : value);
+
   const formatHours = (hours: number) => {
     const wholeHours = Math.floor(hours);
     const minutes = Math.round((hours - wholeHours) * 60);
@@ -1068,6 +1084,18 @@ export default function BoletimPage() {
           </div>
           <div className="flex gap-2">
             <Button
+              variant={hideValues ? "default" : "outline"}
+              onClick={() => setHideValues(!hideValues)}
+              className="gap-2"
+            >
+              {hideValues ? (
+                <Eye className="h-4 w-4" />
+              ) : (
+                <EyeOff className="h-4 w-4" />
+              )}
+              {hideValues ? "Mostrar Valores" : "Ocultar Valores"}
+            </Button>
+            <Button
               variant={showPDFPreview ? "default" : "outline"}
               onClick={() => setShowPDFPreview(!showPDFPreview)}
               className="gap-2"
@@ -1109,7 +1137,7 @@ export default function BoletimPage() {
                 companyCnpj={selectedCompanyCnpj}
                 startDate={startDate}
                 endDate={endDate}
-                data={filteredBulletinData}
+                data={pdfBulletinData}
                 logoBase64={logoBase64}
                 dispensadoKeys={Array.from(dispensaSet)}
               />
@@ -1472,7 +1500,7 @@ export default function BoletimPage() {
                                   {item.extra_100_night}
                                 </td>
                                 <td className="p-3 align-middle whitespace-nowrap font-medium">
-                                  {formatCurrency(item.value)}
+                                  {formatDisplayCurrency(item.value)}
                                 </td>
                                 <td
                                   className={`p-3 align-middle whitespace-nowrap sticky right-0 ${
@@ -1531,7 +1559,7 @@ export default function BoletimPage() {
                               {formatHours(totals.totalExtra100Night)}
                             </td>
                             <td className="p-3 align-middle whitespace-nowrap">
-                              {formatCurrency(totals.totalValue)}
+                              {formatDisplayCurrency(totals.totalValue)}
                             </td>
                             <td className="p-3 align-middle whitespace-nowrap sticky right-0 bg-background"></td>
                           </tr>
@@ -1607,7 +1635,7 @@ export default function BoletimPage() {
                         Valor Total
                       </p>
                       <p className="text-2xl font-bold">
-                        {formatCurrency(totals.totalValue)}
+                        {formatDisplayCurrency(totals.totalValue)}
                       </p>
                     </div>
                     <Users className="h-8 w-8 text-muted-foreground" />
