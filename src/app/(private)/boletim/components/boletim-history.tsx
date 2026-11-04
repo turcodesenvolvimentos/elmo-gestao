@@ -41,6 +41,7 @@ import {
   useDeleteBoletimFromHistory,
 } from "@/hooks/use-boletim";
 import { useCompanies } from "@/hooks/use-companies";
+import type { BoletimExport } from "@/services/boletim.service";
 import {
   Download,
   Trash2,
@@ -77,8 +78,8 @@ export function BoletimHistory() {
   const downloadMutation = useDownloadBoletimFromHistory();
   const deleteMutation = useDeleteBoletimFromHistory();
 
-  const handleDownload = (id: string) => {
-    downloadMutation.mutate(id);
+  const handleDownload = (boletim: BoletimExport) => {
+    downloadMutation.mutate(boletim);
   };
 
   const handleDeleteClick = (id: string) => {
@@ -287,7 +288,7 @@ export function BoletimHistory() {
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8"
-                                onClick={() => handleDownload(item.id)}
+                                onClick={() => handleDownload(item)}
                                 disabled={downloadMutation.isPending}
                               >
                                 <Download className="h-4 w-4" />

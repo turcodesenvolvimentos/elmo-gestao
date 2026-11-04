@@ -53,6 +53,8 @@ export interface ExportBoletimParams {
   endDate: string;
   data: BoletimData[];
   dispensadoKeys?: string[];
+  // Usado só no nome do arquivo baixado
+  date?: string;
 }
 
 export const fetchBoletim = async (

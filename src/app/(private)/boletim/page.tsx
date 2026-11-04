@@ -598,6 +598,7 @@ export default function BoletimPage() {
             endDate,
             data: pdfBulletinData,
             dispensadoKeys: Array.from(dispensaSet),
+            date: dateFilter !== ALL_VALUES.DATE ? dateFilter : undefined,
           });
         },
       }

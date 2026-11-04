@@ -4,6 +4,10 @@ import { BoletimPDF } from "@/components/boletim-pdf";
 import React from "react";
 import fs from "fs";
 import path from "path";
+import {
+  buildBoletimFileName,
+  contentDispositionAttachment,
+} from "@/utils/boletim-file-name";
 
 interface BoletimData {
   employee_id?: string;
@@ -31,8 +35,15 @@ interface BoletimData {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { companyName, companyCnpj, startDate, endDate, data, dispensadoKeys } =
-      body;
+    const {
+      companyName,
+      companyCnpj,
+      startDate,
+      endDate,
+      data,
+      dispensadoKeys,
+      date,
+    } = body;
 
     // Validação
     if (!companyName || !startDate || !endDate || !data) {
@@ -84,9 +95,14 @@ export async function POST(request: NextRequest) {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="boletim-${companyName
-          .replace(/\s+/g, "-")
-          .toLowerCase()}-${startDate}-${endDate}.pdf"`,
+        "Content-Disposition": contentDispositionAttachment(
+          buildBoletimFileName({
+            companyName,
+            startDate,
+            endDate,
+            date,
+          })
+        ),
       },
     });
   } catch (error: unknown) {

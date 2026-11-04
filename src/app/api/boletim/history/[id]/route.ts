@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/db/client";
+import {
+  buildBoletimFileName,
+  contentDispositionAttachment,
+} from "@/utils/boletim-file-name";
 
 // GET - Download de boletim do histórico
 export async function GET(
@@ -41,16 +45,19 @@ export async function GET(
     const buffer = Buffer.from(arrayBuffer);
 
     // Criar nome do arquivo para download
-    const fileName = `boletim-${boletim.company_name
-      .replace(/\s+/g, "-")
-      .toLowerCase()}-${boletim.start_date}-${boletim.end_date}.pdf`;
+    const fileName = buildBoletimFileName({
+      companyName: boletim.company_name,
+      startDate: boletim.start_date,
+      endDate: boletim.end_date,
+      date: boletim.filters_applied?.date,
+    });
 
     // Retornar PDF
     return new NextResponse(buffer, {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${fileName}"`,
+        "Content-Disposition": contentDispositionAttachment(fileName),
       },
     });
   } catch (error: unknown) {

@@ -15,6 +15,7 @@ import {
   BoletimExport,
 } from "@/services/boletim.service";
 import { toast } from "sonner";
+import { buildBoletimFileName } from "@/utils/boletim-file-name";
 
 export const useBoletim = (params: FetchBoletimParams, enabled: boolean = false) => {
   return useQuery<BoletimData[], Error>({
@@ -33,9 +34,7 @@ export const useExportBoletimPDF = () => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `boletim-${variables.companyName
-        .replace(/\s+/g, "-")
-        .toLowerCase()}-${variables.startDate}-${variables.endDate}.pdf`;
+      link.download = buildBoletimFileName(variables);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -83,14 +82,19 @@ export const useBoletimHistory = (
 
 // Hook para download de boletim do histórico
 export const useDownloadBoletimFromHistory = () => {
-  return useMutation<Blob, Error, string>({
-    mutationFn: downloadBoletimFromHistory,
-    onSuccess: (blob, id) => {
+  return useMutation<Blob, Error, BoletimExport>({
+    mutationFn: (boletim) => downloadBoletimFromHistory(boletim.id),
+    onSuccess: (blob, boletim) => {
       // Criar URL para o blob e fazer download
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `boletim-${id}.pdf`;
+      link.download = buildBoletimFileName({
+        companyName: boletim.company_name,
+        startDate: boletim.start_date,
+        endDate: boletim.end_date,
+        date: boletim.filters_applied?.date,
+      });
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
