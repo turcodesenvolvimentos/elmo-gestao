@@ -74,7 +74,10 @@ import { NO_MAPPED_COMPANY_LABEL } from "@/utils/company-mapping";
 import { useCompanies } from "@/hooks/use-companies";
 import { formatEmployeeName } from "@/utils/employee-name-format";
 import {
+  escalaJornadaMinutos,
+  escalaVigenteNoDia,
   pickEscalaCompanyName,
+  pickEscalaEntry,
   resolveWorkCompanyName,
 } from "@/lib/punch-company-resolution";
 import { usePontoEscalaCompanies } from "@/hooks/use-ponto-escala-companies";
@@ -192,6 +195,50 @@ function isNoCompany(value?: string | null): boolean {
     (value || "").trim().toLowerCase() ===
     NO_MAPPED_COMPANY_LABEL.trim().toLowerCase()
   );
+}
+
+const EMPRESAS_FORA_DA_VERIFICACAO = ["elmo (matriz)"];
+
+function empresaForaDaVerificacao(company?: string | null): boolean {
+  return EMPRESAS_FORA_DA_VERIFICACAO.includes(
+    (company || "").trim().toLowerCase(),
+  );
+}
+
+function criarGrupoFalta(
+  employeeName: string,
+  dateStr: string,
+  company: string,
+): GroupedPunch {
+  const [year, month, day] = dateStr.split("-");
+  const date = new Date(dateStr + "T12:00:00Z");
+  return {
+    key: `falta-${employeeName}-${dateStr}`,
+    employeeName,
+    company,
+    isHoliday: false,
+    date: dateStr,
+    formattedDate: `${day}/${month}/${year}`,
+    dayOfWeek: date.toLocaleDateString("pt-BR", {
+      weekday: "long",
+      timeZone: "UTC",
+    }),
+    dayOfWeekNumber: date.getUTCDay(),
+    punches: [],
+    horasDiurnas: "00:00",
+    horasNoturnas: "00:00",
+    horasFictas: "00:00",
+    totalHoras: "00:00",
+    horasNormais: "00:00",
+    horasAtestado: "00:00",
+    atestadoPeriodos: [],
+    adicionalNoturno: "00:00",
+    extra50Diurno: "00:00",
+    extra50Noturno: "00:00",
+    extra100Diurno: "00:00",
+    extra100Noturno: "00:00",
+    heDomEFer: "00:00",
+  };
 }
 
 interface GroupedPunch {
@@ -1628,23 +1675,133 @@ export default function PontoPage() {
   }, [maxPunchPairs]);
 
   const gruposComAvisos = useMemo(() => {
-    return groupedPunches
-      .filter((grupo) => {
+    const ocultarEmpresa = (company?: string | null) =>
+      filter.company === "Todos" && empresaForaDaVerificacao(company);
+
+    const diaDescartado = (employeeName: string, dateKey: string) => {
+      const nameKey = normalizeDispensaName(employeeName);
+      if (dispensaSet.has(`${nameKey}|${dateKey}`)) return true;
+      if (atestadoSet.has(buildAtestadoKey(employeeName, dateKey))) return true;
+      if (avisoIgnoradoSet.has(`${nameKey}|${dateKey}`)) return true;
+      return false;
+    };
+
+    const itens = groupedPunches
+      .filter(
+        (grupo) =>
+          !ocultarEmpresa(grupo.company) &&
+          !diaDescartado(grupo.employeeName, grupo.date.slice(0, 10)),
+      )
+      .map((grupo) => {
         const dateKey = grupo.date.slice(0, 10);
-        const nameKey = normalizeDispensaName(grupo.employeeName);
-        if (dispensaSet.has(`${nameKey}|${dateKey}`)) return false;
-        if (atestadoSet.has(buildAtestadoKey(grupo.employeeName, dateKey))) {
-          return false;
-        }
-        if (avisoIgnoradoSet.has(`${nameKey}|${dateKey}`)) return false;
-        return true;
+        const solidesId =
+          filter.employeeId > 0
+            ? filter.employeeId
+            : (solidesIdByEmployeeName.get(grupo.employeeName) ?? 0);
+        const escalaDoDia =
+          !grupo.ajusteTipo && solidesId > 0 && dateKey < todayStr
+            ? pickEscalaEntry(escalaEntries, solidesId, dateKey)
+            : undefined;
+        const escala =
+          escalaDoDia && escalaVigenteNoDia(escalaDoDia, dateKey)
+            ? escalaDoDia
+            : undefined;
+        const jornadaEsperada = escala ? escalaJornadaMinutos(escala) : 0;
+        const semEscala =
+          !grupo.ajusteTipo &&
+          solidesId > 0 &&
+          grupo.punches.some((p) => p.dateIn || p.dateOut) &&
+          !pickEscalaEntry(escalaEntries, solidesId, dateKey);
+        return {
+          grupo,
+          solidesId,
+          avisos: validateDayPunches(grupo.punches, {
+            convocado: !!escala,
+            semEscala,
+            jornadaEsperadaMinutos: jornadaEsperada || undefined,
+          }),
+        };
       })
-      .map((grupo) => ({
-        grupo,
-        avisos: validateDayPunches(grupo.punches),
-      }))
       .filter((item) => item.avisos.length > 0);
-  }, [groupedPunches, dispensaSet, atestadoSet, avisoIgnoradoSet]);
+
+    const diasCobertos = new Set(
+      groupedPunches.map(
+        (g) => `${normalizeDispensaName(g.employeeName)}|${g.date.slice(0, 10)}`,
+      ),
+    );
+    const inicioPeriodo = shouldSendDates
+      ? filter.startDate
+      : `${todayStr.slice(0, 7)}-01`;
+    const fimPeriodo = shouldSendDates ? filter.endDate : todayStr;
+
+    for (const entry of escalaEntries) {
+      if (
+        filter.employeeId > 0 &&
+        entry.employee_solides_id !== filter.employeeId
+      ) {
+        continue;
+      }
+      if (filter.company !== "Todos" && entry.company_name !== filter.company) {
+        continue;
+      }
+      if (ocultarEmpresa(entry.company_name)) continue;
+      if (!entry.employee_name) continue;
+      const employeeName = formatEmployeeName(entry.employee_name);
+      const nameKey = normalizeDispensaName(employeeName);
+
+      const inicio =
+        entry.start_date > inicioPeriodo ? entry.start_date : inicioPeriodo;
+      const fim =
+        entry.end_date && entry.end_date < fimPeriodo
+          ? entry.end_date
+          : fimPeriodo;
+      const cursor = new Date(inicio + "T12:00:00Z");
+      const limite = new Date(fim + "T12:00:00Z");
+
+      while (cursor <= limite) {
+        const dateKey = toYyyyMmDdFromUtcDate(cursor);
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+        if (dateKey >= todayStr) break;
+        const chave = `${nameKey}|${dateKey}`;
+        if (diasCobertos.has(chave)) continue;
+        if (!escalaVigenteNoDia(entry, dateKey)) continue;
+        if (
+          pickEscalaEntry(escalaEntries, entry.employee_solides_id, dateKey) !==
+          entry
+        ) {
+          continue;
+        }
+        if (diaDescartado(employeeName, dateKey)) continue;
+        diasCobertos.add(chave);
+        itens.push({
+          grupo: criarGrupoFalta(employeeName, dateKey, entry.company_name),
+          solidesId: entry.employee_solides_id,
+          avisos: validateDayPunches([], { convocado: true }),
+        });
+      }
+    }
+
+    return itens.sort((a, b) => {
+      const nameCompare = a.grupo.employeeName.localeCompare(
+        b.grupo.employeeName,
+      );
+      if (nameCompare !== 0) return nameCompare;
+      return a.grupo.date.localeCompare(b.grupo.date);
+    });
+  }, [
+    groupedPunches,
+    dispensaSet,
+    atestadoSet,
+    avisoIgnoradoSet,
+    escalaEntries,
+    solidesIdByEmployeeName,
+    filter.employeeId,
+    filter.company,
+    filter.startDate,
+    filter.endDate,
+    shouldSendDates,
+    todayStr,
+  ]);
 
   const avisosIgnoradosLista = useMemo(
     () =>
@@ -1659,8 +1816,13 @@ export default function PontoPage() {
     [avisosIgnoradosData?.avisos]
   );
 
-  const ignorarAvisosDoDia = (employeeName: string, date: string) => {
+  const ignorarAvisosDoDia = (
+    employeeName: string,
+    date: string,
+    solidesId?: number,
+  ) => {
     const employeeId =
+      (solidesId && solidesId > 0 ? solidesId : undefined) ??
       solidesIdByEmployeeName.get(employeeName) ??
       (filter.employeeId > 0 ? filter.employeeId : 0);
     if (!employeeId) return;
@@ -2499,6 +2661,20 @@ export default function PontoPage() {
                 batidas do período/funcionário filtrado para facilitar a
                 conferência manual. Nada é alterado automaticamente.
               </p>
+              <div className="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <span className="h-3 w-3 rounded-sm bg-red-500" />
+                  Falta (escalado sem batida)
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-3 w-3 rounded-sm bg-orange-500" />
+                  Inconsistência nas batidas ou ponto sem escala
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-3 w-3 rounded-sm bg-amber-300" />
+                  Atenção (meio período, intervalo curto)
+                </span>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -2531,7 +2707,10 @@ export default function PontoPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {gruposComAvisos.map(({ grupo, avisos }) => {
+                  {gruposComAvisos.map(({ grupo, avisos, solidesId }) => {
+                    const temFalta = avisos.some(
+                      (a: PunchWarning) => a.severidade === "falta",
+                    );
                     const temErro = avisos.some(
                       (a: PunchWarning) => a.severidade === "erro",
                     );
@@ -2539,9 +2718,11 @@ export default function PontoPage() {
                       <TableRow
                         key={grupo.key}
                         className={
-                          temErro
+                          temFalta
                             ? "bg-red-50 hover:bg-red-100/70"
-                            : "bg-yellow-50 hover:bg-yellow-100/70"
+                            : temErro
+                              ? "bg-orange-50 hover:bg-orange-100/70"
+                              : "bg-yellow-50 hover:bg-yellow-100/70"
                         }
                       >
                         <TableCell className="font-medium">
@@ -2558,6 +2739,11 @@ export default function PontoPage() {
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-col gap-0.5 text-sm">
+                            {grupo.punches.length === 0 && (
+                              <span className="text-muted-foreground">
+                                Sem batidas
+                              </span>
+                            )}
                             {grupo.punches.map((p, i) => {
                               const entrada = p.dateIn
                                 ? new Date(p.dateIn).toLocaleTimeString(
@@ -2585,11 +2771,17 @@ export default function PontoPage() {
                               <Badge
                                 key={i}
                                 variant={
-                                  a.severidade === "erro"
+                                  a.severidade === "falta"
                                     ? "destructive"
-                                    : "secondary"
+                                    : "outline"
                                 }
-                                className="w-fit font-normal"
+                                className={`w-fit font-normal ${
+                                  a.severidade === "erro"
+                                    ? "border-transparent bg-orange-500 text-white"
+                                    : a.severidade === "alerta"
+                                      ? "border-transparent bg-amber-200 text-amber-900"
+                                      : ""
+                                }`}
                               >
                                 {a.mensagem}
                               </Badge>
@@ -2606,6 +2798,7 @@ export default function PontoPage() {
                               ignorarAvisosDoDia(
                                 grupo.employeeName,
                                 grupo.date,
+                                solidesId,
                               )
                             }
                           >

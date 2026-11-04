@@ -5,9 +5,12 @@ export type PunchWarningTipo =
   | "INTERVALO_LONGO"
   | "PERIODO_LONGO"
   | "JORNADA_SEM_INTERVALO"
-  | "SOBREPOSICAO";
+  | "SOBREPOSICAO"
+  | "FALTA"
+  | "MEIO_PERIODO"
+  | "SEM_ESCALA";
 
-export type PunchWarningSeveridade = "erro" | "alerta";
+export type PunchWarningSeveridade = "falta" | "erro" | "alerta";
 
 export interface PunchWarning {
   tipo: PunchWarningTipo;
@@ -26,12 +29,17 @@ export interface ValidatePunchesOptions {
   almocoMinimoMinutos?: number;
   intervaloMaximoMinutos?: number;
   jornadaMaximaSemIntervaloMinutos?: number;
+  convocado?: boolean;
+  semEscala?: boolean;
+  jornadaEsperadaMinutos?: number;
+  meioPeriodoPercentual?: number;
 }
 
 const DEFAULT_DUPLICATA_MINUTOS = 10;
 const DEFAULT_ALMOCO_MINIMO_MINUTOS = 50;
 const DEFAULT_INTERVALO_MAXIMO_MINUTOS = 120;
 const DEFAULT_JORNADA_MAXIMA_SEM_INTERVALO_MINUTOS = 360;
+const DEFAULT_MEIO_PERIODO_PERCENTUAL = 0.75;
 const MS_POR_MINUTO = 60 * 1000;
 
 function parseTime(value?: string): number | null {
@@ -66,6 +74,20 @@ export function validateDayPunches(
     options.jornadaMaximaSemIntervaloMinutos ??
     DEFAULT_JORNADA_MAXIMA_SEM_INTERVALO_MINUTOS;
 
+  const meioPeriodoPercentual =
+    options.meioPeriodoPercentual ?? DEFAULT_MEIO_PERIODO_PERCENTUAL;
+
+  if (punches.length === 0) {
+    if (!options.convocado) return [];
+    return [
+      {
+        tipo: "FALTA",
+        severidade: "falta",
+        mensagem: "Falta: escalado no dia e sem nenhuma batida",
+      },
+    ];
+  }
+
   const warnings: PunchWarning[] = [];
   const tiposEmitidos = new Set<PunchWarningTipo>();
 
@@ -74,6 +96,14 @@ export function validateDayPunches(
     tiposEmitidos.add(warning.tipo);
     warnings.push(warning);
   };
+
+  if (options.semEscala) {
+    push({
+      tipo: "SEM_ESCALA",
+      severidade: "erro",
+      mensagem: "Bateu ponto sem estar escalado no dia",
+    });
+  }
 
   for (const punch of punches) {
     if (punch.adjust) continue;
@@ -172,6 +202,19 @@ export function validateDayPunches(
       tipo: "JORNADA_SEM_INTERVALO",
       severidade: "erro",
       mensagem: `Jornada de ${formatarDuracao(jornadaMinutos)} sem intervalo de pelo menos ${almocoMinimoMinutos} min`,
+    });
+  }
+
+  const jornadaEsperada = options.jornadaEsperadaMinutos ?? 0;
+  if (
+    jornadaEsperada > 0 &&
+    !tiposEmitidos.has("PERIODO_ABERTO") &&
+    jornadaMinutos < jornadaEsperada * meioPeriodoPercentual
+  ) {
+    push({
+      tipo: "MEIO_PERIODO",
+      severidade: "alerta",
+      mensagem: `Trabalhou ${formatarDuracao(jornadaMinutos)} de uma escala de ${formatarDuracao(jornadaEsperada)} (possível meio período)`,
     });
   }
 
