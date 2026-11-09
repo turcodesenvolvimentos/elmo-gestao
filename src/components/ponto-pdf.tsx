@@ -203,6 +203,47 @@ const styles = StyleSheet.create({
   },
 });
 
+const LARGURA_COLUNA_EXTRA = 6;
+
+const LARGURA_COLUNAS_FIXAS = 22.5;
+
+const COLUNAS_ESCALAVEIS = [
+  "col5",
+  "col6",
+  "col7",
+  "col8",
+  "col12",
+  "col13",
+  "col_atestado",
+  "col14",
+  "col15",
+  "col16",
+  "col17",
+  "col18",
+  "col_dispensado",
+  "col_dispensado2",
+] as const;
+
+function estilosComColunasExtras(colunasExtras: number) {
+  const larguraEscalavel = 100 - LARGURA_COLUNAS_FIXAS;
+  const fator =
+    larguraEscalavel /
+    (larguraEscalavel + colunasExtras * LARGURA_COLUNA_EXTRA);
+  const ajustados = { ...styles } as Record<string, object>;
+  for (const chave of COLUNAS_ESCALAVEIS) {
+    const base = styles[chave] as { width?: string };
+    const largura = parseFloat(String(base.width ?? "0"));
+    ajustados[chave] = { ...base, width: `${largura * fator}%` };
+  }
+  return {
+    ...(ajustados as typeof styles),
+    colExtra: {
+      width: `${LARGURA_COLUNA_EXTRA * fator}%`,
+      fontSize: NUM_FONT,
+    },
+  };
+}
+
 interface PontoData {
   employeeName: string;
   company: string;
@@ -212,6 +253,7 @@ interface PontoData {
   exit1: string;
   entry2?: string;
   exit2?: string;
+  extraPeriodos?: { entrada: string; saida: string }[];
   horasDiurnas: string;
   horasNoturnas: string;
   horasFictas: string;
@@ -361,6 +403,12 @@ const PontoReportPage: React.FC<PontoPDFProps> = ({
 }) => {
   const totals = calculateTotals(data);
   const dispensaSet = new Set(dispensadoKeys ?? []);
+  const maxParesExtras = data.reduce(
+    (max, row) => Math.max(max, row.extraPeriodos?.length ?? 0),
+    0,
+  );
+  const S = estilosComColunasExtras(maxParesExtras * 2);
+  const indicesExtras = Array.from({ length: maxParesExtras }, (_, i) => i);
 
   return (
       <Page size="A4" orientation="portrait" style={styles.page}>
@@ -405,21 +453,27 @@ const PontoReportPage: React.FC<PontoPDFProps> = ({
 
         <View style={styles.table}>
           <View style={styles.tableHeader} fixed>
-            <Text style={[styles.col2, styles.cellLeft]}>Empresa</Text>
-            <Text style={[styles.col3, styles.cellCenter]}>Data</Text>
-            <Text style={[styles.col4, styles.cellCenter]}>Dia Sem.</Text>
-            <Text style={[styles.col5, styles.cellCenter]}>Ent. 1</Text>
-            <Text style={[styles.col6, styles.cellCenter]}>Saí. 1</Text>
-            <Text style={[styles.col7, styles.cellCenter]}>Ent. 2</Text>
-            <Text style={[styles.col8, styles.cellCenter]}>Saí. 2</Text>
-            <Text style={[styles.col12, styles.cellCenter]}>Total</Text>
-            <Text style={[styles.col13, styles.cellCenter]}>Normal</Text>
-            <Text style={[styles.col_atestado, styles.cellCenter]}>Atest.</Text>
-            <Text style={[styles.col14, styles.cellCenter]}>Ad. N.</Text>
-            <Text style={[styles.col15, styles.cellCenter]}>50% D.</Text>
-            <Text style={[styles.col16, styles.cellCenter]}>50% N.</Text>
-            <Text style={[styles.col17, styles.cellCenter]}>100% D.</Text>
-            <Text style={[styles.col18, styles.cellLast]}>100% N.</Text>
+            <Text style={[S.col2, styles.cellLeft]}>Empresa</Text>
+            <Text style={[S.col3, styles.cellCenter]}>Data</Text>
+            <Text style={[S.col4, styles.cellCenter]}>Dia Sem.</Text>
+            <Text style={[S.col5, styles.cellCenter]}>Ent. 1</Text>
+            <Text style={[S.col6, styles.cellCenter]}>Saí. 1</Text>
+            <Text style={[S.col7, styles.cellCenter]}>Ent. 2</Text>
+            <Text style={[S.col8, styles.cellCenter]}>Saí. 2</Text>
+            {indicesExtras.map((i) => (
+              <React.Fragment key={`h${i}`}>
+                <Text style={[S.colExtra, styles.cellCenter]}>Ent. {i + 3}</Text>
+                <Text style={[S.colExtra, styles.cellCenter]}>Saí. {i + 3}</Text>
+              </React.Fragment>
+            ))}
+            <Text style={[S.col12, styles.cellCenter]}>Total</Text>
+            <Text style={[S.col13, styles.cellCenter]}>Normal</Text>
+            <Text style={[S.col_atestado, styles.cellCenter]}>Atest.</Text>
+            <Text style={[S.col14, styles.cellCenter]}>Ad. N.</Text>
+            <Text style={[S.col15, styles.cellCenter]}>50% D.</Text>
+            <Text style={[S.col16, styles.cellCenter]}>50% N.</Text>
+            <Text style={[S.col17, styles.cellCenter]}>100% D.</Text>
+            <Text style={[S.col18, styles.cellLast]}>100% N.</Text>
           </View>
 
           {data.map((row, index) => {
@@ -428,7 +482,10 @@ const PontoReportPage: React.FC<PontoPDFProps> = ({
               isEmptyTime(row.entry1) &&
               isEmptyTime(row.exit1) &&
               isEmptyTime(row.entry2) &&
-              isEmptyTime(row.exit2);
+              isEmptyTime(row.exit2) &&
+              (row.extraPeriodos ?? []).every(
+                (p) => isEmptyTime(p.entrada) && isEmptyTime(p.saida)
+              );
             const hasFirstPair =
               !isEmptyTime(row.entry1) && !isEmptyTime(row.exit1);
             const hasSecondPair =
@@ -459,6 +516,17 @@ const PontoReportPage: React.FC<PontoPDFProps> = ({
               !pair2Real && periodosAtestado[proximoPeriodo]
                 ? periodosAtestado[proximoPeriodo++]
                 : undefined;
+            const slotsExtras = indicesExtras.map((i) => {
+              const periodo = row.extraPeriodos?.[i];
+              const real =
+                !!periodo &&
+                (!isEmptyTime(periodo.entrada) || !isEmptyTime(periodo.saida));
+              const atestado =
+                !real && periodosAtestado[proximoPeriodo]
+                  ? periodosAtestado[proximoPeriodo++]
+                  : undefined;
+              return { periodo, atestado };
+            });
             const missingStyle = styles.missingCell;
             const dispensadoDiaTodo =
               isDispensado && shouldHighlight && !isAtestadoRow;
@@ -474,7 +542,7 @@ const PontoReportPage: React.FC<PontoPDFProps> = ({
                 : styles.tableRow;
             return (
             <View key={index} style={rowStyle} wrap={false}>
-              <View style={[styles.col2Content, { borderRight: "0.5px solid #e5e7eb" }]}>
+              <View style={[S.col2Content, { borderRight: "0.5px solid #e5e7eb" }]}>
                 {isNoCompany(row.company) ? (
                   <View style={styles.companyBadge}>
                     <Text style={styles.companyBadgeText}>{row.company}</Text>
@@ -483,66 +551,89 @@ const PontoReportPage: React.FC<PontoPDFProps> = ({
                   <Text style={styles.companyText}>{row.company}</Text>
                 )}
               </View>
-              <Text style={[styles.col3, styles.cellCenter]}>{formatDate(row.date)}</Text>
-              <Text style={[styles.col4, styles.cellCenter]}>{row.dayOfWeek}</Text>
+              <Text style={[S.col3, styles.cellCenter]}>{formatDate(row.date)}</Text>
+              <Text style={[S.col4, styles.cellCenter]}>{row.dayOfWeek}</Text>
               {dispensadoDiaTodo ? (
-                <Text style={[styles.col_dispensado, styles.cellCenter, styles.missingCellDispensa]}>
+                <Text style={[S.col_dispensado, styles.cellCenter, styles.missingCellDispensa]}>
                   Dispensado
                 </Text>
               ) : (
                 <>
-                  <Text style={slot1 ? [styles.col5, styles.cellCenter, styles.missingCellAtestado] : shouldHighlight && !isAtestadoRow ? [styles.col5, styles.cellCenter, missingStyle] : [styles.col5, styles.cellCenter]}>
+                  <Text style={slot1 ? [S.col5, styles.cellCenter, styles.missingCellAtestado] : shouldHighlight && !isAtestadoRow ? [S.col5, styles.cellCenter, missingStyle] : [S.col5, styles.cellCenter]}>
                     {slot1 ? slot1.entrada : row.entry1 || "-"}
                   </Text>
-                  <Text style={slot1 ? [styles.col6, styles.cellCenter, styles.missingCellAtestado] : shouldHighlight && !isAtestadoRow ? [styles.col6, styles.cellCenter, missingStyle] : [styles.col6, styles.cellCenter]}>
+                  <Text style={slot1 ? [S.col6, styles.cellCenter, styles.missingCellAtestado] : shouldHighlight && !isAtestadoRow ? [S.col6, styles.cellCenter, missingStyle] : [S.col6, styles.cellCenter]}>
                     {slot1 ? slot1.saida : row.exit1 || "-"}
                   </Text>
                   {dispensadoSegundoPeriodo ? (
-                    <Text style={[styles.col_dispensado2, styles.cellCenter, styles.missingCellDispensa]}>
+                    <Text style={[S.col_dispensado2, styles.cellCenter, styles.missingCellDispensa]}>
                       Dispensado
                     </Text>
                   ) : (
                     <>
-                      <Text style={slot2 ? [styles.col7, styles.cellCenter, styles.missingCellAtestado] : shouldHighlight && !isAtestadoRow ? [styles.col7, styles.cellCenter, missingStyle] : [styles.col7, styles.cellCenter]}>
+                      <Text style={slot2 ? [S.col7, styles.cellCenter, styles.missingCellAtestado] : shouldHighlight && !isAtestadoRow ? [S.col7, styles.cellCenter, missingStyle] : [S.col7, styles.cellCenter]}>
                         {slot2 ? slot2.entrada : row.entry2 || "-"}
                       </Text>
-                      <Text style={slot2 ? [styles.col8, styles.cellCenter, styles.missingCellAtestado] : shouldHighlight && !isAtestadoRow ? [styles.col8, styles.cellCenter, missingStyle] : [styles.col8, styles.cellCenter]}>
+                      <Text style={slot2 ? [S.col8, styles.cellCenter, styles.missingCellAtestado] : shouldHighlight && !isAtestadoRow ? [S.col8, styles.cellCenter, missingStyle] : [S.col8, styles.cellCenter]}>
                         {slot2 ? slot2.saida : row.exit2 || "-"}
                       </Text>
                     </>
                   )}
                 </>
               )}
-              <Text style={[styles.col12, styles.cellCenter]}>{row.totalHoras}</Text>
-              <Text style={[styles.col13, styles.cellCenter]}>{row.horasNormais}</Text>
-              <Text style={[styles.col_atestado, styles.cellCenter]}>
+              {slotsExtras.map(({ periodo, atestado }, i) => {
+                const estilo = atestado
+                  ? [S.colExtra, styles.cellCenter, styles.missingCellAtestado]
+                  : shouldHighlight && !isAtestadoRow && !dispensadoDiaTodo
+                    ? [S.colExtra, styles.cellCenter, missingStyle]
+                    : [S.colExtra, styles.cellCenter];
+                return (
+                  <React.Fragment key={`e${i}`}>
+                    <Text style={estilo}>
+                      {atestado ? atestado.entrada : periodo?.entrada || "-"}
+                    </Text>
+                    <Text style={estilo}>
+                      {atestado ? atestado.saida : periodo?.saida || "-"}
+                    </Text>
+                  </React.Fragment>
+                );
+              })}
+              <Text style={[S.col12, styles.cellCenter]}>{row.totalHoras}</Text>
+              <Text style={[S.col13, styles.cellCenter]}>{row.horasNormais}</Text>
+              <Text style={[S.col_atestado, styles.cellCenter]}>
                 {row.horasAtestado || "00:00"}
               </Text>
-              <Text style={[styles.col14, styles.cellCenter]}>{row.adicionalNoturno}</Text>
-              <Text style={[styles.col15, styles.cellCenter]}>{row.extra50Diurno}</Text>
-              <Text style={[styles.col16, styles.cellCenter]}>{row.extra50Noturno}</Text>
-              <Text style={[styles.col17, styles.cellCenter]}>{row.extra100Diurno}</Text>
-              <Text style={[styles.col18, styles.cellLast]}>{row.extra100Noturno}</Text>
+              <Text style={[S.col14, styles.cellCenter]}>{row.adicionalNoturno}</Text>
+              <Text style={[S.col15, styles.cellCenter]}>{row.extra50Diurno}</Text>
+              <Text style={[S.col16, styles.cellCenter]}>{row.extra50Noturno}</Text>
+              <Text style={[S.col17, styles.cellCenter]}>{row.extra100Diurno}</Text>
+              <Text style={[S.col18, styles.cellLast]}>{row.extra100Noturno}</Text>
             </View>
             );
           })}
 
           <View style={styles.tableTotalRow} wrap={false}>
-            <Text style={[styles.col2, styles.cellLeft]}>TOTAIS</Text>
-            <Text style={[styles.col3, styles.cellCenter]}></Text>
-            <Text style={[styles.col4, styles.cellCenter]}></Text>
-            <Text style={[styles.col5, styles.cellCenter]}></Text>
-            <Text style={[styles.col6, styles.cellCenter]}></Text>
-            <Text style={[styles.col7, styles.cellCenter]}></Text>
-            <Text style={[styles.col8, styles.cellCenter]}></Text>
-            <Text style={[styles.col12, styles.cellCenter]}>{totals.totalHoras}</Text>
-            <Text style={[styles.col13, styles.cellCenter]}>{totals.horasNormais}</Text>
-            <Text style={[styles.col_atestado, styles.cellCenter]}>{totals.horasAtestado}</Text>
-            <Text style={[styles.col14, styles.cellCenter]}>{totals.adicionalNoturno}</Text>
-            <Text style={[styles.col15, styles.cellCenter]}>{totals.extra50Diurno}</Text>
-            <Text style={[styles.col16, styles.cellCenter]}>{totals.extra50Noturno}</Text>
-            <Text style={[styles.col17, styles.cellCenter]}>{totals.extra100Diurno}</Text>
-            <Text style={[styles.col18, styles.cellLast]}>{totals.extra100Noturno}</Text>
+            <Text style={[S.col2, styles.cellLeft]}>TOTAIS</Text>
+            <Text style={[S.col3, styles.cellCenter]}></Text>
+            <Text style={[S.col4, styles.cellCenter]}></Text>
+            <Text style={[S.col5, styles.cellCenter]}></Text>
+            <Text style={[S.col6, styles.cellCenter]}></Text>
+            <Text style={[S.col7, styles.cellCenter]}></Text>
+            <Text style={[S.col8, styles.cellCenter]}></Text>
+            {indicesExtras.map((i) => (
+              <React.Fragment key={`t${i}`}>
+                <Text style={[S.colExtra, styles.cellCenter]}></Text>
+                <Text style={[S.colExtra, styles.cellCenter]}></Text>
+              </React.Fragment>
+            ))}
+            <Text style={[S.col12, styles.cellCenter]}>{totals.totalHoras}</Text>
+            <Text style={[S.col13, styles.cellCenter]}>{totals.horasNormais}</Text>
+            <Text style={[S.col_atestado, styles.cellCenter]}>{totals.horasAtestado}</Text>
+            <Text style={[S.col14, styles.cellCenter]}>{totals.adicionalNoturno}</Text>
+            <Text style={[S.col15, styles.cellCenter]}>{totals.extra50Diurno}</Text>
+            <Text style={[S.col16, styles.cellCenter]}>{totals.extra50Noturno}</Text>
+            <Text style={[S.col17, styles.cellCenter]}>{totals.extra100Diurno}</Text>
+            <Text style={[S.col18, styles.cellLast]}>{totals.extra100Noturno}</Text>
           </View>
         </View>
 

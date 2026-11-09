@@ -10,6 +10,7 @@ export interface PontoData {
   exit1: string;
   entry2?: string;
   exit2?: string;
+  extraPeriodos?: { entrada: string; saida: string }[];
   horasDiurnas: string;
   horasNoturnas: string;
   horasFictas: string;

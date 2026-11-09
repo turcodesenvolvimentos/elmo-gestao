@@ -1258,6 +1258,17 @@ export default function PontoPage() {
             minute: "2-digit",
           })
         : undefined;
+      const formatarHora = (value?: string) =>
+        value
+          ? new Date(value).toLocaleTimeString("pt-BR", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "-";
+      const extraPeriodos = group.punches.slice(2).map((p) => ({
+        entrada: formatarHora(p.dateIn),
+        saida: formatarHora(p.dateOut),
+      }));
 
       return {
         employeeName: group.employeeName || "",
@@ -1268,6 +1279,7 @@ export default function PontoPage() {
         exit1: exit1 || "-",
         entry2: entry2,
         exit2: exit2,
+        extraPeriodos: extraPeriodos.length > 0 ? extraPeriodos : undefined,
         horasDiurnas: group.horasDiurnas || "00:00",
         horasNoturnas: group.horasNoturnas || "00:00",
         horasFictas: group.horasFictas || "00:00",
