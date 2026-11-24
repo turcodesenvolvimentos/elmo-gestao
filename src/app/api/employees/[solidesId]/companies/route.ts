@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { supabaseAdmin } from "@/lib/db/client";
 import { ensureDefaultPositionForCompany } from "@/lib/default-position";
 
@@ -10,6 +11,11 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ solidesId: string }> }
 ) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   try {
     const { solidesId } = await params;
     const body = await request.json();
@@ -139,6 +145,11 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ solidesId: string }> }
 ) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   try {
     const { solidesId } = await params;
     const body = await request.json();
@@ -273,6 +284,11 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ solidesId: string }> }
 ) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   try {
     const { solidesId } = await params;
     const searchParams = request.nextUrl.searchParams;

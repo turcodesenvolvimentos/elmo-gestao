@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { supabaseAdmin } from "@/lib/db/client";
 
 // GET - Listar todas as dispensas
 export async function GET() {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   try {
     const { data, error } = await supabaseAdmin
       .from("dispensas")
@@ -28,6 +34,11 @@ export async function GET() {
 
 // POST - Adicionar dispensa
 export async function POST(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   try {
     const body = await request.json();
     const { employee_id, employee_name, date } = body;

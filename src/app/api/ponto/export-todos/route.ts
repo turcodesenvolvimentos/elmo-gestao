@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { renderToBuffer, DocumentProps } from "@react-pdf/renderer";
 import { PontoPDFTodos } from "@/components/ponto-pdf";
 import React from "react";
@@ -36,6 +37,11 @@ interface PontoTodosEmployee {
 }
 
 export async function POST(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   try {
     const body = await request.json();
     const { startDate, endDate, employees, dispensadoKeys } = body;

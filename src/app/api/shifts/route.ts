@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { supabaseAdmin } from "@/lib/db/client";
 
 // GET - Listar todas as escalas (com filtro opcional por company_id)
 export async function GET(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const company_id = searchParams.get("company_id");

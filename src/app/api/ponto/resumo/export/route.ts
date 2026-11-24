@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { renderToBuffer, DocumentProps } from "@react-pdf/renderer";
 import { PontoResumoPDF } from "@/components/ponto-resumo-pdf";
 import type { PontoResumoRow } from "@/components/ponto-resumo-pdf";
@@ -14,6 +15,11 @@ interface ResumoRequest {
 
 // POST - Gera PDF do resumo de ponto (totais por funcionario no periodo)
 export async function POST(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   try {
     const body: ResumoRequest = await request.json();
     const { startDate, endDate, data } = body;

@@ -138,6 +138,11 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET() {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   try {
     const lastSyncDate = await getLastSyncDate();
     return NextResponse.json(

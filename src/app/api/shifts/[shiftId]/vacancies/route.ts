@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { supabaseAdmin } from "@/lib/db/client";
 
 interface VacancyRow {
@@ -20,6 +21,11 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ shiftId: string }> }
 ) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   try {
     const { shiftId } = await params;
 
@@ -65,6 +71,11 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ shiftId: string }> }
 ) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   try {
     const { shiftId } = await params;
     const body = await request.json();

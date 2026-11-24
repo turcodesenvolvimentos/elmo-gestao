@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { renderToBuffer, DocumentProps } from "@react-pdf/renderer";
 import { BoletimPDF } from "@/components/boletim-pdf";
 import React from "react";
@@ -33,6 +34,11 @@ interface BoletimData {
 
 // POST - Gerar PDF do boletim
 export async function POST(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   try {
     const body = await request.json();
     const {

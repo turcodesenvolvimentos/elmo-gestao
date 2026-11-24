@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { renderToBuffer, DocumentProps } from "@react-pdf/renderer";
 import { BoletimPDF } from "@/components/boletim-pdf";
 import React from "react";
@@ -55,6 +56,11 @@ interface SaveBoletimRequest {
 
 // POST - Salvar boletim no histórico (Storage + DB)
 export async function POST(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   try {
     const body: SaveBoletimRequest = await request.json();
     const {
@@ -215,6 +221,11 @@ export async function POST(request: NextRequest) {
 
 // GET - Listar histórico de boletins
 export async function GET(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const companyId = searchParams.get("company_id");

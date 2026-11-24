@@ -7,6 +7,13 @@ export default auth((req) => {
   const session = req.auth;
   const isLoggedIn = !!session;
 
+  if (pathname.startsWith("/api")) {
+    if (!isLoggedIn) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
+    return NextResponse.next();
+  }
+
   const publicRoutes = ["/login"];
 
   if (isLoggedIn && pathname === "/login") {
@@ -34,5 +41,5 @@ export default auth((req) => {
 });
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|.*\\.png$).*)"],
+  matcher: ["/((?!api/auth|_next/static|_next/image|.*\\.png$).*)"],
 };

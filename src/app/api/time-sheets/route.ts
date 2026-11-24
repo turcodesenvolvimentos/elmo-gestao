@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { solidesApiClient } from "@/lib/axios/solides.client";
 import { handleSolidesError } from "@/lib/axios/error-handler";
 import { AxiosError } from "axios";
 
 export async function GET(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const startDate = searchParams.get("startDate");

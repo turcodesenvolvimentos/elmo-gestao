@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { renderToBuffer, DocumentProps } from "@react-pdf/renderer";
 import { ValeAlimentacaoPDF } from "@/components/vale-alimentacao-pdf";
 import { ValeAlimentacaoSummaryPDF } from "@/components/vale-alimentacao-summary-pdf";
@@ -29,6 +30,11 @@ interface EmployeeSummary {
 
 // POST - Gerar PDF do relatório de vale alimentação
 export async function POST(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   try {
     const body = await request.json();
     const {

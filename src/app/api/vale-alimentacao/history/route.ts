@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { renderToBuffer, DocumentProps } from "@react-pdf/renderer";
 import { ValeAlimentacaoPDF } from "@/components/vale-alimentacao-pdf";
 import { ValeAlimentacaoSummaryPDF } from "@/components/vale-alimentacao-summary-pdf";
@@ -55,6 +56,11 @@ interface SaveValeAlimentacaoRequest {
 
 // POST - Salvar relatório de vale alimentação no histórico (Storage + DB)
 export async function POST(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   try {
     const body: SaveValeAlimentacaoRequest = await request.json();
     const {
@@ -243,6 +249,11 @@ export async function POST(request: NextRequest) {
 
 // GET - Listar histórico de relatórios de vale alimentação
 export async function GET(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const employeeId = searchParams.get("employee_id");

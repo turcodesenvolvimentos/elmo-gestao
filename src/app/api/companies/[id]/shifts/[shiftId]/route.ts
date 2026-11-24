@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { supabaseAdmin } from "@/lib/db/client";
 
 // PUT - Atualizar escala
@@ -6,6 +7,11 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; shiftId: string }> }
 ) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   try {
     const { shiftId } = await params;
     const body = await request.json();
@@ -130,6 +136,11 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; shiftId: string }> }
 ) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   try {
     const { shiftId } = await params;
 
